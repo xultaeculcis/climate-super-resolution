@@ -1,0 +1,19 @@
+name: sr
+channels:
+  - conda-forge
+  - defaults
+  - pytorch
+dependencies:
+  - python=3.8
+  - cudatoolkit=11.0
+  - pytorch-lightning
+  - pytorch
+  - geopandas
+  - dask
+  - basemap
+  - pip
+  - pip:
+      - jupyterlab
+      - scikit-learn
+      - seaborn
+      - netCDF4

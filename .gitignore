@@ -235,13 +235,16 @@ fabric.properties
 
 ####################################
 # Project stuff
-####################################datasets/
-logs/
+####################################
+logs/*
+!logs/README.md
 *.h5
-datasets/
+datasets/*
+!datasets/README.md
 *.bin
 *.pth
 *.ckpt
-model_weights/
+model_weights/*
+!model_weights/README.md
 lightning_logs/
 dask-worker-space/

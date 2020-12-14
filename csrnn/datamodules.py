@@ -1,14 +1,13 @@
 import os
-import random
 from argparse import ArgumentParser
 from glob import glob
 import logging
-from typing import Union, Optional, List, Tuple
+from typing import Optional, List, Tuple
 
 import numpy as np
 
 import torch
-import torchvision.transforms.functional as TF
+import torchvision
 from torch.utils.data import Dataset, DataLoader
 from PIL import Image
 import torchvision.transforms as transforms
@@ -53,7 +52,6 @@ class ImageDataset(Dataset):
         )
         self.hr_transform = transforms.Compose(
             [
-                transforms.Resize((hr_height, hr_height), Image.BICUBIC),
                 transforms.ToTensor(),
                 transforms.Normalize(mean, std),
             ]
@@ -65,7 +63,7 @@ class ImageDataset(Dataset):
         img = Image.open(self.image_list[index])
         img = self.common_transforms(img)
         img_lr = self.lr_transform(img)
-        img_hr = self.lr_transform(img)
+        img_hr = self.hr_transform(img)
         return {"lr": img_lr, "hr": img_hr}
 
     def __len__(self):
@@ -155,17 +153,21 @@ class SuperResolutionDataModule(pl.LightningDataModule):
 
 
 if __name__ == '__main__':
-    parser = ArgumentParser()
-    parser = SuperResolutionDataModule.add_data_specific_args(parser)
-    args = parser.parse_args()
+    import matplotlib.pyplot as plt
+    test_images = sorted(glob("../datasets/original/pre-training/corals/val_images/*.jpg"))
+    test_dataloader = DataLoader(ImageDataset(test_images), batch_size=4, num_workers=1, shuffle=False)
 
-    dm = SuperResolutionDataModule(
-        root_data_path=args.root_data_path,
-        scaling_factor=args.scaling_factor,
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        hr_shape=args.hr_shape,
-        seed=args.seed,
-    )
-    for idx, batch in tqdm(enumerate(dm.train_dataloader())):
-        pass
+    def matplotlib_imshow(batch):
+        # create grid of images
+        img_grid = torchvision.utils.make_grid(batch, nrow=2, normalize=True)
+        # show images
+        npimg = img_grid.numpy()
+        plt.imshow(np.transpose(npimg, (1, 2, 0)))
+        plt.show()
+
+    img_grid = None
+    for idx, batch in tqdm(enumerate(test_dataloader), total=len(test_dataloader)):
+        lr, hr = batch["lr"], batch["hr"]
+        matplotlib_imshow(lr)
+        matplotlib_imshow(hr)
+        break

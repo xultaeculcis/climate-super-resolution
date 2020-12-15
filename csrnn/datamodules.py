@@ -31,29 +31,33 @@ class ImageDataset(Dataset):
     def __init__(
             self,
             image_list: List[str],
-            hr_shape: Optional[Tuple[int, int]] = (224, 224),
+            hr_size: Optional[int] = 128,
             scaling_factor: Optional[int] = 4,
+            stage: Optional[str] = "train"
     ):
-        hr_height, hr_width = hr_shape
-        self.hr_shape = hr_shape
-        self.common_transforms = transforms.Compose(
+        self.hr_size = hr_size
+        self.stage = stage
+        self.train_transforms = transforms.Compose(
             [
-                transforms.RandomCrop(hr_shape),
+                transforms.RandomCrop(hr_size),
                 transforms.RandomHorizontalFlip(),
                 transforms.RandomVerticalFlip(),
             ]
         )
         self.lr_transform = transforms.Compose(
             [
-                transforms.Resize((hr_height // scaling_factor, hr_height // scaling_factor), Image.BICUBIC),
+                transforms.Resize((hr_size // scaling_factor, hr_size // scaling_factor), Image.BICUBIC),
+            ]
+        )
+        self.common_post_transforms = transforms.Compose(
+            [
                 transforms.ToTensor(),
                 transforms.Normalize(mean, std),
             ]
         )
-        self.hr_transform = transforms.Compose(
+        self.val_transforms = transforms.Compose(
             [
-                transforms.ToTensor(),
-                transforms.Normalize(mean, std),
+                transforms.CenterCrop(hr_size)
             ]
         )
 
@@ -61,9 +65,14 @@ class ImageDataset(Dataset):
 
     def __getitem__(self, index):
         img = Image.open(self.image_list[index])
-        img = self.common_transforms(img)
-        img_lr = self.lr_transform(img)
-        img_hr = self.hr_transform(img)
+        if self.stage == "train":
+            img = self.train_transforms(img)
+        else:
+            img = self.val_transforms(img)
+
+        img_lr = self.common_post_transforms(self.lr_transform(img))
+        img_hr = self.common_post_transforms(img)
+
         return {"lr": img_lr, "hr": img_hr}
 
     def __len__(self):
@@ -73,29 +82,32 @@ class ImageDataset(Dataset):
 class SuperResolutionDataModule(pl.LightningDataModule):
     def __init__(
             self,
-            root_data_path: str,
+            data_path: str,
             scaling_factor: Optional[int] = 4,
             batch_size: Optional[int] = 32,
             num_workers: Optional[int] = 8,
-            hr_shape: Optional[Tuple[int, int]] = (224, 224),
+            hr_size: Optional[int] = 128,
             seed: Optional[int] = 42,
     ):
         super(SuperResolutionDataModule, self).__init__()
-        self.root_data_path = root_data_path
+
+        assert hr_size % scaling_factor == 0
+
+        self.data_path = data_path
         self.scaling_factor = scaling_factor
         self.batch_size = batch_size
         self.num_workers = num_workers
-        self.hr_shape = hr_shape
+        self.hr_size = hr_size
         self.seed = seed
 
         glob_images = [
-            glob(p, recursive=True) for p in [os.path.join(root_data_path, "**", ext) for ext in ["*.jpg", "*.png"]]
+            glob(p, recursive=True) for p in [os.path.join(data_path, "**", ext) for ext in ["*.jpg", "*.png"]]
         ]
         images = []
         for img_list in glob_images:
             images.extend(img_list)
 
-        logging.info(f"Total of {len(images)} found under the {root_data_path}")
+        logging.info(f"Total of {len(images)} found under the {data_path}")
 
         train_images = []
         val_images = []
@@ -109,13 +121,15 @@ class SuperResolutionDataModule(pl.LightningDataModule):
 
         self.train_dataset = ImageDataset(
             image_list=train_images,
-            hr_shape=self.hr_shape,
-            scaling_factor=self.scaling_factor
+            hr_size=self.hr_size,
+            scaling_factor=self.scaling_factor,
+            stage="train"
         )
         self.val_dataset = ImageDataset(
             image_list=val_images,
-            hr_shape=self.hr_shape,
-            scaling_factor=self.scaling_factor
+            hr_size=self.hr_size,
+            scaling_factor=self.scaling_factor,
+            stage="val"
         )
 
     def train_dataloader(self) -> DataLoader:
@@ -143,18 +157,19 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         :returns: The parser.
         """
         parser = ArgumentParser(parents=[parent_parser], add_help=False, conflict_handler="resolve")
-        parser.add_argument('--root_data_path', type=str, default="../datasets/original")
-        parser.add_argument('--scaling_factor', type=int, default=4)
+        parser.add_argument(
+            '--data_path', type=str, default="/media/xultaeculcis/2TB/datasets/sr/original/pre-training/")
         parser.add_argument('--batch_size', type=int, default=32)
         parser.add_argument('--num_workers', type=int, default=8)
-        parser.add_argument('--hr_shape', type=Tuple[int, int], default=(224, 224))
+        parser.add_argument('--hr_size', type=int, default=128)
+        parser.add_argument('--scale_factor', type=int, default=4)
         parser.add_argument('--seed', type=int, default=42)
         return parser
 
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-    test_images = sorted(glob("../datasets/original/pre-training/corals/val_images/*.jpg"))
+    test_images = sorted(glob("/media/xultaeculcis/2TB/datasets/sr/original/pre-training/corals/val_images/*.jpg"))
     test_dataloader = DataLoader(ImageDataset(test_images), batch_size=4, num_workers=1, shuffle=False)
 
     def matplotlib_imshow(batch):

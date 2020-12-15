@@ -9,6 +9,8 @@ ESRGAN (Enhanced SRGAN)
     year = {2018}
 }
 """
+from math import log2
+
 import torch.nn as nn
 import torch
 from torchvision.models import vgg19
@@ -22,6 +24,86 @@ class FeatureExtractor(nn.Module):
 
     def forward(self, img):
         return self.vgg19_54(img)
+
+
+class SRGANBlock(nn.Module):
+    """
+    Building block of SRGAN.
+    """
+
+    def __init__(self, dim):
+        super(SRGANBlock, self).__init__()
+        self.net = nn.Sequential(
+            nn.ReflectionPad2d(1),
+            nn.Conv2d(dim, dim, kernel_size=3),
+            nn.BatchNorm2d(dim),
+            nn.PReLU(),
+            nn.ReflectionPad2d(1),
+            nn.Conv2d(dim, dim, kernel_size=3),
+            nn.BatchNorm2d(dim)
+        )
+
+    def forward(self, x):
+        return x + self.net(x)
+
+
+class SRResNet(nn.Module):
+    """
+    PyTorch Module for SRGAN, https://arxiv.org/pdf/1609.04802.
+    """
+
+    def __init__(self, scale_factor=4, ngf=64, n_blocks=16):
+        super(SRResNet, self).__init__()
+
+        self.head = nn.Sequential(
+            nn.ReflectionPad2d(4),
+            nn.Conv2d(3, ngf, kernel_size=9),
+            nn.PReLU()
+        )
+        self.body = nn.Sequential(
+            *[SRGANBlock(ngf) for _ in range(n_blocks)],
+            nn.ReflectionPad2d(1),
+            nn.Conv2d(ngf, ngf, kernel_size=3),
+            nn.BatchNorm2d(ngf)
+        )
+        self.tail = nn.Sequential(
+            UpscaleBlock(scale_factor, ngf, act='prelu'),
+            nn.ReflectionPad2d(4),
+            nn.Conv2d(ngf, 3, kernel_size=9),
+            nn.Tanh()
+        )
+
+    def forward(self, x):
+        x = self.head(x)
+        x = self.body(x) + x
+        x = self.tail(x)
+        return (x + 1) / 2
+
+
+class UpscaleBlock(nn.Sequential):
+    """
+    Upscale block using sub-pixel convolutions.
+    `scale_factor` can be selected from {2, 3, 4, 8}.
+    """
+
+    def __init__(self, scale_factor, dim, act=None):
+        assert scale_factor in [2, 3, 4, 8]
+
+        layers = []
+        for _ in range(int(log2(scale_factor))):
+            r = 2 if scale_factor % 2 == 0 else 3
+            layers += [
+                nn.ReflectionPad2d(1),
+                nn.Conv2d(dim, dim * r * r, kernel_size=3),
+                nn.PixelShuffle(r),
+            ]
+
+            if act == 'relu':
+                layers += [nn.ReLU(True)]
+            elif act == 'prelu':
+                layers += [nn.PReLU()]
+
+        super(UpscaleBlock, self).__init__(*layers)
 
 
 class DenseResidualBlock(nn.Module):
@@ -66,9 +148,9 @@ class ResidualInResidualDenseBlock(nn.Module):
         return self.dense_blocks(x).mul(self.res_scale) + x
 
 
-class GeneratorRRDB(nn.Module):
+class RRDB(nn.Module):
     def __init__(self, channels, filters=64, num_res_blocks=16, num_upsample=2):
-        super(GeneratorRRDB, self).__init__()
+        super(RRDB, self).__init__()
 
         # First layer
         self.conv1 = nn.Conv2d(channels, filters, kernel_size=3, stride=1, padding=1)
@@ -102,35 +184,40 @@ class GeneratorRRDB(nn.Module):
         return out
 
 
-class Discriminator(nn.Module):
-    def __init__(self, input_shape):
-        super(Discriminator, self).__init__()
+class Discriminator(nn.Sequential):
+    """
+    Discriminator for SRGAN.
+    Dense layers are replaced with global poolings and 1x1 convolutions.
+    """
 
-        self.input_shape = input_shape
-        in_channels, in_height, in_width = self.input_shape
-        patch_h, patch_w = int(in_height / 2 ** 4), int(in_width / 2 ** 4)
-        self.output_shape = (1, patch_h, patch_w)
+    def __init__(self, ndf):
 
-        def discriminator_block(in_filters, out_filters, first_block=False):
-            layers = []
-            layers.append(nn.Conv2d(in_filters, out_filters, kernel_size=3, stride=1, padding=1))
-            if not first_block:
-                layers.append(nn.BatchNorm2d(out_filters))
-            layers.append(nn.LeakyReLU(0.2, inplace=True))
-            layers.append(nn.Conv2d(out_filters, out_filters, kernel_size=3, stride=2, padding=1))
-            layers.append(nn.BatchNorm2d(out_filters))
-            layers.append(nn.LeakyReLU(0.2, inplace=True))
-            return layers
+        def ConvBlock(in_channels, out_channels, stride):
+            out = [
+                nn.Conv2d(in_channels, out_channels, 3, stride, 1),
+                nn.LeakyReLU(0.2, True),
+                nn.BatchNorm2d(out_channels),
+            ]
+            return out
 
-        layers = []
-        in_filters = in_channels
-        for i, out_filters in enumerate([64, 128, 256, 512]):
-            layers.extend(discriminator_block(in_filters, out_filters, first_block=(i == 0)))
-            in_filters = out_filters
+        super(Discriminator, self).__init__(
+            nn.Conv2d(3, ndf, 3, stride=1, padding=1),
+            nn.LeakyReLU(0.2, True),
 
-        layers.append(nn.Conv2d(out_filters, 1, kernel_size=3, stride=1, padding=1))
+            *ConvBlock(ndf, ndf, 2),
 
-        self.model = nn.Sequential(*layers)
+            *ConvBlock(ndf, ndf * 2, 1),
+            *ConvBlock(ndf * 2, ndf * 2, 2),
 
-    def forward(self, img):
-        return self.model(img)
+            *ConvBlock(ndf * 2, ndf * 4, 1),
+            *ConvBlock(ndf * 4, ndf * 4, 2),
+
+            *ConvBlock(ndf * 4, ndf * 8, 1),
+            *ConvBlock(ndf * 8, ndf * 8, 2),
+
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(ndf * 8, 1024, kernel_size=1),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(1024, 1, kernel_size=1),
+            nn.Sigmoid()
+        )

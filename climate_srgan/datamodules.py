@@ -6,25 +6,18 @@ from typing import Optional, List, Tuple
 
 import numpy as np
 
-import torch
 import torchvision
+from torch import Tensor
 from torch.utils.data import Dataset, DataLoader
 from PIL import Image
 import torchvision.transforms as transforms
 import pytorch_lightning as pl
 from tqdm import tqdm
 
-mean = np.array([0.485, 0.456, 0.406])
-std = np.array([0.229, 0.224, 0.225])
-
 logging.basicConfig(level=logging.INFO)
 
-
-def denormalize(tensors):
-    """ Denormalizes image tensors using mean and std """
-    for c in range(3):
-        tensors[:, c].mul_(std[c]).add_(mean[c])
-    return torch.clamp(tensors, 0, 255)
+mean = np.array([0.485, 0.456, 0.406])
+std = np.array([0.229, 0.224, 0.225])
 
 
 class ImageDataset(Dataset):
@@ -52,7 +45,7 @@ class ImageDataset(Dataset):
         self.common_post_transforms = transforms.Compose(
             [
                 transforms.ToTensor(),
-                transforms.Normalize(mean, std),
+                # transforms.Normalize(mean, std),
             ]
         )
         self.val_transforms = transforms.Compose(
@@ -63,8 +56,8 @@ class ImageDataset(Dataset):
 
         self.image_list = image_list
 
-    def __getitem__(self, index):
-        img = Image.open(self.image_list[index])
+    def __getitem__(self, index) -> Tuple[Tensor, Tensor]:
+        img = Image.open(self.image_list[index]).convert(mode="RGB")
         if self.stage == "train":
             img = self.train_transforms(img)
         else:
@@ -73,9 +66,9 @@ class ImageDataset(Dataset):
         img_lr = self.common_post_transforms(self.lr_transform(img))
         img_hr = self.common_post_transforms(img)
 
-        return {"lr": img_lr, "hr": img_hr}
+        return img_lr, img_hr
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.image_list)
 
 
@@ -85,8 +78,8 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             data_path: str,
             scaling_factor: Optional[int] = 4,
             batch_size: Optional[int] = 32,
-            num_workers: Optional[int] = 8,
-            hr_size: Optional[int] = 128,
+            num_workers: Optional[int] = 4,
+            hr_size: Optional[int] = 256,
             seed: Optional[int] = 42,
     ):
         super(SuperResolutionDataModule, self).__init__()
@@ -160,7 +153,7 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         parser.add_argument(
             '--data_path', type=str, default="/media/xultaeculcis/2TB/datasets/sr/original/pre-training/")
         parser.add_argument('--batch_size', type=int, default=32)
-        parser.add_argument('--num_workers', type=int, default=8)
+        parser.add_argument('--num_workers', type=int, default=4)
         parser.add_argument('--hr_size', type=int, default=128)
         parser.add_argument('--scale_factor', type=int, default=4)
         parser.add_argument('--seed', type=int, default=42)
@@ -169,8 +162,10 @@ class SuperResolutionDataModule(pl.LightningDataModule):
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-    test_images = sorted(glob("/media/xultaeculcis/2TB/datasets/sr/original/pre-training/corals/val_images/*.jpg"))
+
+    test_images = sorted(glob("/media/xultaeculcis/2TB/datasets/sr/original/pre-training/coco/val_images/*.jpg"))
     test_dataloader = DataLoader(ImageDataset(test_images), batch_size=4, num_workers=1, shuffle=False)
+
 
     def matplotlib_imshow(batch):
         # create grid of images
@@ -179,6 +174,7 @@ if __name__ == '__main__':
         npimg = img_grid.numpy()
         plt.imshow(np.transpose(npimg, (1, 2, 0)))
         plt.show()
+
 
     img_grid = None
     for idx, batch in tqdm(enumerate(test_dataloader), total=len(test_dataloader)):

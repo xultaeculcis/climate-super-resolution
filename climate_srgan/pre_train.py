@@ -35,14 +35,14 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
 
     parser.add_argument('--precision', type=int, default=16)
     parser.add_argument('--gpus', type=int, default=1)
-    parser.add_argument('--max_epochs', type=int, default=20)
+    parser.add_argument('--max_epochs', type=int, default=10)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--fast_dev_run', type=bool, default=False)
     parser.add_argument('--print_config', type=bool, default=True)
     parser.add_argument('--log_dir', type=str, default="../logs")
     parser.add_argument('--save_model_path', type=str, default="../model_weights")
     parser.add_argument('--early_stopping_patience', type=int, default=20)
-    parser.add_argument('--checkpoint_monitor_metric', type=str, default="train_l1_loss")
+    parser.add_argument('--checkpoint_monitor_metric', type=str, default="hp_metric")
     parser.add_argument('--accumulate_grad_batches', type=int, default=1)
     parser.add_argument('--save_top_k', type=int, default=1)
     parser.add_argument('--log_every_n_steps', type=int, default=5)
@@ -74,7 +74,7 @@ def prepare_pl_trainer(args: argparse.Namespace) -> pl.Trainer:
     :return: The Pytorch Lightning Trainer.
     """
     experiment_name = f"{int(datetime.utcnow().timestamp())}"
-    tb_logger = pl_loggers.TensorBoardLogger(args.log_dir, name=experiment_name)
+    tb_logger = pl_loggers.TensorBoardLogger(args.log_dir, name=experiment_name, default_hp_metric=True)
     monitor_metric = args.checkpoint_monitor_metric
     mode = "min"
     early_stop_callback = EarlyStopping(

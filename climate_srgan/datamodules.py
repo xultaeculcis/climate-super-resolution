@@ -42,10 +42,9 @@ class ImageDataset(Dataset):
                 transforms.Resize((hr_size // scaling_factor, hr_size // scaling_factor), Image.BICUBIC),
             ]
         )
-        self.common_post_transforms = transforms.Compose(
+        self.common_transforms = transforms.Compose(
             [
                 transforms.ToTensor(),
-                # transforms.Normalize(mean, std),
             ]
         )
         self.val_transforms = transforms.Compose(
@@ -63,8 +62,8 @@ class ImageDataset(Dataset):
         else:
             img = self.val_transforms(img)
 
-        img_lr = self.common_post_transforms(self.lr_transform(img))
-        img_hr = self.common_post_transforms(img)
+        img_lr = self.common_transforms(self.lr_transform(img))
+        img_hr = self.common_transforms(img)
 
         return img_lr, img_hr
 
@@ -94,7 +93,11 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         self.seed = seed
 
         glob_images = [
-            glob(p, recursive=True) for p in [os.path.join(data_path, "**", ext) for ext in ["*.jpg", "*.png"]]
+            glob(p, recursive=True) for p in [
+                os.path.join(data_path, "**", ext) for ext in [
+                    ".jpeg", "*.jpg", "*.png", ".bmp", ".JPEG", ".JPG", ".PNG", ".BMP"
+                ]
+            ]
         ]
         images = []
         for img_list in glob_images:
@@ -104,9 +107,12 @@ class SuperResolutionDataModule(pl.LightningDataModule):
 
         train_images = []
         val_images = []
+        test_images = []
         for img_path in images:
-            if "val_images" in img_path or "valid_HR" in img_path:
+            if "/val/" in img_path:
                 val_images.append(img_path)
+            elif "/test/" in img_path:
+                test_images.append(img_path)
             else:
                 train_images.append(img_path)
 
@@ -123,6 +129,12 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             hr_size=self.hr_size,
             scaling_factor=self.scaling_factor,
             stage="val"
+        )
+        self.test_dataset = ImageDataset(
+            image_list=test_images,
+            hr_size=self.hr_size,
+            scaling_factor=self.scaling_factor,
+            stage="test"
         )
 
     def train_dataloader(self) -> DataLoader:
@@ -141,6 +153,14 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
         )
 
+    def test_dataloader(self) -> DataLoader:
+        return DataLoader(
+            self.test_dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=self.num_workers,
+        )
+
     @staticmethod
     def add_data_specific_args(parent_parser: ArgumentParser) -> ArgumentParser:
         """
@@ -153,7 +173,7 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         parser.add_argument(
             '--data_path', type=str, default="/media/xultaeculcis/2TB/datasets/sr/original/pre-training/")
         parser.add_argument('--batch_size', type=int, default=32)
-        parser.add_argument('--num_workers', type=int, default=4)
+        parser.add_argument('--num_workers', type=int, default=8)
         parser.add_argument('--hr_size', type=int, default=128)
         parser.add_argument('--scale_factor', type=int, default=4)
         parser.add_argument('--seed', type=int, default=42)
@@ -163,7 +183,8 @@ class SuperResolutionDataModule(pl.LightningDataModule):
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
 
-    test_images = sorted(glob("/media/xultaeculcis/2TB/datasets/sr/original/pre-training/coco/val_images/*.jpg"))
+    test_images = sorted(
+        glob("/media/xultaeculcis/2TB/datasets/sr/original/pre-training/val/road_testing/**/*.png", recursive=True))
     test_dataloader = DataLoader(ImageDataset(test_images), batch_size=4, num_workers=1, shuffle=False)
 
 
@@ -176,9 +197,11 @@ if __name__ == '__main__':
         plt.show()
 
 
+    print(len(test_images))
+
     img_grid = None
     for idx, batch in tqdm(enumerate(test_dataloader), total=len(test_dataloader)):
-        lr, hr = batch["lr"], batch["hr"]
+        lr, hr = batch
         matplotlib_imshow(lr)
         matplotlib_imshow(hr)
         break

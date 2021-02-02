@@ -1,16 +1,17 @@
 import argparse
-from typing import List, Any
+from collections import OrderedDict
+from typing import Any
 
 import pytorch_lightning as pl
 import torch
 import pytorch_lightning.metrics as pl_metrics
 
-from models import Generator
+from models import Generator, Discriminator
 
 
 class PreTrainingClimateSRGanModule(pl.LightningModule):
     """
-    LightningModule for pre-training the Climate SRGAN.
+    LightningModule for pre-training the Climate SRGAN Generator.
     """
 
     def __init__(
@@ -33,7 +34,7 @@ class PreTrainingClimateSRGanModule(pl.LightningModule):
         return self.net_G(input)
 
     def training_step(self, batch, batch_nb):
-        lr, hr = batch
+        lr, hr, _ = batch
 
         # Generating fake high resolution images from real low resolution images.
         sr = self(lr)
@@ -45,7 +46,7 @@ class PreTrainingClimateSRGanModule(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_nb):
-        lr, hr = batch
+        lr, hr, sr_bicubic = batch
 
         # Generating fake high resolution images from real low resolution images.
         sr = self(lr)
@@ -57,11 +58,12 @@ class PreTrainingClimateSRGanModule(pl.LightningModule):
 
     def on_epoch_end(self) -> None:
         with torch.no_grad():
-            lr, hr = next(iter(self.trainer.datamodule.val_dataloader()))
+            lr, hr, sr_bicubic = next(iter(self.trainer.datamodule.val_dataloader()))
             lr = lr.to(self.device)
 
             self.logger.experiment.add_images('hr_images', hr, self.current_epoch)
             self.logger.experiment.add_images('lr_images', lr, self.current_epoch)
+            self.logger.experiment.add_images('sr_bicubic', sr_bicubic, self.current_epoch)
 
             sr = self(lr)
             self.logger.experiment.add_images('sr_images', sr, self.current_epoch)

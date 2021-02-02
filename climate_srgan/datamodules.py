@@ -2,7 +2,7 @@ import os
 from argparse import ArgumentParser
 from glob import glob
 import logging
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Any
 
 import numpy as np
 
@@ -55,17 +55,20 @@ class ImageDataset(Dataset):
 
         self.image_list = image_list
 
-    def __getitem__(self, index) -> Tuple[Tensor, Tensor]:
+    def __getitem__(self, index) -> Tuple[Tensor, Tensor, Optional[Any]]:
         img = Image.open(self.image_list[index]).convert(mode="RGB")
         if self.stage == "train":
             img = self.train_transforms(img)
+            img_sr_bicubic = []
         else:
             img = self.val_transforms(img)
+            upscale = transforms.Resize((self.hr_size, self.hr_size))
+            img_sr_bicubic = self.common_transforms(upscale(self.lr_transform(img)))
 
         img_lr = self.common_transforms(self.lr_transform(img))
         img_hr = self.common_transforms(img)
 
-        return img_lr, img_hr
+        return img_lr, img_hr, img_sr_bicubic
 
     def __len__(self) -> int:
         return len(self.image_list)
@@ -185,12 +188,12 @@ if __name__ == '__main__':
 
     test_images = sorted(
         glob("/media/xultaeculcis/2TB/datasets/sr/original/pre-training/val/road_testing/**/*.png", recursive=True))
-    test_dataloader = DataLoader(ImageDataset(test_images), batch_size=4, num_workers=1, shuffle=False)
+    test_dataloader = DataLoader(ImageDataset(test_images, stage="val"), batch_size=4, num_workers=1, shuffle=False)
 
 
     def matplotlib_imshow(batch):
         # create grid of images
-        img_grid = torchvision.utils.make_grid(batch, nrow=2, normalize=True)
+        img_grid = torchvision.utils.make_grid(batch, nrow=2, normalize=True, padding=0)
         # show images
         npimg = img_grid.numpy()
         plt.imshow(np.transpose(npimg, (1, 2, 0)))
@@ -201,7 +204,8 @@ if __name__ == '__main__':
 
     img_grid = None
     for idx, batch in tqdm(enumerate(test_dataloader), total=len(test_dataloader)):
-        lr, hr = batch
+        lr, hr, sr_bicubic = batch
         matplotlib_imshow(lr)
         matplotlib_imshow(hr)
+        matplotlib_imshow(sr_bicubic)
         break

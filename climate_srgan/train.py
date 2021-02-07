@@ -2,10 +2,9 @@ import argparse
 import os
 import warnings
 import logging
-from collections import OrderedDict
 from datetime import datetime
 from pprint import pprint
-from typing import Tuple, Any
+from typing import Tuple
 
 import numpy as np
 import pytorch_lightning as pl
@@ -14,8 +13,7 @@ from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
 
 from datamodules import SuperResolutionDataModule
-from models import Generator
-from pl_pre_training_generator import PreTrainingClimateSRGanModule
+from pl_climate_esrgan import ClimateSRGanModule
 
 np.set_printoptions(precision=3)
 logging.basicConfig(level=logging.INFO)
@@ -34,16 +32,19 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(conflict_handler="resolve", add_help=False)
     parser = pl.Trainer.add_argparse_args(parser)
     parser = SuperResolutionDataModule.add_data_specific_args(parser)
-    parser = PreTrainingClimateSRGanModule.add_model_specific_args(parser)
+    parser = ClimateSRGanModule.add_model_specific_args(parser)
 
     # training config args
     parser.add_argument('--precision', type=int, default=16)
     parser.add_argument('--gpus', type=int, default=1)
     parser.add_argument('--max_epochs', type=int, default=20)
-    parser.add_argument('--batch_size', type=int, default=32)
-    parser.add_argument('--fast_dev_run', type=bool, default=True)
+    parser.add_argument('--batch_size', type=int, default=20)
+    parser.add_argument('--val_check_interval', type=float, default=0.1)
+    parser.add_argument('--accumulate_grad_batches', type=int, default=1)
+    parser.add_argument('--fast_dev_run', type=bool, default=False)
     parser.add_argument('--print_config', type=bool, default=True)
-    parser.add_argument('--experiment_name', type=str, default="gen-pre-training")
+    parser.add_argument('--train_fresh', type=bool, default=True)
+    parser.add_argument('--experiment_name', type=str, default="train")
     parser.add_argument('--log_dir', type=str, default="../logs")
     parser.add_argument('--save_model_path', type=str, default="../model_weights")
     parser.add_argument('--early_stopping_patience', type=int, default=20)
@@ -67,14 +68,14 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     return parser.parse_args(arguments)
 
 
-def prepare_pl_module(args: argparse.Namespace) -> PreTrainingClimateSRGanModule:
+def prepare_pl_module(args: argparse.Namespace) -> ClimateSRGanModule:
     """
     Prepares the Ambulance Network Lightning Module.
 
     :param args: The arguments.
     :return: The Ambulance Network Lightning Module.
     """
-    net = PreTrainingClimateSRGanModule(
+    net = ClimateSRGanModule(
         **vars(args)
     )
     return net
@@ -87,7 +88,8 @@ def prepare_pl_trainer(args: argparse.Namespace) -> pl.Trainer:
     :param args: The arguments.
     :return: The Pytorch Lightning Trainer.
     """
-    experiment_name = f"{args.experiment_name}-{int(datetime.utcnow().timestamp())}"
+    # experiment_name = f"{args.experiment_name}-{int(datetime.utcnow().timestamp())}"
+    experiment_name = f"{args.experiment_name}"
     tb_logger = pl_loggers.TensorBoardLogger(args.log_dir, name=experiment_name, default_hp_metric=True)
     monitor_metric = args.checkpoint_monitor_metric
     mode = "min"
@@ -138,7 +140,7 @@ def prepare_pl_datamodule(args: argparse.Namespace) -> SuperResolutionDataModule
 
 def prepare_training(
         args: argparse.Namespace
-) -> Tuple[PreTrainingClimateSRGanModule, SuperResolutionDataModule, pl.Trainer]:
+) -> Tuple[ClimateSRGanModule, SuperResolutionDataModule, pl.Trainer]:
     """
     Prepares everything for training. `DataModule` is prepared by setting up the train/val/test sets for specified fold.
     Creates new `PreTrainingClimateSRGanModule` Lightning Module together with `pl.Trainer`.
@@ -156,12 +158,13 @@ def prepare_training(
 
 if __name__ == "__main__":
     arguments = parse_args()
-    if arguments.train_both_networks:
-        arguments.experiment_name = "pre-train-both"
 
     if arguments.print_config:
         print(f"Running with following configuration:")
         pprint(vars(arguments))
+
+    pl.seed_everything(seed=arguments.seed)
+    torch.manual_seed(arguments.seed)
 
     net, dm, trainer = prepare_training(arguments)
     trainer.fit(model=net, datamodule=dm)

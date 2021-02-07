@@ -1,12 +1,10 @@
 import argparse
-from collections import OrderedDict
-from typing import Any
 
 import pytorch_lightning as pl
 import torch
 import pytorch_lightning.metrics as pl_metrics
 
-from models import Generator, Discriminator
+from models import Generator
 
 
 class PreTrainingClimateSRGanModule(pl.LightningModule):

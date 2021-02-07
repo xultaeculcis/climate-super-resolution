@@ -80,7 +80,7 @@ class Discriminator(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, upscale_factor, num_rrdb_blocks=2, num_rrfdb_blocks=2):
+    def __init__(self, upscale_factor, num_rrdb_blocks=8, num_rrfdb_blocks=4):
         r""" This is an esrgan model defined by the author himself.
 
         Args:

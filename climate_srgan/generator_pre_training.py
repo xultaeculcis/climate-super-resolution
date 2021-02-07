@@ -14,7 +14,6 @@ from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
 
 from datamodules import SuperResolutionDataModule
-from models import Generator
 from pl_pre_training_generator import PreTrainingClimateSRGanModule
 
 np.set_printoptions(precision=3)
@@ -40,8 +39,8 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     parser.add_argument('--precision', type=int, default=16)
     parser.add_argument('--gpus', type=int, default=1)
     parser.add_argument('--max_epochs', type=int, default=20)
-    parser.add_argument('--batch_size', type=int, default=32)
-    parser.add_argument('--fast_dev_run', type=bool, default=True)
+    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--fast_dev_run', type=bool, default=False)
     parser.add_argument('--print_config', type=bool, default=True)
     parser.add_argument('--experiment_name', type=str, default="gen-pre-training")
     parser.add_argument('--log_dir', type=str, default="../logs")
@@ -148,12 +147,13 @@ def prepare_training(
 
 if __name__ == "__main__":
     arguments = parse_args()
-    if arguments.train_both_networks:
-        arguments.experiment_name = "pre-train-both"
 
     if arguments.print_config:
         print(f"Running with following configuration:")
         pprint(vars(arguments))
+
+    pl.seed_everything(seed=arguments.seed)
+    torch.manual_seed(arguments.seed)
 
     net, dm, trainer = prepare_training(arguments)
     trainer.fit(model=net, datamodule=dm)

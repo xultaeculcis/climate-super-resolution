@@ -5,7 +5,6 @@ import pytorch_lightning as pl
 import torch
 from torch import Tensor
 from torch.optim import Adam
-from torch.optim.lr_scheduler import MultiStepLR
 
 from esrgan.loss import PerceptualLoss
 from esrgan.models import Generator, Discriminator

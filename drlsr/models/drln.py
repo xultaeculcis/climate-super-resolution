@@ -3,10 +3,6 @@ import torch.nn as nn
 import models.ops as ops
 
 
-def make_model(args, parent=False):
-    return DRLN(args)
-
-
 class CALayer(nn.Module):
     def __init__(self, channel, reduction=16):
         super(CALayer, self).__init__()
@@ -56,10 +52,10 @@ class Block(nn.Module):
 
 
 class DRLN(nn.Module):
-    def __init__(self, args):
+    def __init__(self, scaling_factor: int):
         super(DRLN, self).__init__()
 
-        self.scale = args.scale[0]
+        self.scale = scaling_factor
         chs = 64
 
         self.sub_mean = ops.MeanShift((0.4488, 0.4371, 0.4040), sub=True)
@@ -110,7 +106,6 @@ class DRLN(nn.Module):
         self.c20 = ops.BasicBlock(chs * 5, chs, 3, 1, 1)
 
         self.upsample = ops.UpsampleBlock(chs, self.scale, multi_scale=False)
-        # self.convert = ops.ConvertBlock(chs, chs, 20)
         self.tail = nn.Conv2d(chs, 3, 3, 1, 1)
 
     def forward(self, x):

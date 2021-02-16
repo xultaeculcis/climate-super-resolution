@@ -248,3 +248,4 @@ model_weights/*
 !model_weights/README.md
 lightning_logs/
 dask-worker-space/
+results/

@@ -7,16 +7,16 @@ import torch
 from esrgan.models import Generator
 
 
-class PreTrainingClimateESRGANModule(pl.LightningModule):
+class PreTrainingESRGANModule(pl.LightningModule):
     """
-    LightningModule for pre-training the Climate ESRGAN Generator.
+    LightningModule for pre-training the ESRGAN Generator.
     """
 
     def __init__(
             self,
             **kwargs
     ):
-        super(PreTrainingClimateESRGANModule, self).__init__()
+        super(PreTrainingESRGANModule, self).__init__()
 
         # store parameters
         self.save_hyperparameters()
@@ -76,7 +76,7 @@ class PreTrainingClimateESRGANModule(pl.LightningModule):
             self.logger.experiment.add_images('lr_images', lr, self.global_step)
             self.logger.experiment.add_images('sr_bicubic', sr_bicubic, self.global_step)
 
-            sr = self(lr)
+            sr = self(lr).clamp_(0, 1)
             self.logger.experiment.add_images('sr_images', sr, self.global_step)
 
     def configure_optimizers(self):

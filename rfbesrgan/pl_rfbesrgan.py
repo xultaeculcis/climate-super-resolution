@@ -11,16 +11,16 @@ from loss import VGGLoss
 from models import Generator, Discriminator
 
 
-class ClimateRbfESRGANModule(pl.LightningModule):
+class RfbESRGANModule(pl.LightningModule):
     """
-    LightningModule for pre-training the Climate RFB-ESRGAN.
+    LightningModule for pre-training the RFB-ESRGAN.
     """
 
     def __init__(
             self,
             **kwargs
     ):
-        super(ClimateRbfESRGANModule, self).__init__()
+        super(RfbESRGANModule, self).__init__()
 
         # store parameters
         self.save_hyperparameters()
@@ -176,7 +176,7 @@ class ClimateRbfESRGANModule(pl.LightningModule):
             self.logger.experiment.add_images('lr_images', lr, self.current_epoch)
             self.logger.experiment.add_images('sr_bicubic', sr_bicubic, self.current_epoch)
 
-            sr = self(lr)
+            sr = self(lr).clamp_(0, 1)
             self.logger.experiment.add_images('sr_images', sr, self.current_epoch)
 
     def configure_optimizers(self) -> Tuple[List[Adam], List[StepLR]]:

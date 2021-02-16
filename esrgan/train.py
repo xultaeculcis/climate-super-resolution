@@ -11,7 +11,7 @@ from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
 
 from datamodules import SuperResolutionDataModule
-from pl_climate_esrgan import ClimateESRGANModule
+from pl_esrgan import ESRGANModule
 
 np.set_printoptions(precision=3)
 logging.basicConfig(level=logging.INFO)
@@ -30,7 +30,7 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(conflict_handler="resolve", add_help=False)
     parser = pl.Trainer.add_argparse_args(parser)
     parser = SuperResolutionDataModule.add_data_specific_args(parser)
-    parser = ClimateESRGANModule.add_model_specific_args(parser)
+    parser = ESRGANModule.add_model_specific_args(parser)
 
     # training config args
     parser.add_argument('--precision', type=int, default=16)
@@ -41,7 +41,7 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     parser.add_argument('--accumulate_grad_batches', type=int, default=1)
     parser.add_argument('--fast_dev_run', type=bool, default=False)
     parser.add_argument('--print_config', type=bool, default=True)
-    parser.add_argument('--experiment_name', type=str, default="climate-esrgan-training")
+    parser.add_argument('--experiment_name', type=str, default="esrgan-training")
     parser.add_argument('--log_dir', type=str, default="../logs")
     parser.add_argument('--save_model_path', type=str, default="../model_weights")
     parser.add_argument('--early_stopping_patience', type=int, default=100)
@@ -66,14 +66,14 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     return parser.parse_args(arguments)
 
 
-def prepare_pl_module(args: argparse.Namespace) -> ClimateESRGANModule:
+def prepare_pl_module(args: argparse.Namespace) -> ESRGANModule:
     """
-    Prepares the Ambulance Network Lightning Module.
+    Prepares the ESRGANModule Lightning Module.
 
     :param args: The arguments.
-    :return: The Ambulance Network Lightning Module.
+    :return: The ESRGANModule Lightning Module.
     """
-    net = ClimateESRGANModule(
+    net = ESRGANModule(
         **vars(args)
     )
     return net
@@ -136,10 +136,10 @@ def prepare_pl_datamodule(args: argparse.Namespace) -> SuperResolutionDataModule
 
 def prepare_training(
         args: argparse.Namespace
-) -> Tuple[ClimateESRGANModule, SuperResolutionDataModule, pl.Trainer]:
+) -> Tuple[ESRGANModule, SuperResolutionDataModule, pl.Trainer]:
     """
     Prepares everything for training. `DataModule` is prepared by setting up the train/val/test sets for specified fold.
-    Creates new `PreTrainingClimateSRGanModule` Lightning Module together with `pl.Trainer`.
+    Creates new `ESRGANModule` Lightning Module together with `pl.Trainer`.
 
     :param args: The arguments.
     :returns: A tuple with model and the trainer.

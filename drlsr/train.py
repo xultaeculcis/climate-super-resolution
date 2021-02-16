@@ -54,10 +54,10 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
 
     # args for training both GAN and Discriminator networks
     parser.add_argument(
-        '--pretrained_gen_model',
+        '--pretrained_model',
         type=str,
-        default="../model_weights/RRDB_PSNR_x4.pth",
-        help="A path to pre-trained GAN checkpoint. Only required when training both networks."
+        default="../model_weights/DRLN_BIX4.pt",
+        help="A path to pre-trained model checkpoint. Required for fine tuning."
     )
 
     # override args
@@ -68,10 +68,10 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
 
 def prepare_pl_module(args: argparse.Namespace) -> DRLNLightningModule:
     """
-    Prepares the Ambulance Network Lightning Module.
+    Prepares the DRLNLightningModule Lightning Module.
 
     :param args: The arguments.
-    :return: The Ambulance Network Lightning Module.
+    :return: The DRLNLightningModule Lightning Module.
     """
     net = DRLNLightningModule(
         **vars(args)

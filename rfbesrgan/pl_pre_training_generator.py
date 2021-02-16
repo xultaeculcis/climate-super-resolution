@@ -7,16 +7,16 @@ import pytorch_lightning.metrics as pl_metrics
 from models import Generator
 
 
-class PreTrainingClimateSRGanModule(pl.LightningModule):
+class PreTrainingRfbESRGANModule(pl.LightningModule):
     """
-    LightningModule for pre-training the Climate RFB-ESRGAN Generator.
+    LightningModule for pre-training the RFB-ESRGAN Generator.
     """
 
     def __init__(
             self,
             **kwargs
     ):
-        super(PreTrainingClimateSRGanModule, self).__init__()
+        super(PreTrainingRfbESRGANModule, self).__init__()
 
         # store parameters
         self.save_hyperparameters()
@@ -63,7 +63,7 @@ class PreTrainingClimateSRGanModule(pl.LightningModule):
             self.logger.experiment.add_images('lr_images', lr, self.current_epoch)
             self.logger.experiment.add_images('sr_bicubic', sr_bicubic, self.current_epoch)
 
-            sr = self(lr)
+            sr = self(lr).clamp_(0, 1)
             self.logger.experiment.add_images('sr_images', sr, self.current_epoch)
 
     def configure_optimizers(self):

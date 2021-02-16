@@ -13,7 +13,7 @@ from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
 
 from datamodules import SuperResolutionDataModule
-from pl_climate_rfbesrgan import ClimateRbfESRGANModule
+from pl_rfbesrgan import RfbESRGANModule
 
 np.set_printoptions(precision=3)
 logging.basicConfig(level=logging.INFO)
@@ -32,7 +32,7 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(conflict_handler="resolve", add_help=False)
     parser = pl.Trainer.add_argparse_args(parser)
     parser = SuperResolutionDataModule.add_data_specific_args(parser)
-    parser = ClimateRbfESRGANModule.add_model_specific_args(parser)
+    parser = RfbESRGANModule.add_model_specific_args(parser)
 
     # training config args
     parser.add_argument('--precision', type=int, default=16)
@@ -58,7 +58,7 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     parser.add_argument(
         '--pretrained_gen_model',
         type=str,
-        default="../model_weights/climate-rfb-esrgan-pre-training-epoch=09-hp_metric=0.05.ckpt",
+        default="../model_weights/rfb-esrgan-pre-training-epoch=09-hp_metric=0.05.ckpt",
         help="A path to pre-trained GAN checkpoint. Only required when training both networks."
     )
 
@@ -68,14 +68,14 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     return parser.parse_args(arguments)
 
 
-def prepare_pl_module(args: argparse.Namespace) -> ClimateRbfESRGANModule:
+def prepare_pl_module(args: argparse.Namespace) -> RfbESRGANModule:
     """
-    Prepares the Ambulance Network Lightning Module.
+    Prepares the RfbESRGANModule Lightning Module.
 
     :param args: The arguments.
-    :return: The Ambulance Network Lightning Module.
+    :return: The RfbESRGANModule Lightning Module.
     """
-    net = ClimateRbfESRGANModule(
+    net = RfbESRGANModule(
         **vars(args)
     )
     return net
@@ -140,10 +140,10 @@ def prepare_pl_datamodule(args: argparse.Namespace) -> SuperResolutionDataModule
 
 def prepare_training(
         args: argparse.Namespace
-) -> Tuple[ClimateRbfESRGANModule, SuperResolutionDataModule, pl.Trainer]:
+) -> Tuple[RfbESRGANModule, SuperResolutionDataModule, pl.Trainer]:
     """
     Prepares everything for training. `DataModule` is prepared by setting up the train/val/test sets for specified fold.
-    Creates new `PreTrainingClimateSRGanModule` Lightning Module together with `pl.Trainer`.
+    Creates new `RfbESRGANModule` Lightning Module together with `pl.Trainer`.
 
     :param args: The arguments.
     :returns: A tuple with model and the trainer.

@@ -1,4 +1,5 @@
 import argparse
+import logging
 from typing import List, Any, Tuple, Dict, Union
 
 import pytorch_lightning as pl
@@ -10,12 +11,20 @@ from models.drln import DRLN
 
 
 class DRLNLightningModule(pl.LightningModule):
-    def __init__(self, args, kwargs):
+    """
+    LightningModule for training the DRLN.
+    """
+
+    def __init__(self, *args, **kwargs):
         super(DRLNLightningModule, self).__init__()
 
         self.save_hyperparameters()
 
         self.model = DRLN(self.hparams.scaling_factor)
+
+        if self.hparams.pretrained_model:
+            logging.info(f"Loading pre-trained model '{self.hparams.pretrained_model}' for fine-tuning")
+            self.model.load_state_dict(torch.load(self.hparams.pretrained_model), strict=True)
 
     def forward(self, x: Tensor):
         return self.model(x)
@@ -69,7 +78,7 @@ class DRLNLightningModule(pl.LightningModule):
             self.logger.experiment.add_images('lr_images', lr, self.global_step)
             self.logger.experiment.add_images('sr_bicubic', sr_bicubic, self.global_step)
 
-            sr = self(lr)
+            sr = self(lr).clamp_(0, 1)
             self.logger.experiment.add_images('sr_images', sr, self.global_step)
 
     def configure_optimizers(self) -> Tuple[List[torch.optim.Optimizer], List[Dict[str, Union[str, Any]]]]:

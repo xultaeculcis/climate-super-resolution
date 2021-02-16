@@ -10,16 +10,16 @@ from esrgan.loss import PerceptualLoss
 from esrgan.models import Generator, Discriminator
 
 
-class ClimateESRGANModule(pl.LightningModule):
+class ESRGANModule(pl.LightningModule):
     """
-    LightningModule for pre-training the Climate ESRGAN.
+    LightningModule for pre-training the ESRGAN.
     """
 
     def __init__(
             self,
             **kwargs
     ):
-        super(ClimateESRGANModule, self).__init__()
+        super(ESRGANModule, self).__init__()
 
         # store parameters
         self.save_hyperparameters()
@@ -169,7 +169,7 @@ class ClimateESRGANModule(pl.LightningModule):
             self.logger.experiment.add_images('lr_images', lr, self.global_step)
             self.logger.experiment.add_images('sr_bicubic', sr_bicubic, self.global_step)
 
-            sr = self(lr)
+            sr = self(lr).clamp_(0, 1)
             self.logger.experiment.add_images('sr_images', sr, self.global_step)
 
     def configure_optimizers(self) -> Tuple[List[Adam], List[Dict[str, Union[str, Any]]]]:

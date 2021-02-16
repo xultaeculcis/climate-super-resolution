@@ -14,7 +14,7 @@ from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
 
 from datamodules import SuperResolutionDataModule
-from pl_pre_training_generator import PreTrainingClimateSRGanModule
+from pl_pre_training_generator import PreTrainingRfbESRGANModule
 
 np.set_printoptions(precision=3)
 logging.basicConfig(level=logging.INFO)
@@ -33,7 +33,7 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(conflict_handler="resolve", add_help=False)
     parser = pl.Trainer.add_argparse_args(parser)
     parser = SuperResolutionDataModule.add_data_specific_args(parser)
-    parser = PreTrainingClimateSRGanModule.add_model_specific_args(parser)
+    parser = PreTrainingRfbESRGANModule.add_model_specific_args(parser)
 
     # training config args
     parser.add_argument('--precision', type=int, default=16)
@@ -58,14 +58,14 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     return parser.parse_args(arguments)
 
 
-def prepare_pl_module(args: argparse.Namespace) -> PreTrainingClimateSRGanModule:
+def prepare_pl_module(args: argparse.Namespace) -> PreTrainingRfbESRGANModule:
     """
-    Prepares the Ambulance Network Lightning Module.
+    Prepares the PreTrainingRfbESRGANModule Lightning Module.
 
     :param args: The arguments.
-    :return: The Ambulance Network Lightning Module.
+    :return: The PreTrainingRfbESRGANModule Lightning Module.
     """
-    net = PreTrainingClimateSRGanModule(
+    net = PreTrainingRfbESRGANModule(
         **vars(args)
     )
     return net
@@ -129,10 +129,10 @@ def prepare_pl_datamodule(args: argparse.Namespace) -> SuperResolutionDataModule
 
 def prepare_training(
         args: argparse.Namespace
-) -> Tuple[PreTrainingClimateSRGanModule, SuperResolutionDataModule, pl.Trainer]:
+) -> Tuple[PreTrainingRfbESRGANModule, SuperResolutionDataModule, pl.Trainer]:
     """
     Prepares everything for training. `DataModule` is prepared by setting up the train/val/test sets for specified fold.
-    Creates new `PreTrainingClimateSRGanModule` Lightning Module together with `pl.Trainer`.
+    Creates new `PreTrainingRfbESRGANModule` Lightning Module together with `pl.Trainer`.
 
     :param args: The arguments.
     :returns: A tuple with model and the trainer.

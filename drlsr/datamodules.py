@@ -191,7 +191,7 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         """
         parser = ArgumentParser(parents=[parent_parser], add_help=False, conflict_handler="resolve")
         parser.add_argument(
-            '--data_path', type=str, default="/media/xultaeculcis/2TB/datasets/sr/original/pre-training/")
+            '--data_path', type=str, default="/media/xultaeculcis/2TB/datasets/sr/pre-training/classic/")
         parser.add_argument('--batch_size', type=int, default=32)
         parser.add_argument('--num_workers', type=int, default=8)
         parser.add_argument('--hr_size', type=int, default=128)

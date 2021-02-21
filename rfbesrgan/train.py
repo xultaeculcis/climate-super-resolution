@@ -54,7 +54,7 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     parser.add_argument('--log_every_n_steps', type=int, default=5)
     parser.add_argument('--flush_logs_every_n_steps', type=int, default=10)
 
-    # args for training both GAN and Discriminator networks
+    # args for training from pre-trained model
     parser.add_argument(
         '--pretrained_gen_model',
         type=str,

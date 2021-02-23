@@ -37,7 +37,7 @@ class ESRGANModule(pl.LightningModule):
         self.adversarial_criterion = torch.nn.BCEWithLogitsLoss()
 
     def forward(self, x: Tensor) -> Tensor:
-        return self.net_G(x)
+        return self.net_G(x).clamp_(0, 1)
 
     def loss_g(
             self, hr: Tensor, sr: Tensor, real_labels: Tensor, fake_labels: Tensor
@@ -169,7 +169,7 @@ class ESRGANModule(pl.LightningModule):
             self.logger.experiment.add_images('lr_images', lr, self.global_step)
             self.logger.experiment.add_images('sr_bicubic', sr_bicubic, self.global_step)
 
-            sr = self(lr).clamp_(0, 1)
+            sr = self(lr)
             self.logger.experiment.add_images('sr_images', sr, self.global_step)
 
     def configure_optimizers(self) -> Tuple[List[Adam], List[Dict[str, Union[str, Any]]]]:

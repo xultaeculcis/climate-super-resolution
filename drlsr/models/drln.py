@@ -123,7 +123,6 @@ class DRLN(nn.Module):
 
         b4 = self.b4(a1)
         c4 = torch.cat([o3, b4], dim=1)
-        o4 = self.c4(c4)
 
         b5 = self.b5(a1)
         c5 = torch.cat([c4, b5], dim=1)

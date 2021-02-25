@@ -1,46 +1,45 @@
-import functools
-
-import torch.nn as nn
+# -*- coding: utf-8 -*-
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 
-class Discriminator(nn.Module):
-    def __init__(self, num_conv_block=4):
-        super(Discriminator, self).__init__()
+class ESRGANDiscriminator(nn.Module):
+    def __init__(self, in_channels=3, out_channels=64, num_conv_block=4):
+        super(ESRGANDiscriminator, self).__init__()
 
         block = []
 
-        in_channels = 3
-        out_channels = 64
-
         for _ in range(num_conv_block):
-            block += [nn.ReflectionPad2d(1),
-                      nn.Conv2d(in_channels, out_channels, 3),
-                      nn.LeakyReLU(),
-                      nn.BatchNorm2d(out_channels)]
+            block += [
+                nn.ReflectionPad2d(1),
+                nn.Conv2d(in_channels, out_channels, 3),
+                nn.LeakyReLU(),
+                nn.BatchNorm2d(out_channels),
+            ]
             in_channels = out_channels
 
-            block += [nn.ReflectionPad2d(1),
-                      nn.Conv2d(in_channels, out_channels, 3, 2),
-                      nn.LeakyReLU()]
+            block += [
+                nn.ReflectionPad2d(1),
+                nn.Conv2d(in_channels, out_channels, 3, 2),
+                nn.LeakyReLU(),
+            ]
             out_channels *= 2
 
         out_channels //= 2
         in_channels = out_channels
 
-        block += [nn.Conv2d(in_channels, out_channels, 3),
-                  nn.LeakyReLU(0.2),
-                  nn.Conv2d(out_channels, out_channels, 3)]
+        block += [
+            nn.Conv2d(in_channels, out_channels, 3),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(out_channels, out_channels, 3),
+        ]
 
         self.feature_extraction = nn.Sequential(*block)
 
         self.avgpool = nn.AdaptiveAvgPool2d((512, 512))
 
-        self.classification = nn.Sequential(
-            nn.Linear(8192, 100),
-            nn.Linear(100, 1)
-        )
+        self.classification = nn.Sequential(nn.Linear(8192, 100), nn.Linear(100, 1))
 
     def forward(self, x):
         x = self.feature_extraction(x)
@@ -96,13 +95,14 @@ class ResidualInResidualDenseBlock(nn.Module):
         return out * 0.2 + x
 
 
-class Generator(nn.Module):
+class ESRGANGenerator(nn.Module):
     def __init__(self, in_nc=3, out_nc=3, nf=64, nb=23, gc=32):
-        super(Generator, self).__init__()
-        RRDB_block_f = functools.partial(ResidualInResidualDenseBlock, nf=nf, gc=gc)
+        super(ESRGANGenerator, self).__init__()
 
         self.conv_first = nn.Conv2d(in_nc, nf, 3, 1, 1, bias=True)
-        self.RRDB_trunk = make_layer(RRDB_block_f, nb)
+        self.RRDB_trunk = nn.Sequential(
+            *[ResidualInResidualDenseBlock(nf=nf, gc=gc) for _ in range(nb)]
+        )
         self.trunk_conv = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
 
         # upsampling
@@ -118,8 +118,12 @@ class Generator(nn.Module):
         trunk = self.trunk_conv(self.RRDB_trunk(fea))
         fea = fea + trunk
 
-        fea = self.lrelu(self.upconv1(F.interpolate(fea, scale_factor=2, mode='nearest')))
-        fea = self.lrelu(self.upconv2(F.interpolate(fea, scale_factor=2, mode='nearest')))
+        fea = self.lrelu(
+            self.upconv1(F.interpolate(fea, scale_factor=2, mode="nearest"))
+        )
+        fea = self.lrelu(
+            self.upconv2(F.interpolate(fea, scale_factor=2, mode="nearest"))
+        )
         out = self.conv_last(self.lrelu(self.HRconv(fea)))
 
         return out

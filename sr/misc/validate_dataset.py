@@ -1,11 +1,12 @@
+# -*- coding: utf-8 -*-
+import logging
 import os
 from collections import Counter
 from glob import glob
 
-from PIL import Image
 from dask import bag
 from distributed import Client
-import logging
+from PIL import Image
 
 logging.basicConfig(level=logging.INFO)
 
@@ -29,9 +30,18 @@ def validate_image(img_path, min_size=128):
 
 def get_images(data_path):
     glob_images = [
-        glob(p, recursive=True) for p in [
-            os.path.join(data_path, "**", ext) for ext in [
-                ".jpeg", "*.jpg", "*.png", ".bmp", ".JPEG", ".JPG", ".PNG", ".BMP",
+        glob(p, recursive=True)
+        for p in [
+            os.path.join(data_path, "**", ext)
+            for ext in [
+                ".jpeg",
+                "*.jpg",
+                "*.png",
+                ".bmp",
+                ".JPEG",
+                ".JPG",
+                ".PNG",
+                ".BMP",
             ]
         ]
     ]
@@ -53,24 +63,33 @@ def get_images(data_path):
     return train_images, val_images, test_images
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     c = Client(n_workers=8, threads_per_worker=1)
 
-    train, val, test = get_images("/media/xultaeculcis/2TB/datasets/sr/original/pre-training/")
+    train, val, test = get_images(
+        "/media/xultaeculcis/2TB/datasets/sr/original/pre-training/"
+    )
 
     logging.info(f"Train: {len(train)}")
     logging.info(f"Val: {len(val)}")
     logging.info(f"Test: {len(test)}")
 
-    results = bag.from_sequence(train, npartitions=1000).map(validate_image, min_size=128).compute()
+    results = (
+        bag.from_sequence(train, npartitions=1000)
+        .map(validate_image, min_size=128)
+        .compute()
+    )
     logging.info(f"Train: {Counter(results)}")
 
-    results = bag.from_sequence(val, npartitions=1000).map(validate_image, min_size=128).compute()
+    results = (
+        bag.from_sequence(val, npartitions=1000)
+        .map(validate_image, min_size=128)
+        .compute()
+    )
     logging.info(f"Val: {Counter(results)}")
 
     # results = bag.from_sequence(test, npartitions=1000).map(validate_image, min_size=128).compute()
     # logging.info(f"Test: {Counter(results)}")
-
 
     c.close()
 

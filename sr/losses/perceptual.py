@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import torch.nn as nn
 from torchvision.models.vgg import vgg19
 
@@ -14,5 +15,7 @@ class PerceptualLoss(nn.Module):
         self.l1_loss = nn.L1Loss()
 
     def forward(self, fake_high_resolution, high_resolution):
-        perception_loss = self.l1_loss(self.loss_network(high_resolution), self.loss_network(fake_high_resolution))
+        perception_loss = self.l1_loss(
+            self.loss_network(high_resolution), self.loss_network(fake_high_resolution)
+        )
         return perception_loss

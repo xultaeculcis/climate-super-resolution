@@ -1,19 +1,19 @@
+# -*- coding: utf-8 -*-
+import logging
 import os
 from argparse import ArgumentParser
 from glob import glob
-import logging
 from random import random
-from typing import Optional, List, Dict, Union
+from typing import Dict, List, Optional, Union
 
 import numpy as np
-
+import pytorch_lightning as pl
 import torchvision
-from torch import Tensor
-from torch.utils.data import Dataset, DataLoader
-from PIL import Image
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as TF
-import pytorch_lightning as pl
+from PIL import Image
+from torch import Tensor
+from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
 logging.basicConfig(level=logging.INFO)
@@ -21,11 +21,11 @@ logging.basicConfig(level=logging.INFO)
 
 class ImageDataset(Dataset):
     def __init__(
-            self,
-            hr_image_list: List[str],
-            lr_image_list: List[str],
-            hr_size: Optional[int] = 128,
-            stage: Optional[str] = "train"
+        self,
+        hr_image_list: List[str],
+        lr_image_list: List[str],
+        hr_size: Optional[int] = 128,
+        stage: Optional[str] = "train",
     ):
         self.hr_size = hr_size
         self.stage = stage
@@ -68,13 +68,13 @@ class ImageDataset(Dataset):
 
 class SuperResolutionDataModule(pl.LightningDataModule):
     def __init__(
-            self,
-            data_path: str,
-            scale_factor: Optional[int] = 4,
-            batch_size: Optional[int] = 32,
-            num_workers: Optional[int] = 4,
-            hr_size: Optional[int] = 256,
-            seed: Optional[int] = 42,
+        self,
+        data_path: str,
+        scale_factor: Optional[int] = 4,
+        batch_size: Optional[int] = 32,
+        num_workers: Optional[int] = 4,
+        hr_size: Optional[int] = 256,
+        seed: Optional[int] = 42,
     ):
         super(SuperResolutionDataModule, self).__init__()
 
@@ -87,19 +87,44 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         self.hr_size = hr_size
         self.seed = seed
 
-        train_lr_images = SuperResolutionDataModule.search_for_images(os.path.join(data_path, "train", "lr"))
-        train_hr_images = SuperResolutionDataModule.search_for_images(os.path.join(data_path, "train", "hr"))
-        val_lr_images = SuperResolutionDataModule.search_for_images(os.path.join(data_path, "val", "lr"))
-        val_hr_images = SuperResolutionDataModule.search_for_images(os.path.join(data_path, "val", "hr"))
-        test_lr_images = SuperResolutionDataModule.search_for_images(os.path.join(data_path, "test", "lr"))
-        test_hr_images = SuperResolutionDataModule.search_for_images(os.path.join(data_path, "test", "hr"))
+        train_lr_images = SuperResolutionDataModule.search_for_images(
+            os.path.join(data_path, "train", "lr")
+        )
+        train_hr_images = SuperResolutionDataModule.search_for_images(
+            os.path.join(data_path, "train", "hr")
+        )
+        val_lr_images = SuperResolutionDataModule.search_for_images(
+            os.path.join(data_path, "val", "lr")
+        )
+        val_hr_images = SuperResolutionDataModule.search_for_images(
+            os.path.join(data_path, "val", "hr")
+        )
+        test_lr_images = SuperResolutionDataModule.search_for_images(
+            os.path.join(data_path, "test", "lr")
+        )
+        test_hr_images = SuperResolutionDataModule.search_for_images(
+            os.path.join(data_path, "test", "hr")
+        )
 
-        total = len(train_lr_images) + len(train_hr_images) + len(val_lr_images) + len(val_hr_images) + len(test_lr_images) + len(test_hr_images)
+        total = (
+            len(train_lr_images)
+            + len(train_hr_images)
+            + len(val_lr_images)
+            + len(val_hr_images)
+            + len(test_lr_images)
+            + len(test_hr_images)
+        )
         logging.info(f"Total of {total} found under the {data_path}")
 
-        assert len(train_hr_images) == len(train_lr_images), f"Train HR size ({len(train_hr_images)}) does not match LR size ({len(train_lr_images)})"
-        assert len(val_hr_images) == len(val_lr_images), f"Validation HR size ({len(val_hr_images)}) does not match LR size ({len(val_lr_images)})"
-        assert len(test_hr_images) == len(test_lr_images), f"Test HR size ({len(test_hr_images)}) does not match LR size ({len(test_lr_images)})"
+        assert len(train_hr_images) == len(
+            train_lr_images
+        ), f"Train HR size ({len(train_hr_images)}) does not match LR size ({len(train_lr_images)})"
+        assert len(val_hr_images) == len(
+            val_lr_images
+        ), f"Validation HR size ({len(val_hr_images)}) does not match LR size ({len(val_lr_images)})"
+        assert len(test_hr_images) == len(
+            test_lr_images
+        ), f"Test HR size ({len(test_hr_images)}) does not match LR size ({len(test_lr_images)})"
 
         logging.info(
             f"Train/Validation/Test split sizes (HR): {len(train_hr_images)}/{len(val_hr_images)}/{len(test_hr_images)}"
@@ -112,19 +137,19 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             hr_image_list=train_hr_images,
             lr_image_list=train_lr_images,
             hr_size=self.hr_size,
-            stage="train"
+            stage="train",
         )
         self.val_dataset = ImageDataset(
             hr_image_list=val_hr_images,
             lr_image_list=val_lr_images,
             hr_size=self.hr_size,
-            stage="val"
+            stage="val",
         )
         self.test_dataset = ImageDataset(
             hr_image_list=test_hr_images,
             lr_image_list=test_lr_images,
             hr_size=self.hr_size,
-            stage="test"
+            stage="test",
         )
 
     @staticmethod
@@ -140,9 +165,18 @@ class SuperResolutionDataModule(pl.LightningDataModule):
 
         logging.info("Lookup file not found... Searching for images...")
         glob_images = [
-            glob(p, recursive=True) for p in [
-                os.path.join(data_path, "**", ext) for ext in [
-                    ".jpeg", "*.jpg", "*.png", ".bmp", ".JPEG", ".JPG", ".PNG", ".BMP"
+            glob(p, recursive=True)
+            for p in [
+                os.path.join(data_path, "**", ext)
+                for ext in [
+                    ".jpeg",
+                    "*.jpg",
+                    "*.png",
+                    ".bmp",
+                    ".JPEG",
+                    ".JPG",
+                    ".PNG",
+                    ".BMP",
                 ]
             ]
         ]
@@ -150,7 +184,9 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         for img_list in glob_images:
             images.extend(img_list)
 
-        logging.info(f"Found {len(images)} images under '{data_path}'. Saving lookup file.")
+        logging.info(
+            f"Found {len(images)} images under '{data_path}'. Saving lookup file."
+        )
 
         with open(images_lookup, "w") as f:
             f.writelines(sorted([f"{i}\n" for i in images]))
@@ -189,18 +225,23 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         :param parent_parser: The parent parser.
         :returns: The parser.
         """
-        parser = ArgumentParser(parents=[parent_parser], add_help=False, conflict_handler="resolve")
+        parser = ArgumentParser(
+            parents=[parent_parser], add_help=False, conflict_handler="resolve"
+        )
         parser.add_argument(
-            '--data_path', type=str, default="/media/xultaeculcis/2TB/datasets/sr/pre-training/classic")
-        parser.add_argument('--batch_size', type=int, default=32)
-        parser.add_argument('--num_workers', type=int, default=8)
-        parser.add_argument('--hr_size', type=int, default=128)
-        parser.add_argument('--scale_factor', type=int, default=4)
-        parser.add_argument('--seed', type=int, default=42)
+            "--data_path",
+            type=str,
+            default="/media/xultaeculcis/2TB/datasets/sr/pre-training/classic/",
+        )
+        parser.add_argument("--batch_size", type=int, default=32)
+        parser.add_argument("--num_workers", type=int, default=8)
+        parser.add_argument("--hr_size", type=int, default=128)
+        parser.add_argument("--scale_factor", type=int, default=4)
+        parser.add_argument("--seed", type=int, default=42)
         return parser
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
     parser = ArgumentParser()
@@ -229,14 +270,14 @@ if __name__ == '__main__':
 
     img_grid = None
 
-    for idx, batch in tqdm(enumerate(train_dl), total=len(train_dl)):
+    for _, batch in tqdm(enumerate(train_dl), total=len(train_dl)):
         lr = batch["lr"]
         hr = batch["hr"]
         matplotlib_imshow(lr)
         matplotlib_imshow(hr)
         break
 
-    for idx, batch in tqdm(enumerate(val_dl), total=len(val_dl)):
+    for _, batch in tqdm(enumerate(val_dl), total=len(val_dl)):
         lr = batch["lr"]
         hr = batch["hr"]
         sr_bicubic = batch["bicubic"]

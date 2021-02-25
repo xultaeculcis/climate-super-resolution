@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # Copyright 2020 Dakewe Biotech Corporation. All Rights Reserved.
 # Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -18,47 +19,55 @@ import torch.nn as nn
 from torch import Tensor
 
 __all__ = [
-    "Discriminator", "Generator", "ReceptiveFieldBlock", "ReceptiveFieldDenseBlock",
-    "ResidualOfReceptiveFieldDenseBlock", "ResidualDenseBlock", "ResidualInResidualDenseBlock"
+    "RFBESRGANDiscriminator",
+    "RFBESRGANGenerator",
+    "ReceptiveFieldBlock",
+    "ReceptiveFieldDenseBlock",
+    "ResidualOfReceptiveFieldDenseBlock",
+    "ResidualDenseBlock",
+    "ResidualInResidualDenseBlock",
 ]
 
 
-class Discriminator(nn.Module):
+class RFBESRGANDiscriminator(nn.Module):
     r"""The main architecture of the discriminator. Similar to VGG structure."""
 
-    def __init__(self):
-        super(Discriminator, self).__init__()
+    def __init__(self, in_channels=3):
+        super(RFBESRGANDiscriminator, self).__init__()
         self.features = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False),  # input is 3 x 216 x 216
+            nn.Conv2d(
+                in_channels, 64, kernel_size=3, stride=1, padding=1, bias=False
+            ),  # input is 3 x 216 x 216
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
-
-            nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1, bias=False),  # state size. (64) x 108 x 108
+            nn.Conv2d(
+                64, 64, kernel_size=3, stride=2, padding=1, bias=False
+            ),  # state size. (64) x 108 x 108
             nn.BatchNorm2d(64),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
-
             nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1, bias=False),
             nn.BatchNorm2d(128),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
-
-            nn.Conv2d(128, 128, kernel_size=3, stride=2, padding=1, bias=False),  # state size. 128 x 54 x 54
+            nn.Conv2d(
+                128, 128, kernel_size=3, stride=2, padding=1, bias=False
+            ),  # state size. 128 x 54 x 54
             nn.BatchNorm2d(128),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
-
             nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1, bias=False),
             nn.BatchNorm2d(256),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
-
-            nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1, bias=False),  # state size. 256 x 27 x 27
+            nn.Conv2d(
+                256, 256, kernel_size=3, stride=2, padding=1, bias=False
+            ),  # state size. 256 x 27 x 27
             nn.BatchNorm2d(256),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
-
             nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1, bias=False),
             nn.BatchNorm2d(512),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
-
-            nn.Conv2d(512, 512, kernel_size=3, stride=2, padding=1, bias=False),  # state size. 512 x 14 x 14
+            nn.Conv2d(
+                512, 512, kernel_size=3, stride=2, padding=1, bias=False
+            ),  # state size. 512 x 14 x 14
             nn.BatchNorm2d(512),
-            nn.LeakyReLU(negative_slope=0.2, inplace=True)
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
         )
 
         self.avgpool = nn.AdaptiveAvgPool2d((14, 14))
@@ -67,7 +76,7 @@ class Discriminator(nn.Module):
             nn.Linear(512 * 14 * 14, 1024),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
             nn.Linear(1024, 1),
-            nn.Sigmoid()
+            nn.Sigmoid(),
         )
 
     def forward(self, input: Tensor) -> Tensor:
@@ -79,22 +88,16 @@ class Discriminator(nn.Module):
         return out
 
 
-class Generator(nn.Module):
-    def __init__(self, upscale_factor, num_rrdb_blocks=8, num_rrfdb_blocks=4):
-        r""" This is an esrgan model defined by the author himself.
+class RFBESRGANGenerator(nn.Module):
+    def __init__(self, upscale_factor, num_rrdb_blocks=16, num_rrfdb_blocks=8):
+        r"""This is an esrgan model defined by the author himself.
 
         Args:
             upscale_factor (int): Image magnification factor. (Default: 4).
             num_rrdb_blocks (int): How many RRDB structures make up Trunk-A? (Default: 2).
             num_rrfdb_blocks (int): How many RRDB structures make up Trunk-RFB? (Default: 2).
-
-        Notes:
-            Use `num_rrdb_blocks` is 2  and `num_rrfdb_blocks` is 2 for RTX 2080.
-            Use `num_rrdb_blocks` is 4  and `num_rrfdb_blocks` is 2 for RTX 2080Ti.
-            Use `num_rrdb_blocks` is 8  and `num_rrfdb_blocks` is 4 for TITAN RTX.
-            Use `num_rrdb_blocks` is 16 and `num_rrfdb_blocks` is 8 for Tesla A100.
         """
-        super(Generator, self).__init__()
+        super(RFBESRGANGenerator, self).__init__()
         num_upsample_block = int(math.log(upscale_factor, 4))
 
         # First layer
@@ -103,13 +106,17 @@ class Generator(nn.Module):
         # 16 ResidualInResidualDenseBlock layer
         residual_residual_dense_blocks = []
         for _ in range(num_rrdb_blocks):
-            residual_residual_dense_blocks += [ResidualInResidualDenseBlock(64, 32, 0.2)]
+            residual_residual_dense_blocks += [
+                ResidualInResidualDenseBlock(64, 32, 0.2)
+            ]
         self.Trunk_A = nn.Sequential(*residual_residual_dense_blocks)
 
         # 8 ResidualInResidualDenseBlock layer
         residual_residual_fields_dense_blocks = []
         for _ in range(num_rrfdb_blocks):
-            residual_residual_fields_dense_blocks += [ResidualOfReceptiveFieldDenseBlock(64, 32, 0.2)]
+            residual_residual_fields_dense_blocks += [
+                ResidualOfReceptiveFieldDenseBlock(64, 32, 0.2)
+            ]
         self.Trunk_RFB = nn.Sequential(*residual_residual_fields_dense_blocks)
 
         # Second conv layer post residual field blocks
@@ -124,20 +131,19 @@ class Generator(nn.Module):
                 nn.Conv2d(64, 256, kernel_size=3, stride=1, padding=1, bias=False),
                 nn.LeakyReLU(negative_slope=0.2, inplace=True),
                 nn.PixelShuffle(upscale_factor=2),
-                ReceptiveFieldBlock(64, 64)
+                ReceptiveFieldBlock(64, 64),
             ]
         self.upsampling = nn.Sequential(*upsampling)
 
         # Next layer after upper sampling.
         self.conv3 = nn.Sequential(
             nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.LeakyReLU(negative_slope=0.2, inplace=True)
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
         )
 
         # Final output layer
         self.conv4 = nn.Sequential(
-            nn.Conv2d(64, 3, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.Tanh()
+            nn.Conv2d(64, 3, kernel_size=3, stride=1, padding=1, bias=False), nn.Tanh()
         )
 
     def forward(self, input: Tensor) -> Tensor:
@@ -162,42 +168,121 @@ class ReceptiveFieldBlock(nn.Module):
         super(ReceptiveFieldBlock, self).__init__()
         channels = in_channels // 4
         # shortcut layer
-        self.shortcut = nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=False)
+        self.shortcut = nn.Conv2d(
+            in_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=False
+        )
 
         self.branch1 = nn.Sequential(
-            nn.Conv2d(in_channels, channels, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.Conv2d(
+                in_channels, channels, kernel_size=1, stride=1, padding=0, bias=False
+            ),
             nn.ReLU(inplace=True),
-            nn.Conv2d(channels, channels, kernel_size=3, stride=1, padding=1, dilation=1, bias=False)
+            nn.Conv2d(
+                channels,
+                channels,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                dilation=1,
+                bias=False,
+            ),
         )
 
         self.branch2 = nn.Sequential(
-            nn.Conv2d(in_channels, channels, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.Conv2d(
+                in_channels, channels, kernel_size=1, stride=1, padding=0, bias=False
+            ),
             nn.ReLU(inplace=True),
-            nn.Conv2d(channels, channels, kernel_size=(1, 3), stride=1, padding=(0, 1), bias=False),
+            nn.Conv2d(
+                channels,
+                channels,
+                kernel_size=(1, 3),
+                stride=1,
+                padding=(0, 1),
+                bias=False,
+            ),
             nn.ReLU(inplace=True),
-            nn.Conv2d(channels, channels, kernel_size=3, stride=1, padding=3, dilation=3, bias=False)
+            nn.Conv2d(
+                channels,
+                channels,
+                kernel_size=3,
+                stride=1,
+                padding=3,
+                dilation=3,
+                bias=False,
+            ),
         )
 
         self.branch3 = nn.Sequential(
-            nn.Conv2d(in_channels, channels, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.Conv2d(
+                in_channels, channels, kernel_size=1, stride=1, padding=0, bias=False
+            ),
             nn.ReLU(inplace=True),
-            nn.Conv2d(channels, channels, kernel_size=(3, 1), stride=1, padding=(1, 0), bias=False),
+            nn.Conv2d(
+                channels,
+                channels,
+                kernel_size=(3, 1),
+                stride=1,
+                padding=(1, 0),
+                bias=False,
+            ),
             nn.ReLU(inplace=True),
-            nn.Conv2d(channels, channels, kernel_size=3, stride=1, padding=3, dilation=3, bias=False)
+            nn.Conv2d(
+                channels,
+                channels,
+                kernel_size=3,
+                stride=1,
+                padding=3,
+                dilation=3,
+                bias=False,
+            ),
         )
 
         self.branch4 = nn.Sequential(
-            nn.Conv2d(in_channels, channels // 2, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.Conv2d(
+                in_channels,
+                channels // 2,
+                kernel_size=1,
+                stride=1,
+                padding=0,
+                bias=False,
+            ),
             nn.ReLU(inplace=True),
-            nn.Conv2d(channels // 2, (channels // 4) * 3, kernel_size=(1, 3), stride=1, padding=(0, 1), bias=False),
+            nn.Conv2d(
+                channels // 2,
+                (channels // 4) * 3,
+                kernel_size=(1, 3),
+                stride=1,
+                padding=(0, 1),
+                bias=False,
+            ),
             nn.ReLU(inplace=True),
-            nn.Conv2d((channels // 4) * 3, channels, kernel_size=(1, 3), stride=1, padding=(0, 1), bias=False),
+            nn.Conv2d(
+                (channels // 4) * 3,
+                channels,
+                kernel_size=(1, 3),
+                stride=1,
+                padding=(0, 1),
+                bias=False,
+            ),
             nn.ReLU(inplace=True),
-            nn.Conv2d(channels, channels, kernel_size=3, stride=1, padding=5, dilation=5, bias=False)
+            nn.Conv2d(
+                channels,
+                channels,
+                kernel_size=3,
+                stride=1,
+                padding=5,
+                dilation=5,
+                bias=False,
+            ),
         )
 
-        self.conv1x1 = nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=False)
-        self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True) if non_linearity else None
+        self.conv1x1 = nn.Conv2d(
+            in_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=False
+        )
+        self.lrelu = (
+            nn.LeakyReLU(negative_slope=0.2, inplace=True) if non_linearity else None
+        )
 
         self.scale_ratio = scale_ratio
 
@@ -235,8 +320,8 @@ class ReceptiveFieldBlock(nn.Module):
 
 
 class ReceptiveFieldDenseBlock(nn.Module):
-    r""" Inspired by the multi-scale kernels and the structure of Receptive Fields (RFs) in human visual systems,
-        RFB-SSD proposed Receptive Fields Block (RFB) for object detection
+    r"""Inspired by the multi-scale kernels and the structure of Receptive Fields (RFs) in human visual systems,
+    RFB-SSD proposed Receptive Fields Block (RFB) for object detection
     """
 
     def __init__(self, in_channels, growth_channels, scale_ratio):
@@ -249,11 +334,21 @@ class ReceptiveFieldDenseBlock(nn.Module):
         """
         super(ReceptiveFieldDenseBlock, self).__init__()
         self.RFB1 = ReceptiveFieldBlock(in_channels, growth_channels, scale_ratio)
-        self.RFB2 = ReceptiveFieldBlock(in_channels + 1 * growth_channels, growth_channels, scale_ratio)
-        self.RFB3 = ReceptiveFieldBlock(in_channels + 2 * growth_channels, growth_channels, scale_ratio)
-        self.RFB4 = ReceptiveFieldBlock(in_channels + 3 * growth_channels, growth_channels, scale_ratio)
-        self.RFB5 = ReceptiveFieldBlock(in_channels + 4 * growth_channels, in_channels, scale_ratio,
-                                        non_linearity=False)
+        self.RFB2 = ReceptiveFieldBlock(
+            in_channels + 1 * growth_channels, growth_channels, scale_ratio
+        )
+        self.RFB3 = ReceptiveFieldBlock(
+            in_channels + 2 * growth_channels, growth_channels, scale_ratio
+        )
+        self.RFB4 = ReceptiveFieldBlock(
+            in_channels + 3 * growth_channels, growth_channels, scale_ratio
+        )
+        self.RFB5 = ReceptiveFieldBlock(
+            in_channels + 4 * growth_channels,
+            in_channels,
+            scale_ratio,
+            non_linearity=False,
+        )
 
         self.scale_ratio = scale_ratio
 
@@ -306,18 +401,32 @@ class ResidualDenseBlock(nn.Module):
         """
         super(ResidualDenseBlock, self).__init__()
         self.conv1 = nn.Sequential(
-            nn.Conv2d(in_channels + 0 * growth_channels, growth_channels, 3, 1, 1, bias=False),
-            nn.LeakyReLU(negative_slope=0.2, inplace=True))
+            nn.Conv2d(
+                in_channels + 0 * growth_channels, growth_channels, 3, 1, 1, bias=False
+            ),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+        )
         self.conv2 = nn.Sequential(
-            nn.Conv2d(in_channels + 1 * growth_channels, growth_channels, 3, 1, 1, bias=False),
-            nn.LeakyReLU(negative_slope=0.2, inplace=True))
+            nn.Conv2d(
+                in_channels + 1 * growth_channels, growth_channels, 3, 1, 1, bias=False
+            ),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+        )
         self.conv3 = nn.Sequential(
-            nn.Conv2d(in_channels + 2 * growth_channels, growth_channels, 3, 1, 1, bias=False),
-            nn.LeakyReLU(negative_slope=0.2, inplace=True))
+            nn.Conv2d(
+                in_channels + 2 * growth_channels, growth_channels, 3, 1, 1, bias=False
+            ),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+        )
         self.conv4 = nn.Sequential(
-            nn.Conv2d(in_channels + 3 * growth_channels, growth_channels, 3, 1, 1, bias=False),
-            nn.LeakyReLU(negative_slope=0.2, inplace=True))
-        self.conv5 = nn.Conv2d(in_channels + 4 * growth_channels, in_channels, 3, 1, 1, bias=False)
+            nn.Conv2d(
+                in_channels + 3 * growth_channels, growth_channels, 3, 1, 1, bias=False
+            ),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+        )
+        self.conv5 = nn.Conv2d(
+            in_channels + 4 * growth_channels, in_channels, 3, 1, 1, bias=False
+        )
 
         self.scale_ratio = scale_ratio
 

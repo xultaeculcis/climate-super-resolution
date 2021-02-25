@@ -17,3 +17,6 @@ dependencies:
       - scikit-learn
       - seaborn
       - netCDF4
+      - isort
+      - black
+      - flake8

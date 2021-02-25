@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Tuple, Union
 
 import pytorch_lightning as pl
 import torch
+import torch.nn as nn
 from pytorch_lightning.loggers.base import DummyLogger
 from pytorch_lightning.metrics.functional import (
     mean_absolute_error,
@@ -12,6 +13,7 @@ from pytorch_lightning.metrics.functional import (
     psnr,
     ssim,
 )
+from torch import Tensor
 from torchvision.utils import save_image
 
 from sr.losses.perceptual import PerceptualLoss
@@ -23,7 +25,7 @@ from sr.models.srcnn import SRCNN
 
 class GeneratorPreTrainingLightningModule(pl.LightningModule):
     """
-    LightningModule for pre-training the ESRGAN Generator.
+    LightningModule for pre-training the Generator Network.
     """
 
     def __init__(self, **kwargs):
@@ -33,65 +35,64 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
         self.save_hyperparameters()
 
         # networks
-        # networks
-        if self.generator == "esrgan":
-            self.net_G = ESRGANGenerator(
-                in_nc=self.hparams.gen_in_channels,
-                out_nc=self.hparams.gen_out_channels,
-                nf=self.hparams.nf,
-                nb=self.hparams.nb,
-                gc=self.hparams.gc,
-            )
-
-        if self.generator == "drln":
-            self.net_G = DRLN(scaling_factor=self.hparams.scale_factor)
-
-        if self.generator == "rfbesrgan":
-            self.net_G = RFBESRGANGenerator(
-                upscale_factor=self.hparams.scale_factor,
-                num_rrdb_blocks=self.hparams.num_rrdb_blocks,
-                num_rrfdb_blocks=self.hparams.num_rrfdb_blocks,
-            )
-
-        if self.generator == "srcnn":
-            self.net_G = SRCNN(
-                in_channels=self.hparams.gen_in_channels,
-                out_channels=self.hparams.gen_out_channels,
-            )
-
-        else:
-            raise ValueError(
-                f"Specified generator '{self.hparams.generator}' is not supported"
-            )
+        self.net_G = self.build_model()
 
         # metrics
         self.loss = (
-            torch.nn.MSELoss()
+            torch.nn.L1Loss()
             if self.hparams.generator == "srcnn"
             else torch.nn.L1Loss()
         )
         self.perceptual_criterion = PerceptualLoss()
 
-    def forward(self, input):
-        return self.net_G(input).clamp(0, 1)
+    def build_model(self) -> nn.Module:
+        if self.hparams.generator == "esrgan":
+            generator = ESRGANGenerator(
+                in_channels=self.hparams.gen_in_channels,
+                out_channels=self.hparams.gen_out_channels,
+                nf=self.hparams.nf,
+                nb=self.hparams.nb,
+                gc=self.hparams.gc,
+            )
+        elif self.hparams.generator == "drln":
+            generator = DRLN(scaling_factor=self.hparams.scale_factor)
+        elif self.hparams.generator == "rfbesrgan":
+            generator = RFBESRGANGenerator(
+                upscale_factor=self.hparams.scale_factor,
+                num_rrdb_blocks=self.hparams.num_rrdb_blocks,
+                num_rrfdb_blocks=self.hparams.num_rrfdb_blocks,
+            )
+        elif self.hparams.generator == "srcnn":
+            generator = SRCNN(
+                in_channels=self.hparams.gen_in_channels,
+                out_channels=self.hparams.gen_out_channels,
+            )
+        else:
+            raise ValueError(
+                f"Specified generator '{self.hparams.generator}' is not supported"
+            )
+        return generator
 
-    def training_step(self, batch, batch_nb):
-        lr, hr, _ = batch["lr"], batch["hr"], batch["bicubic"]
+    def forward(self, x: Tensor) -> Tensor:
+        return self.net_G(x).clamp(0, 1)
 
-        # Generating fake high resolution images from real low resolution images.
-        sr = self(lr)
+    def training_step(self, batch: Any, batch_idx: int) -> Any:
+        lr, hr, sr_bicubic = batch["lr"], batch["hr"], batch["bicubic"]
 
-        # The L1 of the generated fake high-resolution image and real high-resolution image is calculated.
+        sr = self(sr_bicubic if self.hparams.generator == "srcnn" else lr)
+
         loss = self.loss(sr, hr)
 
         self.log("train/pixel_level_loss", loss, on_step=True, on_epoch=False)
 
         return loss
 
-    def validation_step(self, batch: Any, batch_idx: int):
-        lr, hr = batch["lr"], batch["hr"].half()
+    def validation_step(
+        self, batch: Any, batch_idx: int
+    ) -> Dict[str, Union[float, int]]:
+        lr, hr, sr_bicubic = batch["lr"], batch["hr"].half(), batch["bicubic"]
 
-        sr = self(lr)
+        sr = self(sr_bicubic if self.hparams.generator == "srcnn" else lr)
 
         l1_loss = self.loss(sr, hr)
         psnr_score = psnr(sr, hr)
@@ -141,14 +142,17 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             batch = next(iter(self.trainer.datamodule.val_dataloader()))
             lr, hr, sr_bicubic = batch["lr"], batch["hr"], batch["bicubic"]
 
-            lr = lr.to(self.device)
-
             self.logger.experiment.add_images("hr_images", hr, self.global_step)
             self.logger.experiment.add_images("lr_images", lr, self.global_step)
             self.logger.experiment.add_images(
                 "sr_bicubic", sr_bicubic, self.global_step
             )
 
+            lr = (
+                sr_bicubic.to(self.device)
+                if self.hparams.generator == "srcnn"
+                else lr.to(self.device)
+            )
             sr = self(lr)
             self.logger.experiment.add_images("sr_images", sr, self.global_step)
 

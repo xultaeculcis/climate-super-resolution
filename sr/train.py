@@ -8,14 +8,16 @@ from typing import Tuple, Union
 
 import numpy as np
 import pytorch_lightning as pl
-from datamodules import SuperResolutionDataModule
-from pl_gan import GANLightningModule
+
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import (
     EarlyStopping,
     LearningRateMonitor,
     ModelCheckpoint,
 )
+
+from sr.lightning_modules.datamodules import SuperResolutionDataModule
+from sr.lightning_modules.pl_gan import GANLightningModule
 
 np.set_printoptions(precision=3)
 logging.basicConfig(level=logging.INFO)
@@ -56,13 +58,13 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     parser.add_argument("--terminate_on_nan", type=bool, default=True)
     parser.add_argument("--lr_find_only", type=bool, default=False)
     parser.add_argument("--fast_dev_run", type=bool, default=False)
-    parser.add_argument("--generator", type=str, default="esrgan")
+    parser.add_argument("--generator", type=str, default="drln")
 
     # args for training from pre-trained model
     parser.add_argument(
         "--pretrained_model",
         type=str,
-        default=None,
+        default="../model_weights/drln-training-epoch=4-step=117099-hp_metric=0.04416.ckpt",
         help="A path to pre-trained model checkpoint. Required for fine tuning.",
     )
 
@@ -134,6 +136,7 @@ def prepare_pl_datamodule(args: argparse.Namespace) -> pl.LightningDataModule:
     """
     data_module = SuperResolutionDataModule(
         data_path=args.data_path,
+        generator_type=args.generator,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         hr_size=args.hr_size,

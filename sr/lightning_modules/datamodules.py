@@ -24,11 +24,13 @@ class ImageDataset(Dataset):
         self,
         hr_image_list: List[str],
         lr_image_list: List[str],
+        generator_type: str,
         hr_size: Optional[int] = 128,
         stage: Optional[str] = "train",
     ):
         self.hr_size = hr_size
         self.stage = stage
+        self.generator_type = generator_type
 
         self.common_transforms = transforms.Compose(
             [
@@ -42,6 +44,7 @@ class ImageDataset(Dataset):
     def __getitem__(self, index) -> Dict[str, Union[Tensor, list]]:
         img_lr = Image.open(self.lr_image_list[index]).convert(mode="RGB")
         img_hr = Image.open(self.hr_image_list[index]).convert(mode="RGB")
+        img_sr_bicubic = []
 
         if self.stage == "train":
             if random() > 0.5:
@@ -51,9 +54,7 @@ class ImageDataset(Dataset):
             if random() > 0.5:
                 img_lr = TF.hflip(img_lr)
                 img_hr = TF.hflip(img_hr)
-
-            img_sr_bicubic = []
-        else:
+        if self.generator_type == "srcnn" or self.stage != "train":
             upscale = transforms.Resize((self.hr_size, self.hr_size))
             img_sr_bicubic = self.common_transforms(upscale(img_lr))
 
@@ -70,6 +71,7 @@ class SuperResolutionDataModule(pl.LightningDataModule):
     def __init__(
         self,
         data_path: str,
+        generator_type: str,
         scale_factor: Optional[int] = 4,
         batch_size: Optional[int] = 32,
         num_workers: Optional[int] = 4,
@@ -86,6 +88,7 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.hr_size = hr_size
         self.seed = seed
+        self.generator_type = generator_type
 
         train_lr_images = SuperResolutionDataModule.search_for_images(
             os.path.join(data_path, "train", "lr")
@@ -138,18 +141,21 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             lr_image_list=train_lr_images,
             hr_size=self.hr_size,
             stage="train",
+            generator_type=self.generator_type,
         )
         self.val_dataset = ImageDataset(
             hr_image_list=val_hr_images,
             lr_image_list=val_lr_images,
             hr_size=self.hr_size,
             stage="val",
+            generator_type=self.generator_type,
         )
         self.test_dataset = ImageDataset(
             hr_image_list=test_hr_images,
             lr_image_list=test_lr_images,
             hr_size=self.hr_size,
             stage="test",
+            generator_type=self.generator_type,
         )
 
     @staticmethod
@@ -250,6 +256,7 @@ if __name__ == "__main__":
 
     dm = SuperResolutionDataModule(
         data_path=args.data_path,
+        generator_type="esrgan",
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         hr_size=args.hr_size,

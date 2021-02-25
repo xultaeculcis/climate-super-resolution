@@ -8,7 +8,7 @@ from typing import Tuple
 
 import numpy as np
 import pytorch_lightning as pl
-from pl_generator_pre_training import GeneratorPreTrainingLightningModule
+
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import (
     EarlyStopping,
@@ -16,7 +16,10 @@ from pytorch_lightning.callbacks import (
     ModelCheckpoint,
 )
 
-from sr.models.esrgan import SuperResolutionDataModule
+from sr.lightning_modules.datamodules import SuperResolutionDataModule
+from sr.lightning_modules.pl_generator_pre_training import (
+    GeneratorPreTrainingLightningModule,
+)
 
 np.set_printoptions(precision=3)
 logging.basicConfig(level=logging.INFO)
@@ -46,9 +49,7 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     parser.add_argument("--lr_find_only", type=bool, default=False)
     parser.add_argument("--fast_dev_run", type=bool, default=False)
     parser.add_argument("--print_config", type=bool, default=True)
-    parser.add_argument(
-        "--experiment_name", type=str, default="esrgan-gen-pre-training"
-    )
+    parser.add_argument("--experiment_name", type=str, default="gen-pre-training")
     parser.add_argument("--log_dir", type=str, default="../logs")
     parser.add_argument("--save_model_path", type=str, default="../model_weights")
     parser.add_argument("--early_stopping_patience", type=int, default=100)
@@ -57,19 +58,18 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     parser.add_argument("--save_top_k", type=int, default=10)
     parser.add_argument("--log_every_n_steps", type=int, default=5)
     parser.add_argument("--flush_logs_every_n_steps", type=int, default=10)
-
-    # override args
-    parser.add_argument("--scaling_factor", type=int, default=4)
+    parser.add_argument("--generator", type=str, default="esrgan")
+    parser.add_argument("--resume_from_checkpoint", type=str, default=None)
 
     return parser.parse_args(arguments)
 
 
-def prepare_pl_module(args: argparse.Namespace) -> GeneratorPreTrainingLightningModule:
+def prepare_pl_module(args: argparse.Namespace) -> pl.LightningModule:
     """
-    Prepares the PreTrainingESRGANModule Lightning Module.
+    Prepares the Lightning Module.
 
     :param args: The arguments.
-    :return: The PreTrainingESRGANModule Lightning Module.
+    :return: The Lightning Module.
     """
     net = GeneratorPreTrainingLightningModule(**vars(args))
     return net
@@ -82,7 +82,7 @@ def prepare_pl_trainer(args: argparse.Namespace) -> pl.Trainer:
     :param args: The arguments.
     :return: The Pytorch Lightning Trainer.
     """
-    experiment_name = args.experiment_name
+    experiment_name = f"{args.experiment_name}-{args.generator}"
     tb_logger = pl_loggers.TensorBoardLogger(
         args.log_dir, name=experiment_name, default_hp_metric=True
     )
@@ -116,7 +116,7 @@ def prepare_pl_trainer(args: argparse.Namespace) -> pl.Trainer:
     return pl_trainer
 
 
-def prepare_pl_datamodule(args: argparse.Namespace) -> SuperResolutionDataModule:
+def prepare_pl_datamodule(args: argparse.Namespace) -> pl.LightningDataModule:
     """
     Prepares the Tabular Lightning Data Module.
 
@@ -125,6 +125,7 @@ def prepare_pl_datamodule(args: argparse.Namespace) -> SuperResolutionDataModule
     """
     data_module = SuperResolutionDataModule(
         data_path=args.data_path,
+        generator_type=args.generator,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         hr_size=args.hr_size,
@@ -135,7 +136,7 @@ def prepare_pl_datamodule(args: argparse.Namespace) -> SuperResolutionDataModule
 
 def prepare_training(
     args: argparse.Namespace,
-) -> Tuple[GeneratorPreTrainingLightningModule, SuperResolutionDataModule, pl.Trainer]:
+) -> Tuple[pl.LightningModule, pl.LightningDataModule, pl.Trainer]:
     """
     Prepares everything for training. `DataModule` is prepared by setting up the train/val/test sets for specified fold.
     Creates new `PreTrainingESRGANModule` Lightning Module together with `pl.Trainer`.

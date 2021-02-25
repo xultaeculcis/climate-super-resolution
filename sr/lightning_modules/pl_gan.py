@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Tuple, Union
 
 import pytorch_lightning as pl
 import torch
+import torch.nn as nn
 from torch import Tensor
 from torch.optim import Adam
 
@@ -26,41 +27,7 @@ class GANLightningModule(pl.LightningModule):
         self.save_hyperparameters()
 
         # networks
-        if self.generator == "esrgan":
-            self.net_G = ESRGANGenerator(
-                in_nc=self.hparams.gen_in_channels,
-                out_nc=self.hparams.gen_out_channels,
-                nf=self.hparams.nf,
-                nb=self.hparams.nb,
-                gc=self.hparams.gc,
-            )
-            self.net_D = ESRGANDiscriminator(in_channels=self.hparams.disc_in_channels)
-
-        if self.generator == "drln":
-            self.net_G = DRLN(scaling_factor=self.hparams.scale_factor)
-            self.net_D = ESRGANDiscriminator(in_channels=self.hparams.disc_in_channels)
-
-        if self.generator == "rfbesrgan":
-            self.net_G = RFBESRGANGenerator(
-                upscale_factor=self.hparams.scale_factor,
-                num_rrdb_blocks=self.hparams.num_rrdb_blocks,
-                num_rrfdb_blocks=self.hparams.num_rrfdb_blocks,
-            )
-            self.net_D = RFBESRGANDiscriminator(
-                in_channels=self.hparams.disc_in_channels
-            )
-
-        if self.generator == "srcnn":
-            self.net_G = SRCNN(
-                in_channels=self.hparams.gen_in_channels,
-                out_channels=self.hparams.gen_out_channels,
-            )
-            self.net_D = ESRGANDiscriminator(in_channels=self.hparams.disc_in_channels)
-
-        else:
-            raise ValueError(
-                f"Specified generator '{self.hparams.generator}' is not supported"
-            )
+        self.net_G, self.net_D = self.build_models()
 
         if self.hparams.pretrained_gen_model:
             self.net_G.load_state_dict(
@@ -70,6 +37,46 @@ class GANLightningModule(pl.LightningModule):
         self.perceptual_criterion = PerceptualLoss()
         self.pixel_level_criterion = torch.nn.L1Loss()
         self.adversarial_criterion = torch.nn.BCEWithLogitsLoss()
+
+    def build_models(self) -> Tuple[nn.Module, nn.Module]:
+        if self.hparams.generator == "esrgan":
+            generator = ESRGANGenerator(
+                in_channels=self.hparams.gen_in_channels,
+                out_channels=self.hparams.gen_out_channels,
+                nf=self.hparams.nf,
+                nb=self.hparams.nb,
+                gc=self.hparams.gc,
+            )
+            discriminator = ESRGANDiscriminator(
+                in_channels=self.hparams.disc_in_channels
+            )
+        elif self.hparams.generator == "drln":
+            generator = DRLN(scaling_factor=self.hparams.scale_factor)
+            discriminator = ESRGANDiscriminator(
+                in_channels=self.hparams.disc_in_channels
+            )
+        elif self.hparams.generator == "rfbesrgan":
+            generator = RFBESRGANGenerator(
+                upscale_factor=self.hparams.scale_factor,
+                num_rrdb_blocks=self.hparams.num_rrdb_blocks,
+                num_rrfdb_blocks=self.hparams.num_rrfdb_blocks,
+            )
+            discriminator = RFBESRGANDiscriminator(
+                in_channels=self.hparams.disc_in_channels
+            )
+        elif self.hparams.generator == "srcnn":
+            generator = SRCNN(
+                in_channels=self.hparams.gen_in_channels,
+                out_channels=self.hparams.gen_out_channels,
+            )
+            discriminator = ESRGANDiscriminator(
+                in_channels=self.hparams.disc_in_channels
+            )
+        else:
+            raise ValueError(
+                f"Specified generator '{self.hparams.generator}' is not supported"
+            )
+        return generator, discriminator
 
     def forward(self, x: Tensor) -> Tensor:
         return self.net_G(x).clamp_(0, 1)
@@ -111,13 +118,15 @@ class GANLightningModule(pl.LightningModule):
 
         return loss_d
 
-    def training_step(self, batch: Any, batch_idx: Any, optimizer_idx: Any):
-        lr, hr = batch["lr"], batch["hr"]
+    def training_step(
+        self, batch: Any, batch_idx: int, optimizer_idx: int
+    ) -> Dict[str, Any]:
+        lr, hr, sr_bicubic = batch["lr"], batch["hr"], batch["bicubic"]
 
         real_labels = torch.ones((hr.size(0), 1), device=self.device)
         fake_labels = torch.zeros((hr.size(0), 1), device=self.device)
 
-        sr = self(lr)
+        sr = self(sr_bicubic if self.hparams.generator == "srcnn" else lr)
 
         # train generator
         if optimizer_idx == 0:
@@ -151,7 +160,7 @@ class GANLightningModule(pl.LightningModule):
                 },
             }
 
-    def training_epoch_end(self, outputs):
+    def training_epoch_end(self, outputs: List[Any]) -> None:
         """Compute and log training losses at the epoch level."""
 
         perceptual_loss_mean = torch.stack(
@@ -179,13 +188,14 @@ class GANLightningModule(pl.LightningModule):
         self.log_dict(log_dict)
 
     def validation_step(
-        self, batch: Any, batch_idx: Any
+        self, batch: Any, batch_idx: int
     ) -> Dict[str, Union[int, float]]:
-        lr, hr = batch["lr"], batch["hr"]
+        lr, hr, sr_bicubic = batch["lr"], batch["hr"].half(), batch["bicubic"]
+
         real_labels = torch.ones((hr.size(0), 1), device=self.device)
         fake_labels = torch.zeros((hr.size(0), 1), device=self.device)
 
-        sr = self(lr)
+        sr = self(sr_bicubic if self.hparams.generator == "srcnn" else lr)
 
         perceptual_loss, adversarial_loss, pixel_level_loss, loss_g = self.loss_g(
             hr, sr, real_labels, fake_labels

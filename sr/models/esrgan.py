@@ -96,10 +96,10 @@ class ResidualInResidualDenseBlock(nn.Module):
 
 
 class ESRGANGenerator(nn.Module):
-    def __init__(self, in_nc=3, out_nc=3, nf=64, nb=23, gc=32):
+    def __init__(self, in_channels=3, out_channels=3, nf=64, nb=23, gc=32):
         super(ESRGANGenerator, self).__init__()
 
-        self.conv_first = nn.Conv2d(in_nc, nf, 3, 1, 1, bias=True)
+        self.conv_first = nn.Conv2d(in_channels, nf, 3, 1, 1, bias=True)
         self.RRDB_trunk = nn.Sequential(
             *[ResidualInResidualDenseBlock(nf=nf, gc=gc) for _ in range(nb)]
         )
@@ -109,7 +109,7 @@ class ESRGANGenerator(nn.Module):
         self.upconv1 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
         self.upconv2 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
         self.HRconv = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.conv_last = nn.Conv2d(nf, out_nc, 3, 1, 1, bias=True)
+        self.conv_last = nn.Conv2d(nf, out_channels, 3, 1, 1, bias=True)
 
         self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
 

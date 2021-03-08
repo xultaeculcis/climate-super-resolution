@@ -11,6 +11,9 @@ dependencies:
   - geopandas
   - dask
   - basemap
+  - xarray
+  - cartopy
+  - datacube
   - pip
   - pip:
       - jupyterlab

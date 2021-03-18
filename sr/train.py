@@ -8,7 +8,6 @@ from typing import Tuple, Union
 
 import numpy as np
 import pytorch_lightning as pl
-
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import (
     EarlyStopping,
@@ -25,11 +24,10 @@ logging.basicConfig(level=logging.INFO)
 warnings.filterwarnings("ignore")
 
 
-def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
+def parse_args() -> argparse.Namespace:
     """
     Parses the program arguments.
 
-    :param arguments: The argparse Namespace. Optional.
     :return: The Namespace with parsed parameters.
     """
 

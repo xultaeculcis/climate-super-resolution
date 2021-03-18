@@ -8,10 +8,12 @@ dependencies:
   - cudatoolkit=11.0
   - pytorch-lightning
   - pytorch
+  - torchvision
   - geopandas
   - dask
   - basemap
   - xarray
+  - rioxarray
   - cartopy
   - datacube
   - pip
@@ -20,6 +22,8 @@ dependencies:
       - scikit-learn
       - seaborn
       - netCDF4
+      - rasterio
+      - rio-tiler
       - isort
       - black
       - flake8

@@ -8,7 +8,6 @@ from typing import Tuple
 
 import numpy as np
 import pytorch_lightning as pl
-
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import (
     EarlyStopping,

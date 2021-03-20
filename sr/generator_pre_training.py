@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 import argparse
 import logging
-import os
 import warnings
 from pprint import pprint
-from typing import Tuple
+from typing import Tuple, Union
 
 import numpy as np
 import pytorch_lightning as pl
@@ -42,9 +41,9 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     # training config args
     parser.add_argument("--precision", type=int, default=16)
     parser.add_argument("--gpus", type=int, default=1)
-    parser.add_argument("--val_check_interval", type=int, default=1000)
-    parser.add_argument("--max_epochs", type=int, default=5)
-    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--val_check_interval", type=Union[int, float], default=1.0)
+    parser.add_argument("--max_epochs", type=int, default=50)
+    parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--lr_find_only", type=bool, default=False)
     parser.add_argument("--fast_dev_run", type=bool, default=False)
     parser.add_argument("--print_config", type=bool, default=True)
@@ -57,7 +56,7 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     parser.add_argument("--save_top_k", type=int, default=10)
     parser.add_argument("--log_every_n_steps", type=int, default=5)
     parser.add_argument("--flush_logs_every_n_steps", type=int, default=10)
-    parser.add_argument("--generator", type=str, default="esrgan")
+    parser.add_argument("--generator", type=str, default="srcnn")
     parser.add_argument("--resume_from_checkpoint", type=str, default=None)
 
     return parser.parse_args(arguments)
@@ -81,7 +80,7 @@ def prepare_pl_trainer(args: argparse.Namespace) -> pl.Trainer:
     :param args: The arguments.
     :return: The Pytorch Lightning Trainer.
     """
-    experiment_name = f"{args.experiment_name}-{args.generator}"
+    experiment_name = f"{args.experiment_name}-{args.generator}-{args.world_clim_variable}-{args.world_clim_multiplier}"
     tb_logger = pl_loggers.TensorBoardLogger(
         args.log_dir, name=experiment_name, default_hp_metric=True
     )
@@ -90,17 +89,15 @@ def prepare_pl_trainer(args: argparse.Namespace) -> pl.Trainer:
     early_stop_callback = EarlyStopping(
         monitor=monitor_metric,
         patience=args.early_stopping_patience,
-        verbose=False,
+        verbose=True,
         mode=mode,
     )
     model_checkpoint = ModelCheckpoint(
         monitor=monitor_metric,
-        verbose=False,
+        verbose=True,
         mode=mode,
-        filepath=os.path.join(
-            args.save_model_path,
-            f"{experiment_name}-{{epoch}}-{{step}}-{{{monitor_metric}:.5f}}",
-        ),
+        dirpath=args.save_model_path,
+        filename=f"{experiment_name}-{{epoch}}-{{step}}-{{{monitor_metric}:.5f}}",
         save_top_k=args.save_top_k,
     )
     lr_monitor = LearningRateMonitor(logging_interval="step")
@@ -124,7 +121,10 @@ def prepare_pl_datamodule(args: argparse.Namespace) -> pl.LightningDataModule:
     """
     data_module = SuperResolutionDataModule(
         data_path=args.data_path,
+        world_clim_variable=args.world_clim_variable,
+        world_clim_multiplier=args.world_clim_multiplier,
         generator_type=args.generator,
+        scale_factor=args.scale_factor,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         hr_size=args.hr_size,

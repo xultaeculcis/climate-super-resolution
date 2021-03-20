@@ -8,11 +8,12 @@ def test_should_return_tensor_with_correct_shape_after_forward():
     # arrange
     lr_batch = (32, 3, 32, 32)
     expected = (32, 3, 128, 128)
-    model = RFBESRGANGenerator(upscale_factor=4)
-    x = torch.rand(lr_batch)
+    model = RFBESRGANGenerator(upscale_factor=4).cuda()
+    x = torch.rand(lr_batch).cuda()
 
     # act
-    out = model.forward(x)
+    with torch.no_grad():
+        out = model.forward(x)
 
     # assert
     assert out.shape == expected

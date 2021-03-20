@@ -96,8 +96,18 @@ class ResidualInResidualDenseBlock(nn.Module):
 
 
 class ESRGANGenerator(nn.Module):
-    def __init__(self, in_channels=3, out_channels=3, nf=64, nb=23, gc=32):
+    def __init__(
+        self,
+        in_channels: int = 3,
+        out_channels: int = 3,
+        nf: int = 64,
+        nb: int = 23,
+        gc: int = 32,
+        scale_factor: int = 4,
+    ):
         super(ESRGANGenerator, self).__init__()
+
+        self.scale_factor = scale_factor
 
         self.conv_first = nn.Conv2d(in_channels, nf, 3, 1, 1, bias=True)
         self.RRDB_trunk = nn.Sequential(
@@ -107,7 +117,10 @@ class ESRGANGenerator(nn.Module):
 
         # upsampling
         self.upconv1 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.upconv2 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
+
+        if self.scale_factor == 4:
+            self.upconv2 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
+
         self.HRconv = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
         self.conv_last = nn.Conv2d(nf, out_channels, 3, 1, 1, bias=True)
 
@@ -121,9 +134,12 @@ class ESRGANGenerator(nn.Module):
         fea = self.lrelu(
             self.upconv1(F.interpolate(fea, scale_factor=2, mode="nearest"))
         )
-        fea = self.lrelu(
-            self.upconv2(F.interpolate(fea, scale_factor=2, mode="nearest"))
-        )
+
+        if self.scale_factor == 4:
+            fea = self.lrelu(
+                self.upconv2(F.interpolate(fea, scale_factor=2, mode="nearest"))
+            )
+
         out = self.conv_last(self.lrelu(self.HRconv(fea)))
 
         return out

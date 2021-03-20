@@ -6,28 +6,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class MeanShift(nn.Module):
-    def __init__(self, mean_rgb, sub):
-        super(MeanShift, self).__init__()
-
-        sign = -1 if sub else 1
-        r = mean_rgb[0] * sign
-        g = mean_rgb[1] * sign
-        b = mean_rgb[2] * sign
-
-        self.shifter = nn.Conv2d(3, 3, 1, 1, 0)
-        self.shifter.weight.data = torch.eye(3).view(3, 3, 1, 1)
-        self.shifter.bias.data = torch.Tensor([r, g, b])
-
-        # Freeze the mean shift layer
-        for params in self.shifter.parameters():
-            params.requires_grad = False
-
-    def forward(self, x):
-        x = self.shifter(x)
-        return x
-
-
 class BasicBlock(nn.Module):
     def __init__(self, in_channels, out_channels, ksize=3, stride=1, pad=1, dilation=1):
         super(BasicBlock, self).__init__()
@@ -250,64 +228,62 @@ class Block(nn.Module):
 
 
 class DRLN(nn.Module):
-    def __init__(self, scaling_factor: int):
+    def __init__(
+        self, in_channels: int = 1, out_channels: int = 1, scaling_factor: int = 4
+    ):
         super(DRLN, self).__init__()
 
         self.scale = scaling_factor
-        chs = 64
+        channels = 64
 
-        self.sub_mean = MeanShift((0.4488, 0.4371, 0.4040), sub=True)
-        self.add_mean = MeanShift((0.4488, 0.4371, 0.4040), sub=False)
+        self.head = nn.Conv2d(in_channels, channels, 3, 1, 1)
 
-        self.head = nn.Conv2d(3, chs, 3, 1, 1)
+        self.b1 = Block(channels, channels)
+        self.b2 = Block(channels, channels)
+        self.b3 = Block(channels, channels)
+        self.b4 = Block(channels, channels)
+        self.b5 = Block(channels, channels)
+        self.b6 = Block(channels, channels)
+        self.b7 = Block(channels, channels)
+        self.b8 = Block(channels, channels)
+        self.b9 = Block(channels, channels)
+        self.b10 = Block(channels, channels)
+        self.b11 = Block(channels, channels)
+        self.b12 = Block(channels, channels)
+        self.b13 = Block(channels, channels)
+        self.b14 = Block(channels, channels)
+        self.b15 = Block(channels, channels)
+        self.b16 = Block(channels, channels)
+        self.b17 = Block(channels, channels)
+        self.b18 = Block(channels, channels)
+        self.b19 = Block(channels, channels)
+        self.b20 = Block(channels, channels)
 
-        self.b1 = Block(chs, chs)
-        self.b2 = Block(chs, chs)
-        self.b3 = Block(chs, chs)
-        self.b4 = Block(chs, chs)
-        self.b5 = Block(chs, chs)
-        self.b6 = Block(chs, chs)
-        self.b7 = Block(chs, chs)
-        self.b8 = Block(chs, chs)
-        self.b9 = Block(chs, chs)
-        self.b10 = Block(chs, chs)
-        self.b11 = Block(chs, chs)
-        self.b12 = Block(chs, chs)
-        self.b13 = Block(chs, chs)
-        self.b14 = Block(chs, chs)
-        self.b15 = Block(chs, chs)
-        self.b16 = Block(chs, chs)
-        self.b17 = Block(chs, chs)
-        self.b18 = Block(chs, chs)
-        self.b19 = Block(chs, chs)
-        self.b20 = Block(chs, chs)
+        self.c1 = BasicBlock(channels * 2, channels, 3, 1, 1)
+        self.c2 = BasicBlock(channels * 3, channels, 3, 1, 1)
+        self.c3 = BasicBlock(channels * 4, channels, 3, 1, 1)
+        self.c4 = BasicBlock(channels * 2, channels, 3, 1, 1)
+        self.c5 = BasicBlock(channels * 3, channels, 3, 1, 1)
+        self.c6 = BasicBlock(channels * 4, channels, 3, 1, 1)
+        self.c7 = BasicBlock(channels * 2, channels, 3, 1, 1)
+        self.c8 = BasicBlock(channels * 3, channels, 3, 1, 1)
+        self.c9 = BasicBlock(channels * 4, channels, 3, 1, 1)
+        self.c10 = BasicBlock(channels * 2, channels, 3, 1, 1)
+        self.c11 = BasicBlock(channels * 3, channels, 3, 1, 1)
+        self.c12 = BasicBlock(channels * 4, channels, 3, 1, 1)
+        self.c13 = BasicBlock(channels * 2, channels, 3, 1, 1)
+        self.c14 = BasicBlock(channels * 3, channels, 3, 1, 1)
+        self.c15 = BasicBlock(channels * 4, channels, 3, 1, 1)
+        self.c16 = BasicBlock(channels * 5, channels, 3, 1, 1)
+        self.c17 = BasicBlock(channels * 2, channels, 3, 1, 1)
+        self.c18 = BasicBlock(channels * 3, channels, 3, 1, 1)
+        self.c19 = BasicBlock(channels * 4, channels, 3, 1, 1)
+        self.c20 = BasicBlock(channels * 5, channels, 3, 1, 1)
 
-        self.c1 = BasicBlock(chs * 2, chs, 3, 1, 1)
-        self.c2 = BasicBlock(chs * 3, chs, 3, 1, 1)
-        self.c3 = BasicBlock(chs * 4, chs, 3, 1, 1)
-        self.c4 = BasicBlock(chs * 2, chs, 3, 1, 1)
-        self.c5 = BasicBlock(chs * 3, chs, 3, 1, 1)
-        self.c6 = BasicBlock(chs * 4, chs, 3, 1, 1)
-        self.c7 = BasicBlock(chs * 2, chs, 3, 1, 1)
-        self.c8 = BasicBlock(chs * 3, chs, 3, 1, 1)
-        self.c9 = BasicBlock(chs * 4, chs, 3, 1, 1)
-        self.c10 = BasicBlock(chs * 2, chs, 3, 1, 1)
-        self.c11 = BasicBlock(chs * 3, chs, 3, 1, 1)
-        self.c12 = BasicBlock(chs * 4, chs, 3, 1, 1)
-        self.c13 = BasicBlock(chs * 2, chs, 3, 1, 1)
-        self.c14 = BasicBlock(chs * 3, chs, 3, 1, 1)
-        self.c15 = BasicBlock(chs * 4, chs, 3, 1, 1)
-        self.c16 = BasicBlock(chs * 5, chs, 3, 1, 1)
-        self.c17 = BasicBlock(chs * 2, chs, 3, 1, 1)
-        self.c18 = BasicBlock(chs * 3, chs, 3, 1, 1)
-        self.c19 = BasicBlock(chs * 4, chs, 3, 1, 1)
-        self.c20 = BasicBlock(chs * 5, chs, 3, 1, 1)
-
-        self.upsample = UpsampleBlock(chs, self.scale, multi_scale=False)
-        self.tail = nn.Conv2d(chs, 3, 3, 1, 1)
+        self.upsample = UpsampleBlock(channels, self.scale, multi_scale=False)
+        self.tail = nn.Conv2d(channels, out_channels, 3, 1, 1)
 
     def forward(self, x):
-        x = self.sub_mean(x)
         x = self.head(x)
         c0 = o0 = x
 
@@ -400,6 +376,5 @@ class DRLN(nn.Module):
         out = self.upsample(b_out, scale=self.scale)
 
         out = self.tail(out)
-        f_out = self.add_mean(out)
 
-        return f_out
+        return out

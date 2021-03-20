@@ -16,7 +16,6 @@ from pytorch_lightning.metrics.functional import (
 from torch import Tensor
 from torchvision.utils import save_image
 
-from sr.losses.perceptual import PerceptualLoss
 from sr.models.drln import DRLN
 from sr.models.esrgan import ESRGANGenerator
 from sr.models.rfb_esrgan import RFBESRGANGenerator
@@ -43,7 +42,6 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             if self.hparams.generator == "srcnn"
             else torch.nn.L1Loss()
         )
-        self.perceptual_criterion = PerceptualLoss()
 
     def build_model(self) -> nn.Module:
         if self.hparams.generator == "esrgan":
@@ -53,9 +51,14 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
                 nf=self.hparams.nf,
                 nb=self.hparams.nb,
                 gc=self.hparams.gc,
+                scale_factor=self.hparams.scale_factor,
             )
         elif self.hparams.generator == "drln":
-            generator = DRLN(scaling_factor=self.hparams.scale_factor)
+            generator = DRLN(
+                in_channels=self.hparams.gen_in_channels,
+                out_channels=self.hparams.gen_out_channels,
+                scaling_factor=self.hparams.scale_factor,
+            )
         elif self.hparams.generator == "rfbesrgan":
             generator = RFBESRGANGenerator(
                 upscale_factor=self.hparams.scale_factor,
@@ -73,13 +76,23 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             )
         return generator
 
-    def forward(self, x: Tensor) -> Tensor:
-        return self.net_G(x).clamp(0, 1)
+    def forward(self, x: Tensor, elevation: Tensor) -> Tensor:
+        if self.hparams.generator == "srcnn":
+            return self.net_G(x).clamp(0.0, 1.0)
+        else:
+            return self.net_G(x, elevation).clamp(0.0, 1.0)
 
     def training_step(self, batch: Any, batch_idx: int) -> Any:
-        lr, hr, sr_bicubic = batch["lr"], batch["hr"], batch["bicubic"]
+        lr, hr, sr_nearest, elev = (
+            batch["lr"],
+            batch["hr"],
+            batch["nearest"],
+            batch["elevation"],
+        )
 
-        sr = self(sr_bicubic if self.hparams.generator == "srcnn" else lr)
+        x = torch.cat([sr_nearest, elev], dim=1)
+
+        sr = self(x if self.hparams.generator == "srcnn" else lr, elev)
 
         loss = self.loss(sr, hr)
 
@@ -90,17 +103,24 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
     def validation_step(
         self, batch: Any, batch_idx: int
     ) -> Dict[str, Union[float, int]]:
-        lr, hr, sr_bicubic = batch["lr"], batch["hr"].half(), batch["bicubic"]
+        lr, hr, sr_nearest, elev = (
+            batch["lr"],
+            batch["hr"],
+            batch["nearest"],
+            batch["elevation"],
+        )
 
-        sr = self(sr_bicubic if self.hparams.generator == "srcnn" else lr)
+        x = torch.cat([sr_nearest, elev], dim=1)
+
+        sr = self(x if self.hparams.generator == "srcnn" else lr, elev)
 
         l1_loss = self.loss(sr, hr)
         psnr_score = psnr(sr, hr)
-        ssim_score = ssim(sr, hr)
+        ssim_score = ssim(sr, hr.half())
         mae = mean_absolute_error(sr, hr)
         mse = mean_squared_error(sr, hr)
         rmse = torch.sqrt(mse)
-        perceptual_loss = self.perceptual_criterion(sr, hr)
+        # perceptual_loss = self.perceptual_criterion(sr, hr)
 
         return {
             "val/pixel_level_loss": l1_loss,
@@ -109,7 +129,7 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             "val/mae": mae,
             "val/mse": mse,
             "val/rmse": rmse,
-            "val/perceptual_loss": perceptual_loss,
+            # "val/perceptual_loss": perceptual_loss,
         }
 
     def validation_epoch_end(self, outputs: List[Any]) -> None:
@@ -123,9 +143,6 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
         mae_mean = torch.stack([output["val/mae"] for output in outputs]).mean()
         mse_mean = torch.stack([output["val/mse"] for output in outputs]).mean()
         rmse_mean = torch.stack([output["val/rmse"] for output in outputs]).mean()
-        perceptual_loss_mean = torch.stack(
-            [output["val/perceptual_loss"] for output in outputs]
-        ).mean()
         log_dict = {
             "val/pixel_level_loss": pixel_level_loss_mean,
             "hp_metric": pixel_level_loss_mean,
@@ -134,26 +151,33 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             "val/mae": mae_mean,
             "val/mse": mse_mean,
             "val/rmse": rmse_mean,
-            "val/perceptual_loss": perceptual_loss_mean,
         }
         self.log_dict(log_dict)
 
         with torch.no_grad():
             batch = next(iter(self.trainer.datamodule.val_dataloader()))
-            lr, hr, sr_bicubic = batch["lr"], batch["hr"], batch["bicubic"]
+            lr, hr, sr_nearest, elev = (
+                batch["lr"],
+                batch["hr"],
+                batch["nearest"],
+                batch["elevation"],
+            )
 
             self.logger.experiment.add_images("hr_images", hr, self.global_step)
             self.logger.experiment.add_images("lr_images", lr, self.global_step)
             self.logger.experiment.add_images(
-                "sr_bicubic", sr_bicubic, self.global_step
+                "sr_nearest", sr_nearest, self.global_step
             )
 
             lr = (
-                sr_bicubic.to(self.device)
+                sr_nearest.to(self.device)
                 if self.hparams.generator == "srcnn"
                 else lr.to(self.device)
             )
-            sr = self(lr)
+
+            x = torch.cat([sr_nearest, elev], dim=1).to(self.device)
+
+            sr = self(x)
             self.logger.experiment.add_images("sr_images", sr, self.global_step)
 
             if isinstance(self.logger, DummyLogger):
@@ -162,13 +186,15 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             img_dir = os.path.join(self.logger.log_dir, "images")
             os.makedirs(img_dir, exist_ok=True)
             save_image(
-                hr, os.path.join(img_dir, f"hr-{self.hparams.experiment_name}.png")
+                hr,
+                os.path.join(img_dir, f"hr-{self.hparams.experiment_name}.png"),
             )
             save_image(
-                lr, os.path.join(img_dir, f"lr-{self.hparams.experiment_name}.png")
+                lr,
+                os.path.join(img_dir, f"lr-{self.hparams.experiment_name}.png"),
             )
             save_image(
-                sr_bicubic,
+                sr_nearest,
                 os.path.join(img_dir, f"sr-bicubic-{self.hparams.experiment_name}.png"),
             )
             save_image(
@@ -224,8 +250,8 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             type=float,
             help="Determines the minimum learning rate via min_lr = initial_lr/final_div_factor",
         )
-        parser.add_argument("--gen_in_channels", default=3, type=int)
-        parser.add_argument("--gen_out_channels", default=3, type=int)
+        parser.add_argument("--gen_in_channels", default=2, type=int)
+        parser.add_argument("--gen_out_channels", default=1, type=int)
         parser.add_argument("--nf", default=64, type=int)
         parser.add_argument("--nb", default=23, type=int)
         parser.add_argument("--gc", default=32, type=int)

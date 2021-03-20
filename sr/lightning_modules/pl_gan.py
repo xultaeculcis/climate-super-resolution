@@ -121,12 +121,12 @@ class GANLightningModule(pl.LightningModule):
     def training_step(
         self, batch: Any, batch_idx: int, optimizer_idx: int
     ) -> Dict[str, Any]:
-        lr, hr, sr_bicubic = batch["lr"], batch["hr"], batch["bicubic"]
+        lr, hr, sr_nearest = batch["lr"], batch["hr"], batch["nearest"]
 
         real_labels = torch.ones((hr.size(0), 1), device=self.device)
         fake_labels = torch.zeros((hr.size(0), 1), device=self.device)
 
-        sr = self(sr_bicubic if self.hparams.generator == "srcnn" else lr)
+        sr = self(sr_nearest if self.hparams.generator == "srcnn" else lr)
 
         # train generator
         if optimizer_idx == 0:
@@ -190,12 +190,12 @@ class GANLightningModule(pl.LightningModule):
     def validation_step(
         self, batch: Any, batch_idx: int
     ) -> Dict[str, Union[int, float]]:
-        lr, hr, sr_bicubic = batch["lr"], batch["hr"].half(), batch["bicubic"]
+        lr, hr, sr_nearest = batch["lr"], batch["hr"].half(), batch["nearest"]
 
         real_labels = torch.ones((hr.size(0), 1), device=self.device)
         fake_labels = torch.zeros((hr.size(0), 1), device=self.device)
 
-        sr = self(sr_bicubic if self.hparams.generator == "srcnn" else lr)
+        sr = self(sr_nearest if self.hparams.generator == "srcnn" else lr)
 
         perceptual_loss, adversarial_loss, pixel_level_loss, loss_g = self.loss_g(
             hr, sr, real_labels, fake_labels
@@ -232,14 +232,14 @@ class GANLightningModule(pl.LightningModule):
 
         with torch.no_grad():
             batch = next(iter(self.trainer.datamodule.val_dataloader()))
-            lr, hr, sr_bicubic = batch["lr"], batch["hr"], batch["bicubic"]
+            lr, hr, sr_nearest = batch["lr"], batch["hr"], batch["nearest"]
 
             lr = lr.to(self.device)
 
             self.logger.experiment.add_images("hr_images", hr, self.global_step)
             self.logger.experiment.add_images("lr_images", lr, self.global_step)
             self.logger.experiment.add_images(
-                "sr_bicubic", sr_bicubic, self.global_step
+                "sr_nearest", sr_nearest, self.global_step
             )
 
             sr = self(lr)
@@ -306,9 +306,9 @@ class GANLightningModule(pl.LightningModule):
         parser.add_argument("--pixel_level_loss_factor", default=1e-2, type=float)
         parser.add_argument("--perceptual_loss_factor", default=1.0, type=float)
         parser.add_argument("--adversarial_loss_factor", default=5e-3, type=float)
-        parser.add_argument("--gen_in_channels", default=3, type=int)
-        parser.add_argument("--gen_out_channels", default=3, type=int)
-        parser.add_argument("--disc_in_channels", default=3, type=int)
+        parser.add_argument("--gen_in_channels", default=1, type=int)
+        parser.add_argument("--gen_out_channels", default=1, type=int)
+        parser.add_argument("--disc_in_channels", default=1, type=int)
         parser.add_argument("--nf", default=64, type=int)
         parser.add_argument("--nb", default=23, type=int)
         parser.add_argument("--gc", default=32, type=int)

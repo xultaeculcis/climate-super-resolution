@@ -79,6 +79,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run_world_clim_tiling", type=bool, default=False)
     parser.add_argument("--run_world_clim_elevation_resize", type=bool, default=False)
     parser.add_argument("--patch_size", type=Tuple[int, int], default=(128, 128))
+    parser.add_argument("--patch_stride", type=int, default=64)
     parser.add_argument("--n_workers", type=int, default=8)
     parser.add_argument("--threads_per_worker", type=int, default=1)
     parser.add_argument(
@@ -221,7 +222,7 @@ def resize_raster(
 
 
 def get_tiles(
-    ds: Any, width: Optional[int] = 128, height: Optional[int] = 128
+    ds: Any, width: Optional[int] = 128, height: Optional[int] = 128, stride: Optional[int] = 64
 ) -> Tuple[rio.windows.Window, rio.Affine]:
     """
     Using `rasterio` generate windows and transforms.
@@ -230,12 +231,13 @@ def get_tiles(
         ds (Any): The input dataset.
         width (Optional[int]): The window width. Default: 128.
         height (Optional[int]): The window height. Default: 128.
+        stride (Optional[int]): The stride of the tiles. Default: 64.
 
     Returns (Tuple[rio.windows.Window, rio.Affine]): A tuple with the window and the transform.
 
     """
     ncols, nrows = ds.meta["width"], ds.meta["height"]
-    offsets = np.array(list(product(range(0, ncols, width), range(0, nrows, height))))
+    offsets = np.array(list(product(range(0, ncols, stride), range(0, nrows, stride))))
     big_window = windows.Window(col_off=0, row_off=0, width=ncols, height=nrows)
 
     for col_off, row_off in offsets:
@@ -256,7 +258,7 @@ def get_tiles(
 
 
 def make_patches(
-    file_path: str, out_path: str, tile_shape: Tuple[int, int] = (128, 128)
+    file_path: str, out_path: str, tile_shape: Optional[Tuple[int, int]] = (128, 128), stride: Optional[int] = 64
 ) -> None:
     """
     Create tiles of specified size for ML purposes from specified geo-tiff file.
@@ -264,7 +266,8 @@ def make_patches(
     Args:
         file_path (str): The path to the geo-tiff raster file.
         out_path (str): The output path.
-        tile_shape (Tuple[int, int]): The shape of the image patches.
+        tile_shape (Optional[Tuple[int, int]]): The shape of the image patches.
+        stride (Optional[int]): The stride of the tiles. Default: 64.
 
     """
     with rio.open(file_path) as in_dataset:
@@ -277,7 +280,7 @@ def make_patches(
         scaler = ClimScaler()
         scaler.fit_single(data)
 
-        for window, transform in get_tiles(in_dataset, tile_width, tile_height):
+        for window, transform in get_tiles(in_dataset, tile_width, tile_height, stride):
             meta["transform"] = transform
             meta["dtype"] = np.float32
             meta["width"], meta["height"] = window.width, window.height
@@ -399,6 +402,7 @@ def run_cruts_tiling(args: argparse.Namespace) -> None:
                 make_patches,
                 os.path.join(args.out_dir_cruts, CRUTSConfig.tiles_dir, var),
                 args.patch_size,
+                args.patch_stride,
             ).compute()
 
 

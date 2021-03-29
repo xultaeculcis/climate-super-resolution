@@ -15,9 +15,9 @@ import xarray
 from dask.diagnostics import progress
 from datacube.utils.cog import write_cog
 from distributed import Client
-from misc.clim_scaler import ClimScaler
-from misc.cruts_config import CRUTSConfig
-from misc.world_clim_config import WorldClimConfig
+from pre_processing.clim_scaler import ClimScaler
+from pre_processing.cruts_config import CRUTSConfig
+from pre_processing.world_clim_config import WorldClimConfig
 from rasterio import Affine, windows
 from rasterio.enums import Resampling
 
@@ -74,9 +74,9 @@ def parse_args() -> argparse.Namespace:
         default="../../datasets/",
     )
     parser.add_argument("--run_cruts", type=bool, default=False)
-    parser.add_argument("--run_cruts_tiling", type=bool, default=False)
+    parser.add_argument("--run_cruts_tiling", type=bool, default=True)
     parser.add_argument("--run_world_clim_resize", type=bool, default=False)
-    parser.add_argument("--run_world_clim_tiling", type=bool, default=False)
+    parser.add_argument("--run_world_clim_tiling", type=bool, default=True)
     parser.add_argument("--run_world_clim_elevation_resize", type=bool, default=False)
     parser.add_argument("--patch_size", type=Tuple[int, int], default=(128, 128))
     parser.add_argument("--patch_stride", type=int, default=64)
@@ -222,7 +222,10 @@ def resize_raster(
 
 
 def get_tiles(
-    ds: Any, width: Optional[int] = 128, height: Optional[int] = 128, stride: Optional[int] = 64
+    ds: Any,
+    width: Optional[int] = 128,
+    height: Optional[int] = 128,
+    stride: Optional[int] = 64,
 ) -> Tuple[rio.windows.Window, rio.Affine]:
     """
     Using `rasterio` generate windows and transforms.
@@ -258,7 +261,10 @@ def get_tiles(
 
 
 def make_patches(
-    file_path: str, out_path: str, tile_shape: Optional[Tuple[int, int]] = (128, 128), stride: Optional[int] = 64
+    file_path: str,
+    out_path: str,
+    tile_shape: Optional[Tuple[int, int]] = (128, 128),
+    stride: Optional[int] = 64,
 ) -> None:
     """
     Create tiles of specified size for ML purposes from specified geo-tiff file.
@@ -312,8 +318,6 @@ def run_cruts_to_cog(args: argparse.Namespace) -> None:
 
     """
     if args.run_cruts:
-        ensure_sub_dirs_exist_cts(args.out_dir_cruts)
-
         logger.info("Running CRU-TS pre-processing - Geo Tiff generation")
 
         dask.bag.from_sequence(CRUTSConfig.variables_cts).map(
@@ -330,8 +334,6 @@ def run_world_clim_resize(args: argparse.Namespace) -> None:
 
     """
     if args.run_world_clim_resize:
-        ensure_sub_dirs_exist_wc(args.out_dir_world_clim)
-
         for var in WorldClimConfig.variables_wc:
             files = sorted(
                 glob(
@@ -363,7 +365,6 @@ def run_world_clim_elevation_resize(args: argparse.Namespace) -> None:
 
     """
     if args.run_world_clim_elevation_resize:
-        ensure_sub_dirs_exist_wc(args.out_dir_world_clim)
         for multiplier, scale in WorldClimConfig.resolution_multipliers:
             logger.info(
                 "Running WorldClim pre-processing for variable: "
@@ -593,6 +594,9 @@ if __name__ == "__main__":
     )
 
     try:
+        ensure_sub_dirs_exist_cts(arguments.out_dir_cruts)
+        ensure_sub_dirs_exist_wc(arguments.out_dir_world_clim)
+
         run_cruts_to_cog(arguments)
         run_world_clim_resize(arguments)
         run_world_clim_elevation_resize(arguments)

@@ -16,7 +16,7 @@ from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
-from misc.world_clim_config import WorldClimConfig
+from pre_processing.world_clim_config import WorldClimConfig
 
 logging.basicConfig(level=logging.INFO)
 os.environ["NUMEXPR_MAX_THREADS"] = "16"

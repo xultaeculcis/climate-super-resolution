@@ -8,7 +8,7 @@ import dask
 import dask.bag
 import numpy as np
 from dask.distributed import Client
-from misc.clim_scaler import ClimScaler
+from pre_processing.clim_scaler import ClimScaler
 from PIL import Image
 from tqdm import tqdm
 

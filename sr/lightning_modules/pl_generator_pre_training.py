@@ -76,7 +76,7 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             )
         return generator
 
-    def forward(self, x: Tensor, elevation: Tensor) -> Tensor:
+    def forward(self, x: Tensor, elevation: Tensor = None) -> Tensor:
         if self.hparams.generator == "srcnn":
             return self.net_G(x).clamp(0.0, 1.0)
         else:

@@ -56,7 +56,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--terminate_on_nan", type=bool, default=True)
     parser.add_argument("--lr_find_only", type=bool, default=False)
     parser.add_argument("--fast_dev_run", type=bool, default=False)
-    parser.add_argument("--generator", type=str, default="drln")
+    parser.add_argument("--generator", type=str, default="srcnn")
 
     # args for training from pre-trained model
     parser.add_argument(
@@ -69,7 +69,7 @@ def parse_args() -> argparse.Namespace:
     # override args
     parser.add_argument("--scaling_factor", type=int, default=4)
 
-    return parser.parse_args(arguments)
+    return parser.parse_args()
 
 
 def prepare_pl_module(args: argparse.Namespace) -> pl.LightningModule:

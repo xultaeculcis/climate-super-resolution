@@ -30,7 +30,7 @@ class ClimateDataset(Dataset):
         generator_type: str,
         hr_size: Optional[int] = 128,
         stage: Optional[str] = "train",
-        scaling_factor: Optional[int] = 2,
+        scaling_factor: Optional[int] = 4,
     ):
         self.hr_size = hr_size
         self.scaling_factor = scaling_factor
@@ -232,10 +232,10 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             type=str,
             default="4x",
         )
-        parser.add_argument("--batch_size", type=int, default=32)
+        parser.add_argument("--batch_size", type=int, default=64)
         parser.add_argument("--num_workers", type=int, default=8)
         parser.add_argument("--hr_size", type=int, default=128)
-        parser.add_argument("--scale_factor", type=int, default=2)
+        parser.add_argument("--scale_factor", type=int, default=4)
         parser.add_argument("--seed", type=int, default=42)
         return parser
 

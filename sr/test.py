@@ -7,10 +7,6 @@ from typing import Union
 
 import numpy as np
 import pytorch_lightning as pl
-
-from lightning_modules.pl_generator_pre_training import (
-    GeneratorPreTrainingLightningModule,
-)
 from sr.lightning_modules.datamodules import SuperResolutionDataModule
 from sr.lightning_modules.pl_gan import GANLightningModule
 from utils import prepare_training
@@ -21,22 +17,17 @@ logging.basicConfig(level=logging.INFO)
 warnings.filterwarnings("ignore")
 
 
-def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
+def parse_args() -> argparse.Namespace:
     """
     Parses the program arguments.
 
-    :param arguments: The argparse Namespace. Optional.
     :return: The Namespace with parsed parameters.
     """
 
     parser = argparse.ArgumentParser(conflict_handler="resolve", add_help=False)
     parser = pl.Trainer.add_argparse_args(parser)
     parser = SuperResolutionDataModule.add_data_specific_args(parser)
-
-    if arguments.experiment_name == "gen-pre-training":
-        parser = GeneratorPreTrainingLightningModule.add_model_specific_args(parser)
-    else:
-        parser = GANLightningModule.add_model_specific_args(parser)
+    parser = GANLightningModule.add_model_specific_args(parser)
 
     # training config args
     parser.add_argument("--precision", type=int, default=16)
@@ -48,6 +39,7 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     parser.add_argument("--fast_dev_run", type=bool, default=False)
     parser.add_argument("--print_config", type=bool, default=True)
     parser.add_argument("--log_dir", type=str, default="../logs")
+    parser.add_argument("--experiment_name", type=str, default="gen-pre-training")
     parser.add_argument("--save_model_path", type=str, default="../model_weights")
     parser.add_argument("--early_stopping_patience", type=int, default=100)
     parser.add_argument("--checkpoint_monitor_metric", type=str, default="hp_metric")
@@ -62,21 +54,15 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     parser.add_argument(
         "--pretrained_model",
         type=str,
-        default=None,
+        default="../model_weights/gen-pre-training-srcnn-tmax-4x-epoch=14-step=0-hp_metric=0.00402.ckpt",
         help="A path to pre-trained model checkpoint. Required for fine tuning.",
     )
-    parsed_arguments = parser.parse_args()
-    parsed_arguments.experiment_name = arguments.experiment_name
 
-    return parsed_arguments
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(conflict_handler="resolve", add_help=False)
-    parser.add_argument("--experiment_name", type=str, default="gen-pre-training")
-
-    arguments = parser.parse_args()
-    arguments = parse_args(arguments)
+    arguments = parse_args()
 
     if arguments.print_config:
         print("Running with following configuration:")  # noqa T001
@@ -86,17 +72,4 @@ if __name__ == "__main__":
 
     net, dm, trainer = prepare_training(arguments)
 
-    if arguments.lr_find_only:
-        # Run learning rate finder
-        lr_finder = trainer.tuner.lr_find(model=net, datamodule=dm, max_lr=1e-2)
-
-        # Plot lr find results
-        fig = lr_finder.plot(suggest=True)
-        fig.show()
-
-        # Pick point based on plot, or get suggestion
-        new_lr = lr_finder.suggestion()
-        logging.info(f"LR Finder suggestion: {new_lr}")
-    else:
-        trainer.fit(model=net, datamodule=dm)
-        trainer.test()
+    trainer.test(model=net, datamodule=dm)

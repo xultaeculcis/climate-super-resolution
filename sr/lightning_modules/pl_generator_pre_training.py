@@ -82,77 +82,139 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
         else:
             return self.net_G(x, elevation).clamp(0.0, 1.0)
 
-    def training_step(self, batch: Any, batch_idx: int) -> Any:
+    def common_step(self, batch: Any) -> Tuple[Tensor, Tensor]:
+        """
+        Runs common step during train/val/test pass.
+
+        Args:
+            batch (Any): A batch of data from a dataloader.
+
+        Returns (Tuple[Tensor, Tensor]): A tuple with HR image and SR image.
+
+        """
         lr, hr, sr_nearest, elev = (
             batch["lr"],
             batch["hr"],
             batch["nearest"],
             batch["elevation"],
         )
-
         x = torch.cat([sr_nearest, elev], dim=1)
-
         sr = self(x if self.hparams.generator == "srcnn" else lr, elev)
 
-        loss = self.loss(sr, hr)
+        return hr, sr
 
+    def compute_metrics_common(
+        self, hr: Tensor, sr: Tensor
+    ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+        """
+        Common step to compute all of the metrics.
+
+        Args:
+            hr (Tensor): The ground truth HR image.
+            sr (Tensor): The hallucinated SR image.
+
+        Returns (Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]): A tuple with metrics in following order:
+            L1_Loss, PSNR, SSIM, MAE, MSE, RMSE.
+
+        """
+        loss = self.loss(sr, hr)
+        psnr_score = psnr(sr, hr)
+        ssim_score = ssim(sr, hr.half())
+        mae = mean_absolute_error(sr, hr)
+        mse = mean_squared_error(sr, hr)
+        rmse = torch.sqrt(mse)
+
+        return loss, psnr_score, ssim_score, mae, mse, rmse
+
+    def training_step(self, batch: Any, batch_idx: int) -> Any:
+        """
+        Runs training step.
+
+        Args:
+            batch (Any): A batch of data from validation dataloader.
+            batch_idx (int): The batch index.
+
+        Returns (Any): Loss score for further processing.
+
+        """
+        hr, sr = self.common_step(batch)
+        loss = self.loss(sr, hr)
         self.log("train/pixel_level_loss", loss, on_step=True, on_epoch=False)
 
         return loss
 
     def validation_step(
         self, batch: Any, batch_idx: int
-    ) -> Dict[str, Union[float, int]]:
-        lr, hr, sr_nearest, elev = (
-            batch["lr"],
-            batch["hr"],
-            batch["nearest"],
-            batch["elevation"],
+    ) -> Dict[str, Union[float, int, Tensor]]:
+        """
+        Run validation step.
+
+        Args:
+            batch (Any): A batch of data from validation dataloader.
+            batch_idx (int): The batch index.
+
+        Returns (Dict[str, Union[float, int, Tensor]]): A dictionary with outputs for further processing.
+
+        """
+        hr, sr = self.common_step(batch)
+        l1_loss, psnr_score, ssim_score, mae, mse, rmse = self.compute_metrics_common(
+            hr, sr
         )
 
-        x = torch.cat([sr_nearest, elev], dim=1)
-
-        sr = self(x if self.hparams.generator == "srcnn" else lr, elev)
-
-        l1_loss = self.loss(sr, hr)
-        psnr_score = psnr(sr, hr)
-        ssim_score = ssim(sr, hr.half())
-        mae = mean_absolute_error(sr, hr)
-        mse = mean_squared_error(sr, hr)
-        rmse = torch.sqrt(mse)
-        # perceptual_loss = self.perceptual_criterion(sr, hr)
-
-        return {
+        log_dict = {
             "val/pixel_level_loss": l1_loss,
             "val/psnr": psnr_score,
             "val/ssim": ssim_score,
             "val/mae": mae,
             "val/mse": mse,
             "val/rmse": rmse,
-            # "val/perceptual_loss": perceptual_loss,
         }
 
+        self.log_dict(log_dict, on_step=False, on_epoch=True)
+
+        return log_dict
+
+    def test_step(self, batch: Any, batch_idx: int) -> Union[float, int, Tensor]:
+        """
+        Run test step.
+
+        Args:
+           batch (Any): A batch of data from test dataloader.
+           batch_idx (int): The batch index.
+
+        Returns (Union[float, int, Tensor]): A test loss for further processing.
+
+        """
+        hr, sr = self.common_step(batch)
+        l1_loss, psnr_score, ssim_score, mae, mse, rmse = self.compute_metrics_common(
+            hr, sr
+        )
+
+        log_dict = {
+            "test/pixel_level_loss": l1_loss,
+            "test/psnr": psnr_score,
+            "test/ssim": ssim_score,
+            "test/mae": mae,
+            "test/mse": mse,
+            "test/rmse": rmse,
+        }
+
+        self.log_dict(log_dict, on_step=False, on_epoch=True)
+
+        return l1_loss
+
     def validation_epoch_end(self, outputs: List[Any]) -> None:
-        """Compute and log validation losses at the epoch level."""
+        """Compute and log hp_metric at the epoch level."""
 
         pixel_level_loss_mean = torch.stack(
             [output["val/pixel_level_loss"] for output in outputs]
         ).mean()
-        psnr_score_mean = torch.stack([output["val/psnr"] for output in outputs]).mean()
-        ssim_score_mean = torch.stack([output["val/ssim"] for output in outputs]).mean()
-        mae_mean = torch.stack([output["val/mae"] for output in outputs]).mean()
-        mse_mean = torch.stack([output["val/mse"] for output in outputs]).mean()
-        rmse_mean = torch.stack([output["val/rmse"] for output in outputs]).mean()
-        log_dict = {
-            "val/pixel_level_loss": pixel_level_loss_mean,
-            "hp_metric": pixel_level_loss_mean,
-            "val/psnr": psnr_score_mean,
-            "val/ssim": ssim_score_mean,
-            "val/mae": mae_mean,
-            "val/mse": mse_mean,
-            "val/rmse": rmse_mean,
-        }
-        self.log_dict(log_dict)
+
+        self.log("hp_metric", pixel_level_loss_mean)
+        self.log_images()
+
+    def log_images(self) -> None:
+        """Log a single batch of images from the validation set to monitor image quality progress."""
 
         with torch.no_grad():
             batch = next(iter(self.trainer.datamodule.val_dataloader()))
@@ -195,7 +257,7 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             )
             save_image(
                 sr_nearest,
-                os.path.join(img_dir, f"sr-bicubic-{self.hparams.experiment_name}.png"),
+                os.path.join(img_dir, f"sr-nearest-{self.hparams.experiment_name}.png"),
             )
             save_image(
                 sr,

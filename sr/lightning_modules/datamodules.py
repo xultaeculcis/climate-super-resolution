@@ -12,11 +12,10 @@ import torchvision
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as TF
 from PIL import Image
+from pre_processing.world_clim_config import WorldClimConfig
 from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
-
-from pre_processing.world_clim_config import WorldClimConfig
 
 logging.basicConfig(level=logging.INFO)
 os.environ["NUMEXPR_MAX_THREADS"] = "16"
@@ -45,14 +44,18 @@ class ClimateDataset(Dataset):
 
         self.df = df
         self.elevation_df = elevation_df
+        self.resize = transforms.Resize(
+            (self.hr_size // self.scaling_factor, self.hr_size // self.scaling_factor),
+            Image.NEAREST,
+        )
+        self.upscale = transforms.Resize(
+            (self.hr_size, self.hr_size), interpolation=Image.NEAREST
+        )
 
     def __getitem__(self, index) -> Dict[str, Union[Tensor, list]]:
         row = self.df.iloc[index]
         img_hr = Image.open(row["file_path"])
-        img_lr = transforms.Resize(
-            (self.hr_size // self.scaling_factor, self.hr_size // self.scaling_factor),
-            Image.NEAREST,
-        )(img_hr)
+        img_lr = self.resize(img_hr)
         img_sr_nearest = []
         x = row["x"]
         y = row["y"]
@@ -73,10 +76,7 @@ class ClimateDataset(Dataset):
                 img_elev = TF.hflip(img_elev)
 
         if self.generator_type == "srcnn" or self.stage != "train":
-            upscale = transforms.Resize(
-                (self.hr_size, self.hr_size), interpolation=Image.NEAREST
-            )
-            img_sr_nearest = self.common_transforms(np.array(upscale(img_lr)))
+            img_sr_nearest = self.common_transforms(np.array(self.upscale(img_lr)))
 
         img_lr = self.common_transforms(np.array(img_lr))
         img_hr = self.common_transforms(np.array(img_hr))

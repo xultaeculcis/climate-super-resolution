@@ -87,8 +87,8 @@ def parse_args() -> argparse.Namespace:
         type=List[Tuple[int, int]],
         default=[
             (720, 360),
-            (1080, 720),
-            (2160, 1080),
+            (1440, 720),
+            (2880, 1440),
         ],
     )
     parser.add_argument("--train_years", type=Tuple[int, int], default=(1961, 1999))

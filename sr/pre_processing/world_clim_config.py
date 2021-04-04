@@ -19,3 +19,4 @@ class WorldClimConfig:
         ("2x", 1 / 6),
         ("4x", 1 / 3),
     ]
+    CRS = "EPSG:4326"

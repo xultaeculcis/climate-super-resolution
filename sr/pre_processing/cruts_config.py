@@ -20,3 +20,5 @@ class CRUTSConfig:
         tiles_dir,
     ]
     file_pattern = "cru_ts4.04.1901.2019.{0}.dat.nc"
+    degree_per_pix = 0.5
+    CRS = "EPSG:4326"

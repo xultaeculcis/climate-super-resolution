@@ -7,9 +7,10 @@ from typing import Union
 
 import numpy as np
 import pytorch_lightning as pl
+from utils import prepare_training
+
 from sr.lightning_modules.datamodules import SuperResolutionDataModule
 from sr.lightning_modules.pl_gan import GANLightningModule
-from utils import prepare_training
 
 np.set_printoptions(precision=3)
 logging.basicConfig(level=logging.INFO)

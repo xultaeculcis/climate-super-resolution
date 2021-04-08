@@ -4,7 +4,7 @@ import logging
 import os
 from glob import glob
 from itertools import product
-from typing import Any, List, Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import dask.bag
 import datacube.utils.geometry as dcug
@@ -20,6 +20,7 @@ from pre_processing.cruts_config import CRUTSConfig
 from pre_processing.world_clim_config import WorldClimConfig
 from rasterio import Affine, windows
 from rasterio.enums import Resampling
+from tqdm import tqdm
 
 pbar = progress.ProgressBar()
 pbar.register()
@@ -56,12 +57,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out_dir_cruts",
         type=str,
-        default="/media/xultaeculcis/2TB/datasets/cruts/pre-processed/",
+        default="/media/xultaeculcis/2TB/datasets/cruts/pre-processed-v2/",
     )
     parser.add_argument(
         "--out_dir_world_clim",
         type=str,
-        default="/media/xultaeculcis/2TB/datasets/wc/pre-processed/",
+        default="/media/xultaeculcis/2TB/datasets/wc/pre-processed-v2/",
     )
     parser.add_argument(
         "--world_clim_elevation_fp",
@@ -73,24 +74,17 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default="../../datasets/",
     )
-    parser.add_argument("--run_cruts", type=bool, default=False)
-    parser.add_argument("--run_cruts_tiling", type=bool, default=True)
+    parser.add_argument("--run_cruts_resize", type=bool, default=False)
+    parser.add_argument("--run_cruts_tiling", type=bool, default=False)
+    parser.add_argument("--run_statistics_computation", type=bool, default=True)
     parser.add_argument("--run_world_clim_resize", type=bool, default=False)
-    parser.add_argument("--run_world_clim_tiling", type=bool, default=True)
+    parser.add_argument("--run_world_clim_tiling", type=bool, default=False)
     parser.add_argument("--run_world_clim_elevation_resize", type=bool, default=False)
     parser.add_argument("--patch_size", type=Tuple[int, int], default=(128, 128))
     parser.add_argument("--patch_stride", type=int, default=64)
+    parser.add_argument("--normalize_patches", type=bool, default=False)
     parser.add_argument("--n_workers", type=int, default=8)
     parser.add_argument("--threads_per_worker", type=int, default=1)
-    parser.add_argument(
-        "--resolutions",
-        type=List[Tuple[int, int]],
-        default=[
-            (720, 360),
-            (1440, 720),
-            (2880, 1440),
-        ],
-    )
     parser.add_argument("--train_years", type=Tuple[int, int], default=(1961, 1999))
     parser.add_argument("--val_years", type=Tuple[int, int], default=(2000, 2004))
     parser.add_argument("--test_years", type=Tuple[int, int], default=(2005, 2019))
@@ -265,6 +259,7 @@ def make_patches(
     out_path: str,
     tile_shape: Optional[Tuple[int, int]] = (128, 128),
     stride: Optional[int] = 64,
+    normalize: Optional[bool] = True,
 ) -> None:
     """
     Create tiles of specified size for ML purposes from specified geo-tiff file.
@@ -274,21 +269,28 @@ def make_patches(
         out_path (str): The output path.
         tile_shape (Optional[Tuple[int, int]]): The shape of the image patches.
         stride (Optional[int]): The stride of the tiles. Default: 64.
+        normalize (Optional[bool]): Whether to normalize the patches to [0,1] range. True by default.
 
     """
     with rio.open(file_path) as in_dataset:
         tile_width, tile_height = tile_shape
         fname = os.path.basename(os.path.splitext(file_path)[0]) + ".{}.{}.tif"
 
-        data = in_dataset.read()
-        meta = in_dataset.meta.copy()
+        if normalize:
+            data = in_dataset.read()
+            scaler = ClimScaler()
+            scaler.fit_single(data)
 
-        scaler = ClimScaler()
-        scaler.fit_single(data)
+        meta = in_dataset.meta.copy()
 
         for window, transform in get_tiles(in_dataset, tile_width, tile_height, stride):
             meta["transform"] = transform
-            meta["dtype"] = np.float32
+
+            if "elev" not in file_path:
+                meta["dtype"] = np.float32
+            else:
+                meta["dtype"] = np.int16
+
             meta["width"], meta["height"] = window.width, window.height
             out_fp = os.path.join(
                 out_path, fname.format(int(window.col_off), int(window.row_off))
@@ -296,7 +298,7 @@ def make_patches(
 
             subset = in_dataset.read(window=window)
 
-            # ignore tiles with less than more than 85% nan values
+            # ignore tiles with more than 85% nan values
             # unless it's the elevation file
             if (
                 np.count_nonzero(np.isnan(subset)) / np.prod(subset.shape) > 0.85
@@ -305,8 +307,10 @@ def make_patches(
                 continue
 
             with rio.open(out_fp, "w", **meta) as out_dataset:
-                scaled = scaler.transform_single(subset)
-                out_dataset.write(scaled)
+                if normalize:
+                    subset = scaler.transform_single(subset)
+
+                out_dataset.write(subset)
 
 
 def run_cruts_to_cog(args: argparse.Namespace) -> None:
@@ -317,12 +321,49 @@ def run_cruts_to_cog(args: argparse.Namespace) -> None:
         args (argparse.Namespace): The arguments.
 
     """
-    if args.run_cruts:
+    if args.run_cruts_resize:
         logger.info("Running CRU-TS pre-processing - Geo Tiff generation")
 
         dask.bag.from_sequence(CRUTSConfig.variables_cts).map(
             cruts_as_cog, args.data_dir_cruts, args.out_dir_cruts
         ).compute()
+
+
+def run_statistics_computation(args: argparse.Namespace) -> None:
+    """
+    Runs CRU-TS and World Clim Elevation statistics computation.
+
+    Args:
+        args (argparse.Namespace): The arguments.
+
+    """
+    if args.run_statistics_computation:
+        logger.info("Running statistics computation")
+
+        def compute_stats(var_name, arr):
+            mean = np.nanmean(arr)
+            std = np.nanstd(arr)
+            results.append((var_name, mean, std))
+
+        results = []
+        for var in tqdm(CRUTSConfig.variables_cts + [WorldClimConfig.elevation]):
+            if var == WorldClimConfig.elevation:
+                elevation = (
+                    rio.open(args.world_clim_elevation_fp).read().astype(np.float32)
+                )
+                elevation[elevation == -32768.0] = np.nan
+                compute_stats(var, elevation)
+            else:
+                ds = xarray.open_dataset(
+                    os.path.join(
+                        args.data_dir_cruts, CRUTSConfig.file_pattern.format(var)
+                    )
+                )
+                compute_stats(var, ds[var].values)
+
+        output_file = os.path.join(args.dataframe_output_path, "statistics.csv")
+        df = pd.DataFrame(results, columns=["variable", "mean", "std"])
+        df.to_csv(output_file, header=True, index=False)
 
 
 def run_world_clim_resize(args: argparse.Namespace) -> None:
@@ -404,6 +445,7 @@ def run_cruts_tiling(args: argparse.Namespace) -> None:
                 os.path.join(args.out_dir_cruts, CRUTSConfig.tiles_dir, var),
                 args.patch_size,
                 args.patch_stride,
+                args.normalize_patches,
             ).compute()
 
 
@@ -416,7 +458,7 @@ def run_world_clim_tiling(args: argparse.Namespace) -> None:
 
     """
     if args.run_world_clim_tiling:
-        variables = WorldClimConfig.variables_wc + [WorldClimConfig.elevation]
+        variables = [WorldClimConfig.elevation]
         for var in variables:
             for multiplier, scale in WorldClimConfig.resolution_multipliers:
                 files = sorted(
@@ -443,6 +485,8 @@ def run_world_clim_tiling(args: argparse.Namespace) -> None:
                         multiplier,
                     ),
                     args.patch_size,
+                    args.patch_stride,
+                    args.normalize_patches,
                 ).compute()
 
 
@@ -524,60 +568,27 @@ def run_train_val_test_split(args: argparse.Namespace) -> None:
                 else:
                     elevation_images.append((file_path, var, multiplier, x, y))
 
-            if train_images:
-                train_df = pd.DataFrame(
-                    train_images,
-                    columns=["file_path", "variable", "multiplier", "year", "x", "y"],
-                )
-                train_df.to_csv(
-                    os.path.join(
-                        args.dataframe_output_path, var, multiplier, "train.csv"
-                    ),
-                    index=False,
-                    header=True,
-                )
-
-            if val_images:
-                val_df = pd.DataFrame(
-                    val_images,
-                    columns=["file_path", "variable", "multiplier", "year", "x", "y"],
-                )
-                val_df.to_csv(
-                    os.path.join(
-                        args.dataframe_output_path, var, multiplier, "val.csv"
-                    ),
-                    index=False,
-                    header=True,
-                )
-
-            if test_images:
-                test_df = pd.DataFrame(
-                    test_images,
-                    columns=["file_path", "variable", "multiplier", "year", "x", "y"],
-                )
-                test_df.to_csv(
-                    os.path.join(
-                        args.dataframe_output_path, var, multiplier, "test.csv"
-                    ),
-                    index=False,
-                    header=True,
-                )
-
-            if elevation_images:
-                elevation_df = pd.DataFrame(
-                    elevation_images,
-                    columns=["file_path", "variable", "multiplier", "x", "y"],
-                )
-                elevation_df.to_csv(
-                    os.path.join(
-                        args.dataframe_output_path,
-                        var,
-                        multiplier,
-                        f"{WorldClimConfig.elevation}.csv",
-                    ),
-                    index=False,
-                    header=True,
-                )
+            for stage, images in zip(
+                ["train", "val", "test", WorldClimConfig.elevation],
+                [train_images, val_images, test_images, elevation_images],
+            ):
+                if images:
+                    columns = (
+                        ["file_path", "variable", "multiplier", "x", "y"]
+                        if stage == WorldClimConfig.elevation
+                        else ["file_path", "variable", "multiplier", "year", "x", "y"]
+                    )
+                    df = pd.DataFrame(
+                        images,
+                        columns=columns,
+                    )
+                    df.to_csv(
+                        os.path.join(
+                            args.dataframe_output_path, var, multiplier, f"{stage}.csv"
+                        ),
+                        index=False,
+                        header=True,
+                    )
 
             logger.info(
                 f"Generated Train ({len(train_images)}) / "
@@ -589,6 +600,7 @@ def run_train_val_test_split(args: argparse.Namespace) -> None:
 
 if __name__ == "__main__":
     arguments = parse_args()
+
     client = Client(
         n_workers=arguments.n_workers, threads_per_worker=arguments.threads_per_worker
     )
@@ -598,6 +610,7 @@ if __name__ == "__main__":
         ensure_sub_dirs_exist_wc(arguments.out_dir_world_clim)
 
         run_cruts_to_cog(arguments)
+        run_statistics_computation(arguments)
         run_world_clim_resize(arguments)
         run_world_clim_elevation_resize(arguments)
         run_cruts_tiling(arguments)

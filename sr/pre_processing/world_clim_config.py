@@ -20,3 +20,10 @@ class WorldClimConfig:
         ("4x", 1 / 3),
     ]
     CRS = "EPSG:4326"
+
+    statistics = {
+        elevation: {
+            "mean": 1120.0989990234375,
+            "std": 1154.4285888671875,
+        },
+    }

@@ -7,21 +7,19 @@ from glob import glob
 from typing import Optional, Tuple
 
 import numpy as np
+import pandas as pd
 import pytorch_lightning as pl
 import rasterio as rio
 import torch
 from PIL import Image
-from rasterio.merge import merge
-import pandas as pd
-
 from pre_processing.clim_scaler import ClimScaler
 from pre_processing.cruts_config import CRUTSConfig
+from pre_processing.preprocessing import get_tiles
+from pre_processing.world_clim_config import WorldClimConfig
+from rasterio.merge import merge
 from rasterio.transform import from_origin
 from torchvision import transforms
 from tqdm import tqdm
-
-from pre_processing.preprocessing import get_tiles
-from pre_processing.world_clim_config import WorldClimConfig
 from utils import prepare_pl_module
 
 
@@ -257,6 +255,196 @@ def run_inference(
         break
 
 
+def run_inference_v2(
+    model: pl.LightningModule,
+    data_dir: str,
+    cruts_variable: str,
+    elevation_file: str,
+    out_dir: str,
+    scaling_factor: Optional[int] = 4,
+) -> None:
+    """
+    Runs the inference on CRU-TS dataset.
+
+    Args:
+        model (pl.LightningModule): The LightningModule.
+        data_dir (str): The path to the data.
+        cruts_variable (str): The name of the CRU-TS variable.
+        elevation_file (str): The path to the elevation file.
+        out_dir (str): The output path.
+        scaling_factor (Optional[int]): The scaling factor.
+
+    """
+    logging.info(f"Running Inference for '{cruts_variable}'")
+    tiffs = glob(os.path.join(data_dir, cruts_variable, "*.tif"))
+    logging.info(
+        f"Found {len(tiffs)} files under {data_dir} for variable '{cruts_variable}'"
+    )
+
+    # get and normalize elevation data
+    elev_scaler = ClimScaler()
+    elevation_data = np.array(Image.open(elevation_file))
+    elevation_data_scaled = elev_scaler.fit_transform_single(elevation_data)
+
+    # load mask
+    with rio.open(
+        "/media/xultaeculcis/2TB/datasets/wc/pre-processed/prec/resized/4x/wc2.1_2.5m_prec_1961-01.tif"
+    ) as mask_src:
+        mask_data = mask_src.read()
+
+    mask = np.isnan(mask_data).squeeze(0)
+
+    to_tensor = transforms.ToTensor()
+    upscale = transforms.Resize((1440, 2880), interpolation=Image.NEAREST)
+
+    for fp in tqdm(tiffs):
+        # load file
+        img = Image.open(fp)
+        arr = np.array(img)
+
+        # normalize
+        scaler = ClimScaler()
+        arr = scaler.fit_transform_single(arr)
+
+        # to tensor
+        t_lr = to_tensor(np.array(upscale(Image.fromarray(arr)))).unsqueeze_(0)
+        t_elev = to_tensor(elevation_data_scaled).unsqueeze_(0)
+        t = torch.cat(tensors=[t_lr, t_elev], dim=1)
+
+        # run inference with model
+        out = model(t).clamp(0.0, 1.0)
+
+        # back to array
+        arr = out.squeeze_(0).squeeze_(0).numpy()
+
+        # denormalize
+        arr = scaler.inverse_transform(arr)
+        arr[mask] = np.nan
+
+        # get filename
+        filename = os.path.basename(os.path.splitext(fp)[0])
+        filename = os.path.join(out_dir, f"{filename}-inference.tif")
+
+        # prepare transform using prior knowledge
+        transform = from_origin(
+            west=-180.0,
+            north=90.0,
+            xsize=CRUTSConfig.degree_per_pix / scaling_factor,
+            ysize=CRUTSConfig.degree_per_pix / scaling_factor,
+        )
+
+        # create COG with enhanced data
+        with rio.open(
+            filename,
+            "w",
+            driver="COG",
+            height=arr.shape[0],
+            width=arr.shape[1],
+            count=1,
+            dtype=str(arr.dtype),
+            crs=CRUTSConfig.CRS,
+            transform=transform,
+        ) as new_dataset:
+            new_dataset.write(arr, 1)
+
+        break
+
+
+def run_inference_single_path(
+    model: pl.LightningModule,
+    data_dir: str,
+    cruts_variable: str,
+    elevation_file: str,
+    out_dir: str,
+    scaling_factor: Optional[int] = 4,
+) -> None:
+    """
+    Runs the inference on CRU-TS dataset.
+
+    Args:
+        model (pl.LightningModule): The LightningModule.
+        data_dir (str): The path to the data.
+        cruts_variable (str): The name of the CRU-TS variable.
+        elevation_file (str): The path to the elevation file.
+        out_dir (str): The output path.
+        scaling_factor (Optional[int]): The scaling factor.
+
+    """
+    logging.info(f"Running Inference for '{cruts_variable}'")
+    tiffs = glob(os.path.join(data_dir, cruts_variable, "*.tif"))
+    logging.info(
+        f"Found {len(tiffs)} files under {data_dir} for variable '{cruts_variable}'"
+    )
+
+    # get and normalize elevation data
+    elev_scaler = ClimScaler()
+    elevation_data = np.array(Image.open(elevation_file))
+    elevation_data_scaled = elev_scaler.fit_transform_single(elevation_data)
+
+    # load mask
+    with rio.open(
+        "/media/xultaeculcis/2TB/datasets/wc/pre-processed/prec/resized/4x/wc2.1_2.5m_prec_1961-01.tif"
+    ) as mask_src:
+        mask_data = mask_src.read()
+
+    mask = np.isnan(mask_data).squeeze(0)
+
+    to_tensor = transforms.ToTensor()
+    upscale = transforms.Resize((1440, 2880), interpolation=Image.NEAREST)
+
+    for fp in tqdm(tiffs):
+        # load file
+        img = Image.open(fp)
+        arr = np.array(img)
+
+        # normalize
+        scaler = ClimScaler()
+        arr = scaler.fit_transform_single(arr)
+
+        # to tensor
+        t_lr = to_tensor(np.array(upscale(Image.fromarray(arr)))).unsqueeze_(0)
+        t_elev = to_tensor(elevation_data_scaled).unsqueeze_(0)
+        t = torch.cat(tensors=[t_lr, t_elev], dim=1)
+
+        # run inference with model
+        out = model(t).clamp(0.0, 1.0)
+
+        # back to array
+        arr = out.squeeze_(0).squeeze_(0).numpy()
+
+        # denormalize
+        arr = scaler.inverse_transform(arr)
+        arr[mask] = np.nan
+
+        # get filename
+        filename = os.path.basename(os.path.splitext(fp)[0])
+        filename = os.path.join(out_dir, f"{filename}-inference.tif")
+
+        # prepare transform using prior knowledge
+        transform = from_origin(
+            west=-180.0,
+            north=90.0,
+            xsize=CRUTSConfig.degree_per_pix / scaling_factor,
+            ysize=CRUTSConfig.degree_per_pix / scaling_factor,
+        )
+
+        # create COG with enhanced data
+        with rio.open(
+            filename,
+            "w",
+            driver="COG",
+            height=arr.shape[0],
+            width=arr.shape[1],
+            count=1,
+            dtype=str(arr.dtype),
+            crs=CRUTSConfig.CRS,
+            transform=transform,
+        ) as new_dataset:
+            new_dataset.write(arr, 1)
+
+        break
+
+
 if __name__ == "__main__":
     args = parse_args()
     logging.info(f"Running with following config: {vars(args)}")
@@ -266,7 +454,7 @@ if __name__ == "__main__":
     net = prepare_pl_module(args)
     net.eval()
     with torch.no_grad():
-        run_inference(
+        run_inference_v2(
             model=net,
             data_dir=args.data_dir,
             cruts_variable=args.cruts_variable,

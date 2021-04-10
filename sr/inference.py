@@ -12,7 +12,7 @@ import pytorch_lightning as pl
 import rasterio as rio
 import torch
 from PIL import Image
-from pre_processing.clim_scaler import ClimScaler
+from legacy.clim_scaler import ClimScaler
 from pre_processing.cruts_config import CRUTSConfig
 from pre_processing.preprocessing import get_tiles
 from pre_processing.world_clim_config import WorldClimConfig

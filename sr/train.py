@@ -39,7 +39,7 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
         parser = GANLightningModule.add_model_specific_args(parser)
 
     # training config args
-    parser.add_argument("--precision", type=int, default=16)
+    parser.add_argument("--precision", type=int, default=32)
     parser.add_argument("--gpus", type=int, default=1)
     parser.add_argument("--val_check_interval", type=Union[int, float], default=1.0)
     parser.add_argument("--max_epochs", type=int, default=15)

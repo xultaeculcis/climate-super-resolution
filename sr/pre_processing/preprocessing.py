@@ -15,9 +15,9 @@ import xarray
 from dask.diagnostics import progress
 from datacube.utils.cog import write_cog
 from distributed import Client
-from pre_processing.clim_scaler import ClimScaler
-from pre_processing.cruts_config import CRUTSConfig
-from pre_processing.world_clim_config import WorldClimConfig
+from legacy.clim_scaler import ClimScaler
+from sr.pre_processing.cruts_config import CRUTSConfig
+from sr.pre_processing.world_clim_config import WorldClimConfig
 from rasterio import Affine, windows
 from rasterio.enums import Resampling
 from tqdm import tqdm
@@ -74,9 +74,8 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default="../../datasets/",
     )
-    parser.add_argument("--run_cruts_resize", type=bool, default=False)
-    parser.add_argument("--run_cruts_tiling", type=bool, default=False)
-    parser.add_argument("--run_statistics_computation", type=bool, default=True)
+    parser.add_argument("--run_cruts_to_cog", type=bool, default=True)
+    parser.add_argument("--run_statistics_computation", type=bool, default=False)
     parser.add_argument("--run_world_clim_resize", type=bool, default=False)
     parser.add_argument("--run_world_clim_tiling", type=bool, default=False)
     parser.add_argument("--run_world_clim_elevation_resize", type=bool, default=False)
@@ -108,7 +107,9 @@ def ensure_sub_dirs_exist_cts(out_dir: str) -> None:
             os.makedirs(sub_dir_name, exist_ok=True)
 
 
-def cruts_as_cog(variable: str, data_dir: str, out_dir: str) -> None:
+def cruts_as_cog(
+    variable: str, data_dir: str, out_dir: str, dataframe_output_path: str
+) -> None:
     """
     Creates a Cloud Optimized Geo-Tiff file for each time step in the CRU-TS dataset.
 
@@ -116,12 +117,17 @@ def cruts_as_cog(variable: str, data_dir: str, out_dir: str) -> None:
         variable (str): The variable name.
         data_dir (str): Data dir.
         out_dir (str): Where to save the Geo-Tiffs.
+        dataframe_output_path (str): Where to save the dataframe with results.
 
     """
     fp = CRUTSConfig.file_pattern.format(variable)
     file_path = os.path.join(data_dir, fp)
     out_path = os.path.join(out_dir, CRUTSConfig.full_res_dir, variable)
     ds = xarray.open_dataset(file_path)
+    file_paths = []
+    dataframe_output_path = os.path.join(dataframe_output_path, "cruts_inference")
+    os.makedirs(dataframe_output_path, exist_ok=True)
+
     for i in range(ds.dims["time"]):
         # get frame at time index i
         arr = ds[variable].isel(time=i)
@@ -132,12 +138,19 @@ def cruts_as_cog(variable: str, data_dir: str, out_dir: str) -> None:
         # extract date
         date_str = np.datetime_as_string(arr.time, unit="D")
 
+        fname = os.path.join(out_path, f"cruts-{variable}-{date_str}.tif")
+        file_paths.append(fname)
+
         # Write as Cloud Optimized GeoTIFF
         write_cog(
             geo_im=arr,
-            fname=os.path.join(out_path, f"cruts-{variable}-{date_str}.tif"),
+            fname=fname,
             overwrite=True,
         )
+
+    pd.DataFrame(file_paths, columns=["file_path"]).to_csv(
+        os.path.join(dataframe_output_path, f"{variable}.csv"), index=False, header=True
+    )
 
 
 def ensure_sub_dirs_exist_wc(out_dir: str) -> None:
@@ -150,8 +163,7 @@ def ensure_sub_dirs_exist_wc(out_dir: str) -> None:
     """
     logger.info("Creating sub-dirs for WorldClim")
 
-    variables = WorldClimConfig.variables_wc
-    variables.append(WorldClimConfig.elevation)
+    variables = WorldClimConfig.variables_wc + [WorldClimConfig.elevation]
     for var in variables:
         for rm in WorldClimConfig.resolution_multipliers:
             sub_dir_name = os.path.join(
@@ -321,11 +333,14 @@ def run_cruts_to_cog(args: argparse.Namespace) -> None:
         args (argparse.Namespace): The arguments.
 
     """
-    if args.run_cruts_resize:
+    if args.run_cruts_to_cog:
         logger.info("Running CRU-TS pre-processing - Geo Tiff generation")
 
         dask.bag.from_sequence(CRUTSConfig.variables_cts).map(
-            cruts_as_cog, args.data_dir_cruts, args.out_dir_cruts
+            cruts_as_cog,
+            args.data_dir_cruts,
+            args.out_dir_cruts,
+            args.dataframe_output_path,
         ).compute()
 
 
@@ -420,35 +435,6 @@ def run_world_clim_elevation_resize(args: argparse.Namespace) -> None:
             )
 
 
-def run_cruts_tiling(args: argparse.Namespace) -> None:
-    """
-    Runs CRU-TS tiling operation.
-
-    Args:
-        args (argparse.Namespace): The arguments.
-
-    """
-    if args.run_cruts_tiling:
-        for var in CRUTSConfig.variables_cts:
-            files = sorted(
-                glob(
-                    os.path.join(
-                        args.out_dir_cruts, CRUTSConfig.full_res_dir, var, "*.tif"
-                    )
-                )
-            )
-            logger.info(
-                f"CRU-TS - Running tile generation for {len(files)} {var} files"
-            )
-            dask.bag.from_sequence(files).map(
-                make_patches,
-                os.path.join(args.out_dir_cruts, CRUTSConfig.tiles_dir, var),
-                args.patch_size,
-                args.patch_stride,
-                args.normalize_patches,
-            ).compute()
-
-
 def run_world_clim_tiling(args: argparse.Namespace) -> None:
     """
     Runs WorldClim tiling operation.
@@ -458,7 +444,7 @@ def run_world_clim_tiling(args: argparse.Namespace) -> None:
 
     """
     if args.run_world_clim_tiling:
-        variables = [WorldClimConfig.elevation]
+        variables = WorldClimConfig.variables_wc + [WorldClimConfig.elevation]
         for var in variables:
             for multiplier, scale in WorldClimConfig.resolution_multipliers:
                 files = sorted(
@@ -499,12 +485,15 @@ def run_train_val_test_split(args: argparse.Namespace) -> None:
 
     """
     variables = WorldClimConfig.variables_wc + [WorldClimConfig.elevation]
+
     for var in variables:
         for multiplier, scale in WorldClimConfig.resolution_multipliers:
-            logger.info(
-                f"Generating Train/Validation/Test splits for variable: {var}, "
-                f"multiplier: {multiplier}, scale:{scale:.4f}"
-            )
+            if var != WorldClimConfig.elevation:
+                logger.info(
+                    f"Generating Train/Validation/Test splits for variable: {var}, "
+                    f"multiplier: {multiplier}, scale:{scale:.4f}"
+                )
+
             files = sorted(
                 glob(
                     os.path.join(
@@ -557,15 +546,19 @@ def run_train_val_test_split(args: argparse.Namespace) -> None:
                     )
 
                 elif (
-                    test_years_lower_bound
-                    <= year_from_filename
-                    <= test_years_upper_bound
+                    (
+                        test_years_lower_bound
+                        <= year_from_filename
+                        <= test_years_upper_bound
+                    )
+                    and x % args.patch_size[1] == 0
+                    and y % args.patch_size[0] == 0
                 ):
                     test_images.append(
                         (file_path, var, multiplier, year_from_filename, x, y)
                     )
 
-                else:
+                elif WorldClimConfig.elevation in file_path:
                     elevation_images.append((file_path, var, multiplier, x, y))
 
             for stage, images in zip(
@@ -590,12 +583,18 @@ def run_train_val_test_split(args: argparse.Namespace) -> None:
                         header=True,
                     )
 
-            logger.info(
-                f"Generated Train ({len(train_images)}) / "
-                f"Validation ({len(val_images)}) / "
-                f"Test ({len(test_images)}) splits "
-                f"for variable: {var}, multiplier: {multiplier}, scale:{scale:.4f}"
-            )
+            if var != WorldClimConfig.elevation:
+                logger.info(
+                    f"Generated Train ({len(train_images)}) / "
+                    f"Validation ({len(val_images)}) / "
+                    f"Test ({len(test_images)}) splits "
+                    f"for variable: {var}, multiplier: {multiplier}, scale:{scale:.4f}"
+                )
+            else:
+                logger.info(
+                    f"({len(elevation_images)}) images "
+                    f"for variable: {var}, multiplier: {multiplier}, scale:{scale:.4f}"
+                )
 
 
 if __name__ == "__main__":
@@ -613,7 +612,6 @@ if __name__ == "__main__":
         run_statistics_computation(arguments)
         run_world_clim_resize(arguments)
         run_world_clim_elevation_resize(arguments)
-        run_cruts_tiling(arguments)
         run_world_clim_tiling(arguments)
         run_train_val_test_split(arguments)
         logger.info("DONE")

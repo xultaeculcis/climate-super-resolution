@@ -41,3 +41,5 @@ class CRUTSConfig:
             "std": 81.54020690917969,
         },
     }
+
+    cruts_original_shape = (360, 720)

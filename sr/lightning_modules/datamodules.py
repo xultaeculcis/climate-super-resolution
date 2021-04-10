@@ -2,95 +2,20 @@
 import logging
 import os
 from argparse import ArgumentParser
-from random import random
-from typing import Dict, Optional, Union
+from typing import Optional
 
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 import torchvision
-import torchvision.transforms as transforms
-import torchvision.transforms.functional as TF
-from PIL import Image
-from pre_processing.world_clim_config import WorldClimConfig
-from torch import Tensor
-from torch.utils.data import DataLoader, Dataset
+
+from sr.data.datasets import ClimateDataset
+from sr.pre_processing.world_clim_config import WorldClimConfig
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 logging.basicConfig(level=logging.INFO)
 os.environ["NUMEXPR_MAX_THREADS"] = "16"
-
-
-class ClimateDataset(Dataset):
-    def __init__(
-        self,
-        df: pd.DataFrame,
-        elevation_df: pd.DataFrame,
-        generator_type: str,
-        hr_size: Optional[int] = 128,
-        stage: Optional[str] = "train",
-        scaling_factor: Optional[int] = 4,
-    ):
-        self.hr_size = hr_size
-        self.scaling_factor = scaling_factor
-        self.stage = stage
-        self.generator_type = generator_type
-
-        self.common_transforms = transforms.Compose(
-            [
-                transforms.ToTensor(),
-            ]
-        )
-
-        self.df = df
-        self.elevation_df = elevation_df
-        self.resize = transforms.Resize(
-            (self.hr_size // self.scaling_factor, self.hr_size // self.scaling_factor),
-            Image.NEAREST,
-        )
-        self.upscale = transforms.Resize(
-            (self.hr_size, self.hr_size), interpolation=Image.NEAREST
-        )
-
-    def __getitem__(self, index) -> Dict[str, Union[Tensor, list]]:
-        row = self.df.iloc[index]
-        img_hr = Image.open(row["file_path"])
-        img_lr = self.resize(img_hr)
-        img_sr_nearest = []
-        x = row["x"]
-        y = row["y"]
-        elev_fp = self.elevation_df[
-            (self.elevation_df["x"] == x) & (self.elevation_df["y"] == y)
-        ]["file_path"].values[0]
-        img_elev = Image.open(elev_fp)
-
-        if self.stage == "train":
-            if random() > 0.5:
-                img_lr = TF.vflip(img_lr)
-                img_hr = TF.vflip(img_hr)
-                img_elev = TF.vflip(img_elev)
-
-            if random() > 0.5:
-                img_lr = TF.hflip(img_lr)
-                img_hr = TF.hflip(img_hr)
-                img_elev = TF.hflip(img_elev)
-
-        if self.generator_type == "srcnn" or self.stage != "train":
-            img_sr_nearest = self.common_transforms(np.array(self.upscale(img_lr)))
-
-        img_lr = self.common_transforms(np.array(img_lr))
-        img_hr = self.common_transforms(np.array(img_hr))
-        img_elev = self.common_transforms(np.array(img_elev))
-
-        return {
-            "lr": img_lr,
-            "hr": img_hr,
-            "elevation": img_elev,
-            "nearest": img_sr_nearest,
-        }
-
-    def __len__(self) -> int:
-        return len(self.df)
 
 
 class SuperResolutionDataModule(pl.LightningDataModule):
@@ -162,6 +87,12 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             elevation_df=elevation_df,
             hr_size=self.hr_size,
             stage="train",
+            normalization_mean=WorldClimConfig.statistics[self.world_clim_variable][
+                "mean"
+            ],
+            normalization_std=WorldClimConfig.statistics[self.world_clim_variable][
+                "std"
+            ],
             generator_type=self.generator_type,
             scaling_factor=self.scale_factor,
         )
@@ -170,6 +101,12 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             elevation_df=elevation_df,
             hr_size=self.hr_size,
             stage="val",
+            normalization_mean=WorldClimConfig.statistics[self.world_clim_variable][
+                "mean"
+            ],
+            normalization_std=WorldClimConfig.statistics[self.world_clim_variable][
+                "std"
+            ],
             generator_type=self.generator_type,
             scaling_factor=self.scale_factor,
         )
@@ -178,6 +115,12 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             elevation_df=elevation_df,
             hr_size=self.hr_size,
             stage="test",
+            normalization_mean=WorldClimConfig.statistics[self.world_clim_variable][
+                "mean"
+            ],
+            normalization_std=WorldClimConfig.statistics[self.world_clim_variable][
+                "std"
+            ],
             generator_type=self.generator_type,
             scaling_factor=self.scale_factor,
         )
@@ -225,7 +168,7 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         parser.add_argument(
             "--world_clim_variable",
             type=str,
-            default="prec",
+            default="tmin",
         )
         parser.add_argument(
             "--world_clim_multiplier",
@@ -263,7 +206,7 @@ if __name__ == "__main__":
 
     def matplotlib_imshow(batch):
         # create grid of images
-        img_grid = torchvision.utils.make_grid(batch, nrow=4, normalize=True, padding=0)
+        img_grid = torchvision.utils.make_grid(batch, nrow=8, normalize=True, padding=0)
         # show images
         npimg = img_grid.numpy()
         plt.imshow(np.transpose(npimg, (1, 2, 0)))
@@ -272,30 +215,30 @@ if __name__ == "__main__":
     for _, batch in tqdm(enumerate(val_dl), total=len(val_dl)):
         lr = batch["lr"]
         hr = batch["hr"]
-        sr_bicubic = batch["nearest"]
+        sr_nearest = batch["nearest"]
         elevation = batch["elevation"]
 
-        expected_lr_shape = (32, 1, 32, 32)
-        expected_hr_shape = (32, 1, 128, 128)
+        expected_lr_shape = (args.batch_size, 1, 32, 32)
+        expected_hr_shape = (args.batch_size, 1, 128, 128)
         assert lr.shape == expected_lr_shape, (
             f"Expected the LR batch to be in shape {expected_lr_shape}, "
             f"but found: {lr.shape}"
         )
-        assert hr.shape == (32, 1, 128, 128), (
-            f"Expected the LR batch to be in shape {expected_hr_shape}, "
+        assert hr.shape == (args.batch_size, 1, 128, 128), (
+            f"Expected the HR batch to be in shape {expected_hr_shape}, "
             f"but found: {hr.shape}"
         )
-        assert sr_bicubic.shape == (32, 1, 128, 128), (
-            f"Expected the LR batch to be in shape {expected_hr_shape}, "
-            f"but found: {sr_bicubic.shape}"
+        assert sr_nearest.shape == (args.batch_size, 1, 128, 128), (
+            f"Expected the SR batch to be in shape {expected_hr_shape}, "
+            f"but found: {sr_nearest.shape}"
         )
-        assert elevation.shape == (32, 1, 128, 128), (
-            f"Expected the LR batch to be in shape {expected_hr_shape}, "
+        assert elevation.shape == (args.batch_size, 1, 128, 128), (
+            f"Expected the Elev batch to be in shape {expected_hr_shape}, "
             f"but found: {elevation.shape}"
         )
 
         matplotlib_imshow(lr)
         matplotlib_imshow(hr)
-        matplotlib_imshow(sr_bicubic)
+        matplotlib_imshow(sr_nearest)
         matplotlib_imshow(elevation)
         break

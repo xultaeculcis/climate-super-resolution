@@ -74,7 +74,7 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default="../../datasets/",
     )
-    parser.add_argument("--run_cruts_to_cog", type=bool, default=True)
+    parser.add_argument("--run_cruts_to_cog", type=bool, default=False)
     parser.add_argument("--run_statistics_computation", type=bool, default=False)
     parser.add_argument("--run_world_clim_resize", type=bool, default=False)
     parser.add_argument("--run_world_clim_tiling", type=bool, default=False)
@@ -539,7 +539,13 @@ def run_train_val_test_split(args: argparse.Namespace) -> None:
                     )
 
                 elif (
-                    val_years_lower_bound <= year_from_filename <= val_years_upper_bound
+                    (
+                        val_years_lower_bound
+                        <= year_from_filename
+                        <= val_years_upper_bound
+                    )
+                    and x % args.patch_size[1] == 0
+                    and y % args.patch_size[0] == 0
                 ):
                     val_images.append(
                         (file_path, var, multiplier, year_from_filename, x, y)

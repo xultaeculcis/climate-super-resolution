@@ -131,9 +131,12 @@ class ClimateDataset(Dataset):
                 img_elev = TF.hflip(img_elev)
 
         if self.generator_type == "srcnn" or self.stage != "train":
-            arr = np.array(self.upscale(img_lr))
-            t = self.to_tensor(arr)
-            img_sr_nearest = torch.nan_to_num(self.input_image_normalize(t), nan=-7.0)
+            img_sr_nearest = torch.nan_to_num(
+                self.input_image_normalize(
+                    self.to_tensor(np.array(self.upscale(img_lr)))
+                ),
+                nan=-4.0,
+            )
 
         img_lr = torch.nan_to_num(
             self.input_image_normalize(

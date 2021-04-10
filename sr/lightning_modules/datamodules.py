@@ -12,7 +12,6 @@ import torchvision
 from sr.data.datasets import ClimateDataset
 from sr.pre_processing.world_clim_config import WorldClimConfig
 from torch.utils.data import DataLoader
-from tqdm import tqdm
 
 logging.basicConfig(level=logging.INFO)
 os.environ["NUMEXPR_MAX_THREADS"] = "16"
@@ -29,6 +28,7 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         batch_size: Optional[int] = 32,
         num_workers: Optional[int] = 4,
         hr_size: Optional[int] = 128,
+        normalize: Optional[bool] = False,
         seed: Optional[int] = 42,
     ):
         super(SuperResolutionDataModule, self).__init__()
@@ -194,7 +194,7 @@ if __name__ == "__main__":
         data_path=os.path.join("..", args.data_path),
         world_clim_variable=args.world_clim_variable,
         world_clim_multiplier=args.world_clim_multiplier,
-        generator_type="esrgan",
+        generator_type="srcnn",
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         hr_size=args.hr_size,
@@ -202,43 +202,32 @@ if __name__ == "__main__":
         seed=args.seed,
     )
 
-    val_dl = dm.val_dataloader()
-
     def matplotlib_imshow(batch):
         # create grid of images
-        img_grid = torchvision.utils.make_grid(batch, nrow=8, normalize=True, padding=0)
+        img_grid = torchvision.utils.make_grid(
+            batch, nrow=8, normalize=False, padding=0
+        )
         # show images
         npimg = img_grid.numpy()
         plt.imshow(np.transpose(npimg, (1, 2, 0)))
         plt.show()
 
-    for _, batch in tqdm(enumerate(val_dl), total=len(val_dl)):
-        lr = batch["lr"]
-        hr = batch["hr"]
-        sr_nearest = batch["nearest"]
-        elevation = batch["elevation"]
+    def plot_single_batch(loader, stage):
+        for _, batch in enumerate(loader):
+            lr = batch["lr"]
+            hr = batch["hr"]
+            sr_nearest = batch["nearest"]
+            elevation = batch["elevation"]
 
-        expected_lr_shape = (args.batch_size, 1, 32, 32)
-        expected_hr_shape = (args.batch_size, 1, 128, 128)
-        assert lr.shape == expected_lr_shape, (
-            f"Expected the LR batch to be in shape {expected_lr_shape}, "
-            f"but found: {lr.shape}"
-        )
-        assert hr.shape == (args.batch_size, 1, 128, 128), (
-            f"Expected the HR batch to be in shape {expected_hr_shape}, "
-            f"but found: {hr.shape}"
-        )
-        assert sr_nearest.shape == (args.batch_size, 1, 128, 128), (
-            f"Expected the SR batch to be in shape {expected_hr_shape}, "
-            f"but found: {sr_nearest.shape}"
-        )
-        assert elevation.shape == (args.batch_size, 1, 128, 128), (
-            f"Expected the Elev batch to be in shape {expected_hr_shape}, "
-            f"but found: {elevation.shape}"
-        )
+            matplotlib_imshow(lr)
+            matplotlib_imshow(hr)
+            matplotlib_imshow(elevation)
 
-        matplotlib_imshow(lr)
-        matplotlib_imshow(hr)
-        matplotlib_imshow(sr_nearest)
-        matplotlib_imshow(elevation)
-        break
+            if stage != "train":
+                matplotlib_imshow(sr_nearest)
+
+            break
+
+    # plot_single_batch(dm.train_dataloader(), "train")
+    plot_single_batch(dm.val_dataloader(), "val")
+    # plot_single_batch(dm.test_dataloader(), "test")

@@ -78,9 +78,9 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
 
     def forward(self, x: Tensor, elevation: Tensor = None) -> Tensor:
         if self.hparams.generator == "srcnn":
-            return self.net_G(x).clamp(0.0, 1.0)
+            return self.net_G(x)
         else:
-            return self.net_G(x, elevation).clamp(0.0, 1.0)
+            return self.net_G(x, elevation)
 
     def common_step(self, batch: Any) -> Tuple[Tensor, Tensor]:
         """
@@ -119,7 +119,7 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
         """
         loss = self.loss(sr, hr)
         psnr_score = psnr(sr, hr)
-        ssim_score = ssim(sr, hr.half())
+        ssim_score = ssim(sr, hr.half() if self.hparams.precision == 16 else hr)
         mae = mean_absolute_error(sr, hr)
         mse = mean_squared_error(sr, hr)
         rmse = torch.sqrt(mse)
@@ -216,6 +216,11 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
     def log_images(self) -> None:
         """Log a single batch of images from the validation set to monitor image quality progress."""
 
+        def norm_ip(img, min, max):
+            img.clamp_(min=min, max=max)
+            img.add_(-min).div_(max - min + 1e-5)
+            return img
+
         with torch.no_grad():
             batch = next(iter(self.trainer.datamodule.val_dataloader()))
             lr, hr, sr_nearest, elev = (
@@ -225,10 +230,20 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
                 batch["elevation"],
             )
 
-            self.logger.experiment.add_images("hr_images", hr, self.global_step)
-            self.logger.experiment.add_images("lr_images", lr, self.global_step)
             self.logger.experiment.add_images(
-                "sr_nearest", sr_nearest, self.global_step
+                "hr_images",
+                norm_ip(hr, float(hr.min()), float(hr.max())),
+                self.global_step,
+            )
+            self.logger.experiment.add_images(
+                "lr_images",
+                norm_ip(lr, float(lr.min()), float(lr.max())),
+                self.global_step,
+            )
+            self.logger.experiment.add_images(
+                "sr_nearest",
+                norm_ip(sr_nearest, float(sr_nearest.min()), float(sr_nearest.max())),
+                self.global_step,
             )
 
             lr = (
@@ -240,7 +255,11 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             x = torch.cat([sr_nearest, elev], dim=1).to(self.device)
 
             sr = self(x)
-            self.logger.experiment.add_images("sr_images", sr, self.global_step)
+            self.logger.experiment.add_images(
+                "sr_images",
+                norm_ip(sr, float(sr.min()), float(sr.max())),
+                self.global_step,
+            )
 
             if isinstance(self.logger, DummyLogger):
                 return
@@ -248,19 +267,19 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             img_dir = os.path.join(self.logger.log_dir, "images")
             os.makedirs(img_dir, exist_ok=True)
             save_image(
-                hr,
+                norm_ip(hr, float(hr.min()), float(hr.max())),
                 os.path.join(img_dir, f"hr-{self.hparams.experiment_name}.png"),
             )
             save_image(
-                lr,
+                norm_ip(lr, float(lr.min()), float(lr.max())),
                 os.path.join(img_dir, f"lr-{self.hparams.experiment_name}.png"),
             )
             save_image(
-                sr_nearest,
+                norm_ip(sr_nearest, float(sr_nearest.min()), float(sr_nearest.max())),
                 os.path.join(img_dir, f"sr-nearest-{self.hparams.experiment_name}.png"),
             )
             save_image(
-                sr,
+                norm_ip(sr, float(sr.min()), float(sr.max())),
                 os.path.join(
                     img_dir,
                     f"sr-{self.hparams.experiment_name}-step={self.global_step}.png",

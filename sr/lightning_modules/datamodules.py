@@ -4,11 +4,10 @@ import os
 from argparse import ArgumentParser
 from typing import Optional
 
-import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
-import torchvision
 
+from sr.data.utils import plot_single_batch
 from sr.data.datasets import ClimateDataset
 from sr.pre_processing.world_clim_config import WorldClimConfig
 from torch.utils.data import DataLoader
@@ -87,12 +86,6 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             elevation_df=elevation_df,
             hr_size=self.hr_size,
             stage="train",
-            normalization_mean=WorldClimConfig.statistics[self.world_clim_variable][
-                "mean"
-            ],
-            normalization_std=WorldClimConfig.statistics[self.world_clim_variable][
-                "std"
-            ],
             generator_type=self.generator_type,
             scaling_factor=self.scale_factor,
         )
@@ -101,12 +94,6 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             elevation_df=elevation_df,
             hr_size=self.hr_size,
             stage="val",
-            normalization_mean=WorldClimConfig.statistics[self.world_clim_variable][
-                "mean"
-            ],
-            normalization_std=WorldClimConfig.statistics[self.world_clim_variable][
-                "std"
-            ],
             generator_type=self.generator_type,
             scaling_factor=self.scale_factor,
         )
@@ -115,12 +102,6 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             elevation_df=elevation_df,
             hr_size=self.hr_size,
             stage="test",
-            normalization_mean=WorldClimConfig.statistics[self.world_clim_variable][
-                "mean"
-            ],
-            normalization_std=WorldClimConfig.statistics[self.world_clim_variable][
-                "std"
-            ],
             generator_type=self.generator_type,
             scaling_factor=self.scale_factor,
         )
@@ -184,8 +165,6 @@ class SuperResolutionDataModule(pl.LightningDataModule):
 
 
 if __name__ == "__main__":
-    import matplotlib.pyplot as plt
-
     parser = ArgumentParser()
     parser = SuperResolutionDataModule.add_data_specific_args(parser)
     args = parser.parse_args()
@@ -201,33 +180,6 @@ if __name__ == "__main__":
         scale_factor=args.scale_factor,
         seed=args.seed,
     )
-
-    def matplotlib_imshow(batch):
-        # create grid of images
-        img_grid = torchvision.utils.make_grid(
-            batch, nrow=8, normalize=False, padding=0
-        )
-        # show images
-        npimg = img_grid.numpy()
-        plt.imshow(np.transpose(npimg, (1, 2, 0)))
-        plt.show()
-
-    def plot_single_batch(loader, stage):
-        for _, batch in enumerate(loader):
-            lr = batch["lr"]
-            hr = batch["hr"]
-            sr_nearest = batch["nearest"]
-            elevation = batch["elevation"]
-
-            matplotlib_imshow(lr)
-            matplotlib_imshow(hr)
-            matplotlib_imshow(elevation)
-
-            if stage != "train":
-                matplotlib_imshow(sr_nearest)
-
-            break
-
-    # plot_single_batch(dm.train_dataloader(), "train")
-    plot_single_batch(dm.val_dataloader(), "val")
-    # plot_single_batch(dm.test_dataloader(), "test")
+    # plot_single_batch(dm.train_dataloader(), keys=["lr", "hr", "elevation", "nearest"])
+    plot_single_batch(dm.val_dataloader(), keys=["lr", "hr", "elevation", "nearest"])
+    # plot_single_batch(dm.test_dataloader(), keys=["lr", "hr", "elevation", "nearest"])

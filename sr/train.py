@@ -10,7 +10,7 @@ import pytorch_lightning as pl
 from lightning_modules.pl_generator_pre_training import (
     GeneratorPreTrainingLightningModule,
 )
-from utils import prepare_training
+from lightning_modules.utils import prepare_training
 
 from sr.lightning_modules.datamodules import SuperResolutionDataModule
 from sr.lightning_modules.pl_gan import GANLightningModule

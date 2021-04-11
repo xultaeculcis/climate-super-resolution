@@ -15,7 +15,7 @@ import xarray
 from dask.diagnostics import progress
 from datacube.utils.cog import write_cog
 from distributed import Client
-from legacy.clim_scaler import ClimScaler
+
 from sr.pre_processing.cruts_config import CRUTSConfig
 from sr.pre_processing.world_clim_config import WorldClimConfig
 from rasterio import Affine, windows
@@ -57,12 +57,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out_dir_cruts",
         type=str,
-        default="/media/xultaeculcis/2TB/datasets/cruts/pre-processed-v2/",
+        default="/media/xultaeculcis/2TB/datasets/cruts/pre-processed",
     )
     parser.add_argument(
         "--out_dir_world_clim",
         type=str,
-        default="/media/xultaeculcis/2TB/datasets/wc/pre-processed-v2/",
+        default="/media/xultaeculcis/2TB/datasets/wc/pre-processed",
     )
     parser.add_argument(
         "--world_clim_elevation_fp",
@@ -77,12 +77,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run_cruts_to_cog", type=bool, default=False)
     parser.add_argument("--run_statistics_computation", type=bool, default=False)
     parser.add_argument("--run_world_clim_resize", type=bool, default=False)
-    parser.add_argument("--run_world_clim_tiling", type=bool, default=False)
+    parser.add_argument("--run_world_clim_tiling", type=bool, default=True)
     parser.add_argument("--run_world_clim_elevation_resize", type=bool, default=False)
     parser.add_argument("--patch_size", type=Tuple[int, int], default=(128, 128))
     parser.add_argument("--patch_stride", type=int, default=64)
-    parser.add_argument("--normalize_patches", type=bool, default=False)
+    parser.add_argument("--normalize_patches", type=bool, default=True)
     parser.add_argument("--n_workers", type=int, default=8)
+    parser.add_argument("--res_mult_inx", type=int, default=2)
     parser.add_argument("--threads_per_worker", type=int, default=1)
     parser.add_argument("--train_years", type=Tuple[int, int], default=(1961, 1999))
     parser.add_argument("--val_years", type=Tuple[int, int], default=(2000, 2004))
@@ -165,14 +166,16 @@ def ensure_sub_dirs_exist_wc(out_dir: str) -> None:
 
     variables = WorldClimConfig.variables_wc + [WorldClimConfig.elevation]
     for var in variables:
-        for rm in WorldClimConfig.resolution_multipliers:
+        for multiplier, _ in WorldClimConfig.resolution_multipliers:
             sub_dir_name = os.path.join(
-                out_dir, var, WorldClimConfig.resized_dir, rm[0]
+                out_dir, var, WorldClimConfig.resized_dir, multiplier
             )
             logger.info(f"Creating sub-dir: '{sub_dir_name}'")
             os.makedirs(sub_dir_name, exist_ok=True)
 
-            sub_dir_name = os.path.join(out_dir, var, WorldClimConfig.tiles_dir, rm[0])
+            sub_dir_name = os.path.join(
+                out_dir, var, WorldClimConfig.tiles_dir, multiplier
+            )
             logger.info(f"Creating sub-dir: '{sub_dir_name}'")
             os.makedirs(sub_dir_name, exist_ok=True)
 
@@ -289,26 +292,23 @@ def make_patches(
         fname = os.path.basename(os.path.splitext(file_path)[0]) + ".{}.{}.tif"
 
         if normalize:
-            data = in_dataset.read()
-            scaler = ClimScaler()
-            scaler.fit_single(data)
+            data = in_dataset.read().astype(np.float32)
+            data[data == -32768.0] = np.nan
+            min = np.nanmin(data)
+            max = np.nanmax(data)
 
         meta = in_dataset.meta.copy()
 
         for window, transform in get_tiles(in_dataset, tile_width, tile_height, stride):
             meta["transform"] = transform
-
-            if "elev" not in file_path:
-                meta["dtype"] = np.float32
-            else:
-                meta["dtype"] = np.int16
-
+            meta["dtype"] = np.float32
             meta["width"], meta["height"] = window.width, window.height
+
             out_fp = os.path.join(
                 out_path, fname.format(int(window.col_off), int(window.row_off))
             )
 
-            subset = in_dataset.read(window=window)
+            subset = in_dataset.read(window=window).astype(np.float32)
 
             # ignore tiles with more than 85% nan values
             # unless it's the elevation file
@@ -320,7 +320,9 @@ def make_patches(
 
             with rio.open(out_fp, "w", **meta) as out_dataset:
                 if normalize:
-                    subset = scaler.transform_single(subset)
+                    subset[subset == -32768.0] = np.nan
+                    subset = (subset + (-min)) / (max - min + 1e-5)
+                    subset[np.isnan(subset)] = 0.0
 
                 out_dataset.write(subset)
 
@@ -402,14 +404,16 @@ def run_world_clim_resize(args: argparse.Namespace) -> None:
                     recursive=True,
                 )
             )
-            for multiplier, scale in WorldClimConfig.resolution_multipliers:
-                logger.info(
-                    "Running WorldClim pre-processing for variable: "
-                    f"{var}, scale: {scale:.4f}, multiplier: {multiplier}. Total files to process: {len(files)}"
-                )
-                dask.bag.from_sequence(files, npartitions=1000).map(
-                    resize_raster, var, scale, multiplier, args.out_dir_world_clim
-                ).compute()
+            multiplier, scale = WorldClimConfig.resolution_multipliers[
+                args.res_mult_inx
+            ]
+            logger.info(
+                "Running WorldClim pre-processing for variable: "
+                f"{var}, scale: {scale:.4f}, multiplier: {multiplier}. Total files to process: {len(files)}"
+            )
+            dask.bag.from_sequence(files, npartitions=1000).map(
+                resize_raster, var, scale, multiplier, args.out_dir_world_clim
+            ).compute()
 
 
 def run_world_clim_elevation_resize(args: argparse.Namespace) -> None:
@@ -421,18 +425,18 @@ def run_world_clim_elevation_resize(args: argparse.Namespace) -> None:
 
     """
     if args.run_world_clim_elevation_resize:
-        for multiplier, scale in WorldClimConfig.resolution_multipliers:
-            logger.info(
-                "Running WorldClim pre-processing for variable: "
-                f"elevation, scale: {scale:.4f}, multiplier: {multiplier}"
-            )
-            resize_raster(
-                args.world_clim_elevation_fp,
-                WorldClimConfig.elevation,
-                scale,
-                multiplier,
-                args.out_dir_world_clim,
-            )
+        multiplier, scale = WorldClimConfig.resolution_multipliers[args.res_mult_inx]
+        logger.info(
+            "Running WorldClim pre-processing for variable: "
+            f"elevation, scale: {scale:.4f}, multiplier: {multiplier}"
+        )
+        resize_raster(
+            args.world_clim_elevation_fp,
+            WorldClimConfig.elevation,
+            scale,
+            multiplier,
+            args.out_dir_world_clim,
+        )
 
 
 def run_world_clim_tiling(args: argparse.Namespace) -> None:
@@ -446,34 +450,36 @@ def run_world_clim_tiling(args: argparse.Namespace) -> None:
     if args.run_world_clim_tiling:
         variables = WorldClimConfig.variables_wc + [WorldClimConfig.elevation]
         for var in variables:
-            for multiplier, scale in WorldClimConfig.resolution_multipliers:
-                files = sorted(
-                    glob(
-                        os.path.join(
-                            args.out_dir_world_clim,
-                            var,
-                            WorldClimConfig.resized_dir,
-                            multiplier,
-                            "*.tif",
-                        )
-                    )
-                )
-                logger.info(
-                    f"WorldClim - Running tile generation. Total files: {len(files)}, "
-                    f"variable: {var}, scale: {scale:.4f}, multiplier: {multiplier}"
-                )
-                dask.bag.from_sequence(files).map(
-                    make_patches,
+            multiplier, scale = WorldClimConfig.resolution_multipliers[
+                args.res_mult_inx
+            ]
+            files = sorted(
+                glob(
                     os.path.join(
                         args.out_dir_world_clim,
                         var,
-                        WorldClimConfig.tiles_dir,
+                        WorldClimConfig.resized_dir,
                         multiplier,
-                    ),
-                    args.patch_size,
-                    args.patch_stride,
-                    args.normalize_patches,
-                ).compute()
+                        "*.tif",
+                    )
+                )
+            )
+            logger.info(
+                f"WorldClim - Running tile generation. Total files: {len(files)}, "
+                f"variable: {var}, scale: {scale:.4f}, multiplier: {multiplier}"
+            )
+            dask.bag.from_sequence(files).map(
+                make_patches,
+                os.path.join(
+                    args.out_dir_world_clim,
+                    var,
+                    WorldClimConfig.tiles_dir,
+                    multiplier,
+                ),
+                args.patch_size,
+                args.patch_stride,
+                args.normalize_patches,
+            ).compute()
 
 
 def run_train_val_test_split(args: argparse.Namespace) -> None:
@@ -487,120 +493,108 @@ def run_train_val_test_split(args: argparse.Namespace) -> None:
     variables = WorldClimConfig.variables_wc + [WorldClimConfig.elevation]
 
     for var in variables:
-        for multiplier, scale in WorldClimConfig.resolution_multipliers:
-            if var != WorldClimConfig.elevation:
-                logger.info(
-                    f"Generating Train/Validation/Test splits for variable: {var}, "
-                    f"multiplier: {multiplier}, scale:{scale:.4f}"
-                )
-
-            files = sorted(
-                glob(
-                    os.path.join(
-                        args.out_dir_world_clim,
-                        var,
-                        WorldClimConfig.tiles_dir,
-                        multiplier,
-                        "*.tif",
-                    )
-                )
+        multiplier, scale = WorldClimConfig.resolution_multipliers[args.res_mult_inx]
+        if var != WorldClimConfig.elevation:
+            logger.info(
+                f"Generating Train/Validation/Test splits for variable: {var}, "
+                f"multiplier: {multiplier}, scale:{scale:.4f}"
             )
 
-            train_images = []
-            val_images = []
-            test_images = []
-            elevation_images = []
+        files = sorted(
+            glob(
+                os.path.join(
+                    args.out_dir_world_clim,
+                    var,
+                    WorldClimConfig.tiles_dir,
+                    multiplier,
+                    "*.tif",
+                )
+            )
+        )
 
-            train_years_lower_bound, train_years_upper_bound = args.train_years
-            val_years_lower_bound, val_years_upper_bound = args.val_years
-            test_years_lower_bound, test_years_upper_bound = args.test_years
+        train_images = []
+        val_images = []
+        test_images = []
+        elevation_images = []
 
-            os.makedirs(
-                os.path.join(args.dataframe_output_path, var, multiplier), exist_ok=True
+        train_years_lower_bound, train_years_upper_bound = args.train_years
+        val_years_lower_bound, val_years_upper_bound = args.val_years
+        test_years_lower_bound, test_years_upper_bound = args.test_years
+
+        os.makedirs(
+            os.path.join(args.dataframe_output_path, var, multiplier), exist_ok=True
+        )
+
+        for file_path in files:
+            filename = os.path.basename(file_path)
+            x = int(file_path.split(".")[-3])
+            y = int(file_path.split(".")[-2])
+            year_from_filename = (
+                int(filename.split("-")[0].split("_")[-1])
+                if var != WorldClimConfig.elevation
+                else -1
             )
 
-            for file_path in files:
-                filename = os.path.basename(file_path)
-                x = int(file_path.split(".")[-3])
-                y = int(file_path.split(".")[-2])
-                year_from_filename = (
-                    int(filename.split("-")[0].split("_")[-1])
-                    if var != WorldClimConfig.elevation
-                    else -1
+            if train_years_lower_bound <= year_from_filename <= train_years_upper_bound:
+                train_images.append(
+                    (file_path, var, multiplier, year_from_filename, x, y)
                 )
 
-                if (
-                    train_years_lower_bound
-                    <= year_from_filename
-                    <= train_years_upper_bound
-                ):
-                    train_images.append(
-                        (file_path, var, multiplier, year_from_filename, x, y)
-                    )
-
-                elif (
-                    (
-                        val_years_lower_bound
-                        <= year_from_filename
-                        <= val_years_upper_bound
-                    )
-                    and x % args.patch_size[1] == 0
-                    and y % args.patch_size[0] == 0
-                ):
-                    val_images.append(
-                        (file_path, var, multiplier, year_from_filename, x, y)
-                    )
-
-                elif (
-                    (
-                        test_years_lower_bound
-                        <= year_from_filename
-                        <= test_years_upper_bound
-                    )
-                    and x % args.patch_size[1] == 0
-                    and y % args.patch_size[0] == 0
-                ):
-                    test_images.append(
-                        (file_path, var, multiplier, year_from_filename, x, y)
-                    )
-
-                elif WorldClimConfig.elevation in file_path:
-                    elevation_images.append((file_path, var, multiplier, x, y))
-
-            for stage, images in zip(
-                ["train", "val", "test", WorldClimConfig.elevation],
-                [train_images, val_images, test_images, elevation_images],
+            elif (
+                (val_years_lower_bound <= year_from_filename <= val_years_upper_bound)
+                and x % args.patch_size[1] == 0
+                and y % args.patch_size[0] == 0
             ):
-                if images:
-                    columns = (
-                        ["file_path", "variable", "multiplier", "x", "y"]
-                        if stage == WorldClimConfig.elevation
-                        else ["file_path", "variable", "multiplier", "year", "x", "y"]
-                    )
-                    df = pd.DataFrame(
-                        images,
-                        columns=columns,
-                    )
-                    df.to_csv(
-                        os.path.join(
-                            args.dataframe_output_path, var, multiplier, f"{stage}.csv"
-                        ),
-                        index=False,
-                        header=True,
-                    )
+                val_images.append(
+                    (file_path, var, multiplier, year_from_filename, x, y)
+                )
 
-            if var != WorldClimConfig.elevation:
-                logger.info(
-                    f"Generated Train ({len(train_images)}) / "
-                    f"Validation ({len(val_images)}) / "
-                    f"Test ({len(test_images)}) splits "
-                    f"for variable: {var}, multiplier: {multiplier}, scale:{scale:.4f}"
+            elif (
+                (test_years_lower_bound <= year_from_filename <= test_years_upper_bound)
+                and x % args.patch_size[1] == 0
+                and y % args.patch_size[0] == 0
+            ):
+                test_images.append(
+                    (file_path, var, multiplier, year_from_filename, x, y)
                 )
-            else:
-                logger.info(
-                    f"({len(elevation_images)}) images "
-                    f"for variable: {var}, multiplier: {multiplier}, scale:{scale:.4f}"
+
+            elif WorldClimConfig.elevation in file_path:
+                elevation_images.append((file_path, var, multiplier, x, y))
+
+        for stage, images in zip(
+            ["train", "val", "test", WorldClimConfig.elevation],
+            [train_images, val_images, test_images, elevation_images],
+        ):
+            if images:
+                columns = (
+                    ["file_path", "variable", "multiplier", "x", "y"]
+                    if stage == WorldClimConfig.elevation
+                    else ["file_path", "variable", "multiplier", "year", "x", "y"]
                 )
+                df = pd.DataFrame(
+                    images,
+                    columns=columns,
+                )
+                df.to_csv(
+                    os.path.join(
+                        args.dataframe_output_path, var, multiplier, f"{stage}.csv"
+                    ),
+                    index=False,
+                    header=True,
+                )
+
+        if var != WorldClimConfig.elevation:
+            logger.info(
+                f"Generated Train ({len(train_images)}) / "
+                f"Validation ({len(val_images)}) / "
+                f"Test ({len(test_images)}) splits "
+                f"for variable: {var}, multiplier: {multiplier}, scale:{scale:.4f}"
+            )
+        else:
+            logger.info(
+                f"({len(elevation_images)}) images "
+                f"for variable: {var}, multiplier: {multiplier}, scale:{scale:.4f}"
+            )
 
 
 if __name__ == "__main__":

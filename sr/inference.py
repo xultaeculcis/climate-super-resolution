@@ -20,7 +20,7 @@ from rasterio.merge import merge
 from rasterio.transform import from_origin
 from torchvision import transforms
 from tqdm import tqdm
-from utils import prepare_pl_module
+from lightning_modules.utils import prepare_pl_module
 
 
 def parse_args() -> argparse.Namespace:

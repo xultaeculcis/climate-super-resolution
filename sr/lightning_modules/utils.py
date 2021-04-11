@@ -4,6 +4,7 @@ import os
 from typing import Tuple
 
 import pytorch_lightning as pl
+
 from lightning_modules.pl_gan import GANLightningModule
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import (

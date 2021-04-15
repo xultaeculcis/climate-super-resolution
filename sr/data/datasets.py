@@ -49,9 +49,9 @@ class CRUTSInferenceDataset(Dataset):
         self.elevation_data = self.to_tensor(elevation_arr)
 
     def __getitem__(self, index):
-        input_img = np.flipud(
-            self.ds[self.variable].isel(time=index).values.astype(np.float32)
-        )
+        arr = self.ds[self.variable].isel(time=index)
+
+        input_img = np.flipud(arr.values.astype(np.float32))
 
         input_img, min, max = normalize(input_img)
 
@@ -61,11 +61,15 @@ class CRUTSInferenceDataset(Dataset):
 
         img_lr = self.to_tensor(input_img)
 
+        # extract date
+        date_str = np.datetime_as_string(arr.time, unit="D")
+
         return {
             "lr": img_lr,
             "elevation": self.elevation_data,
             "min": min,
             "max": max,
+            "filename": f"cruts-{self.variable}-{date_str}.tif",
         }
 
     def __len__(self):

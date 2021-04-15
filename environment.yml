@@ -6,26 +6,24 @@ channels:
 dependencies:
   - python=3.8
   - cudatoolkit=11.1
-  - pytorch
-  - torchvision
-  - pytorch-lightning
-  - geopandas
-  - dask
-  - basemap
-  - xarray
-  - rioxarray
-  - cartopy
-  - datacube
+  - pytorch=1.8.1
+  - torchvision=0.2.2
+  - pytorch-lightning=1.2.0
+  - geopandas=0.9.0
+  - dask=2021.4.0
+  - xarray=0.17.0
+  - rioxarray=0.3.1
+  - cartopy=0.18.0
+  - datacube=1.8.3
+  - rasterio=1.2.2
+  - netCDF4=1.5.6
   - pip
   - pip:
-      - jupyterlab
-      - scikit-learn
-      - seaborn
-      - netCDF4
-      - rasterio
-      - rio-tiler
-      - isort
-      - black
-      - flake8
-      - pytest
-      - pre-commit
+      - jupyterlab==3.0.14
+      - scikit-learn==0.24.1
+      - seaborn==0.11.1
+      - isort==5.8.0
+      - black==20.8b1
+      - flake8==3.9.0
+      - pytest==6.2.3
+      - pre-commit==2.12.0

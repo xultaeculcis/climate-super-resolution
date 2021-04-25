@@ -1,4 +1,4 @@
-# super-resolution
+# climate-super-resolution
 
 This repo contains training and evaluation scripts of Neural Network for Climate Modelling Super Resolution
 

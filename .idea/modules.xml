@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/super-resolution.iml" filepath="$PROJECT_DIR$/.idea/super-resolution.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/climate-super-resolution.iml" filepath="$PROJECT_DIR$/.idea/climate-super-resolution.iml" />
     </modules>
   </component>
 </project>

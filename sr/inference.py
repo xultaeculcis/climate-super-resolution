@@ -28,7 +28,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--ds_path",
         type=str,
-        default="/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.pre.dat.nc",
+        # default="/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.tmn.dat.nc",
+        default="/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.tmp.dat.nc",
+        # default="/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.tmx.dat.nc",
+        # default="/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.pre.dat.nc",
+    )
+    parser.add_argument(
+        "--data_dir",
+        type=str,
+        default="/media/xultaeculcis/2TB/datasets/cruts/pre-processed/full-res",
     )
     parser.add_argument(
         "--elevation_file",
@@ -48,10 +56,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--pretrained_model",
         type=str,
-        default="../model_weights/gen-pre-training-srcnn-prec-4x-epoch=14-step=0-hp_metric=0.00153.ckpt",
+        # default="../model_weights/gen-pre-training-srcnn-tmin-4x-epoch=14-step=41354-hp_metric=0.00587.ckpt",
+        default="../model_weights/gen-pre-training-srcnn-tmax-4x-epoch=14-step=41354-hp_metric=0.00560.ckpt",
+        # default="../model_weights/gen-pre-training-srcnn-prec-4x-epoch=14-step=41354-hp_metric=0.00152.ckpt",
     )
     parser.add_argument("--experiment_name", type=str, default="inference")
-    parser.add_argument("--cruts_variable", type=str, default=CRUTSConfig.pre)
+    parser.add_argument("--cruts_variable", type=str, default=CRUTSConfig.tmp)
     parser.add_argument("--scaling_factor", type=int, default=4)
     parser.add_argument("--precision", type=int, default=32)
     parser.add_argument("--gpus", type=int, default=1)
@@ -59,7 +69,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def run_inference(
+def run_inference_on_full_images(
     model: pl.LightningModule,
     ds_path: str,
     elevation_file: str,
@@ -121,10 +131,10 @@ if __name__ == "__main__":
     net = prepare_pl_module(args)
     net.eval()
     with torch.no_grad():
-        run_inference(
+        run_inference_on_full_images(
             model=net,
             ds_path=args.ds_path,
-            elevation_file=args.elevation_file,
             land_mask_file=args.land_mask_file,
+            elevation_file=args.elevation_file,
             out_dir=out_path,
         )

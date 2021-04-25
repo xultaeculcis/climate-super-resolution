@@ -217,7 +217,6 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
         """Log a single batch of images from the validation set to monitor image quality progress."""
 
         def norm_ip(img, min, max):
-            img.clamp_(min=min, max=max)
             img.add_(-min).div_(max - min + 1e-5)
             return img
 
@@ -238,6 +237,11 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             self.logger.experiment.add_images(
                 "lr_images",
                 norm_ip(lr, float(lr.min()), float(lr.max())),
+                self.global_step,
+            )
+            self.logger.experiment.add_images(
+                "elevation",
+                norm_ip(elev, float(elev.min()), float(elev.max())),
                 self.global_step,
             )
             self.logger.experiment.add_images(
@@ -273,6 +277,10 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             save_image(
                 norm_ip(lr, float(lr.min()), float(lr.max())),
                 os.path.join(img_dir, f"lr-{self.hparams.experiment_name}.png"),
+            )
+            save_image(
+                norm_ip(elev, float(elev.min()), float(elev.max())),
+                os.path.join(img_dir, f"elev-{self.hparams.experiment_name}.png"),
             )
             save_image(
                 norm_ip(sr_nearest, float(sr_nearest.min()), float(sr_nearest.max())),

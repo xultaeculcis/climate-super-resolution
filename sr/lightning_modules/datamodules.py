@@ -149,7 +149,7 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         parser.add_argument(
             "--world_clim_variable",
             type=str,
-            default="prec",
+            default="tmax",
         )
         parser.add_argument(
             "--world_clim_multiplier",

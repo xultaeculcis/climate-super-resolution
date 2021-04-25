@@ -56,7 +56,7 @@ def normalize(arr: np.ndarray) -> Tuple[np.ndarray, float, float]:
     arr = (arr + (-min)) / (max - min + 1e-5)
     arr[np.isnan(arr)] = 0.0
 
-    return arr, min, max
+    return arr.astype(np.float32), min, max
 
 
 def normalize_inverse_transform(arr: np.ndarray, min: float, max: float) -> np.ndarray:

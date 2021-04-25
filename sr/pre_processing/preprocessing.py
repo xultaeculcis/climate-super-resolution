@@ -249,7 +249,14 @@ def get_tiles(
 
     """
     ncols, nrows = ds.meta["width"], ds.meta["height"]
-    offsets = np.array(list(product(range(0, ncols, stride), range(0, nrows, stride))))
+    offsets = np.array(
+        list(
+            product(
+                range(0, ncols, stride if stride else width),
+                range(0, nrows, stride if stride else height),
+            )
+        )
+    )
     big_window = windows.Window(col_off=0, row_off=0, width=ncols, height=nrows)
 
     for col_off, row_off in offsets:
@@ -266,6 +273,7 @@ def get_tiles(
             col_off=col_off, row_off=row_off, width=width, height=height
         ).intersection(big_window)
         transform = windows.transform(window, ds.transform)
+
         yield window, transform
 
 

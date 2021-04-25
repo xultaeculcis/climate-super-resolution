@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import argparse
-import os
 from typing import Tuple
 
 import pytorch_lightning as pl
@@ -69,10 +68,8 @@ def prepare_pl_trainer(args: argparse.Namespace) -> pl.Trainer:
         monitor=monitor_metric,
         verbose=False,
         mode=mode,
-        filepath=os.path.join(
-            args.save_model_path,
-            f"{experiment_name}-{{epoch}}-{{step}}-{{{monitor_metric}:.5f}}",
-        ),
+        dirpath=args.save_model_path,
+        filename=f"{experiment_name}-{{epoch:02d}}-{{step:05d}}-{{{monitor_metric}:.5f}}",
         save_top_k=args.save_top_k,
     )
     lr_monitor = LearningRateMonitor(logging_interval="step")

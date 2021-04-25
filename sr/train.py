@@ -52,7 +52,7 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     parser.add_argument("--early_stopping_patience", type=int, default=100)
     parser.add_argument("--checkpoint_monitor_metric", type=str, default="hp_metric")
     parser.add_argument("--accumulate_grad_batches", type=int, default=1)
-    parser.add_argument("--save_top_k", type=int, default=10)
+    parser.add_argument("--save_top_k", type=int, default=5)
     parser.add_argument("--log_every_n_steps", type=int, default=5)
     parser.add_argument("--flush_logs_every_n_steps", type=int, default=10)
     parser.add_argument("--generator", type=str, default="srcnn")

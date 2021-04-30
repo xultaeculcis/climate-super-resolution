@@ -8,8 +8,8 @@ import dask
 import dask.bag
 import numpy as np
 from dask.distributed import Client
-from PIL import Image
 from legacy.clim_scaler import ClimScaler
+from PIL import Image
 from tqdm import tqdm
 
 logging.basicConfig(level=logging.INFO)

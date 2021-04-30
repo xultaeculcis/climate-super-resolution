@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-from typing import Tuple
+from typing import Optional, Tuple
 
+import numpy as np
 import torchvision
 from matplotlib import pyplot as plt
-import numpy as np
 
 from sr.pre_processing.cruts_config import CRUTSConfig
 
@@ -50,15 +50,32 @@ def get_variable_from_ds_fp(fp):
         return CRUTSConfig.tmx
 
 
-def normalize(arr: np.ndarray) -> Tuple[np.ndarray, float, float]:
-    max = np.nanmax(arr)
-    min = np.nanmin(arr)
+def normalize(
+    arr: np.ndarray,
+    min: Optional[float] = None,
+    max: Optional[float] = None,
+    missing_indicator: Optional[float] = None,
+) -> Tuple[np.ndarray, float, float]:
+    if missing_indicator:
+        arr[arr == missing_indicator] = np.nan
+
+    if min is None or max is None:
+        max = np.nanmax(arr)
+        min = np.nanmin(arr)
+
     arr = (arr + (-min)) / (max - min + 1e-5)
+
     arr[np.isnan(arr)] = 0.0
 
     return arr.astype(np.float32), min, max
 
 
-def normalize_inverse_transform(arr: np.ndarray, min: float, max: float) -> np.ndarray:
+def denormalize(arr: np.ndarray, min: float, max: float) -> np.ndarray:
     arr = arr * (max - min) + min
     return arr
+
+
+def plot_array(arr):
+    plt.figure(figsize=(20, 10))
+    plt.imshow(arr, cmap="jet")
+    plt.show()

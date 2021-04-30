@@ -42,7 +42,7 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     parser.add_argument("--precision", type=int, default=32)
     parser.add_argument("--gpus", type=int, default=1)
     parser.add_argument("--val_check_interval", type=Union[int, float], default=1.0)
-    parser.add_argument("--max_epochs", type=int, default=15)
+    parser.add_argument("--max_epochs", type=int, default=30)
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--lr_find_only", type=bool, default=False)
     parser.add_argument("--fast_dev_run", type=bool, default=False)
@@ -99,4 +99,5 @@ if __name__ == "__main__":
         logging.info(f"LR Finder suggestion: {new_lr}")
     else:
         trainer.fit(model=net, datamodule=dm)
-        trainer.test()
+        if ~arguments.fast_dev_run:
+            trainer.test()

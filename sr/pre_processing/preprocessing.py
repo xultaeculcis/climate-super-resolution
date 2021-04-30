@@ -15,12 +15,12 @@ import xarray
 from dask.diagnostics import progress
 from datacube.utils.cog import write_cog
 from distributed import Client
-
-from sr.pre_processing.cruts_config import CRUTSConfig
-from sr.pre_processing.world_clim_config import WorldClimConfig
 from rasterio import Affine, windows
 from rasterio.enums import Resampling
 from tqdm import tqdm
+
+from sr.pre_processing.cruts_config import CRUTSConfig
+from sr.pre_processing.world_clim_config import WorldClimConfig
 
 pbar = progress.ProgressBar()
 pbar.register()
@@ -75,13 +75,13 @@ def parse_args() -> argparse.Namespace:
         default="../../datasets/",
     )
     parser.add_argument("--run_cruts_to_cog", type=bool, default=False)
-    parser.add_argument("--run_statistics_computation", type=bool, default=False)
+    parser.add_argument("--run_statistics_computation", type=bool, default=True)
     parser.add_argument("--run_world_clim_resize", type=bool, default=False)
     parser.add_argument("--run_world_clim_tiling", type=bool, default=True)
     parser.add_argument("--run_world_clim_elevation_resize", type=bool, default=False)
     parser.add_argument("--patch_size", type=Tuple[int, int], default=(128, 128))
     parser.add_argument("--patch_stride", type=int, default=64)
-    parser.add_argument("--normalize_patches", type=bool, default=True)
+    parser.add_argument("--normalize_patches", type=bool, default=False)
     parser.add_argument("--n_workers", type=int, default=8)
     parser.add_argument("--res_mult_inx", type=int, default=2)
     parser.add_argument("--threads_per_worker", type=int, default=1)
@@ -356,7 +356,7 @@ def run_cruts_to_cog(args: argparse.Namespace) -> None:
 
 def run_statistics_computation(args: argparse.Namespace) -> None:
     """
-    Runs CRU-TS and World Clim Elevation statistics computation.
+    Runs CRU-TS and World Clim statistics computation.
 
     Args:
         args (argparse.Namespace): The arguments.
@@ -365,29 +365,91 @@ def run_statistics_computation(args: argparse.Namespace) -> None:
     if args.run_statistics_computation:
         logger.info("Running statistics computation")
 
-        def compute_stats(var_name, arr):
-            mean = np.nanmean(arr)
-            std = np.nanstd(arr)
-            results.append((var_name, mean, std))
+        def compute_stats(fp):
+            with rio.open(fp) as ds:
+                arr = ds.read(1)
+                min = np.nanmin(arr)
+                max = np.nanmax(arr)
+                return min, max
 
         results = []
-        for var in tqdm(CRUTSConfig.variables_cts + [WorldClimConfig.elevation]):
-            if var == WorldClimConfig.elevation:
-                elevation = (
-                    rio.open(args.world_clim_elevation_fp).read().astype(np.float32)
-                )
-                elevation[elevation == -32768.0] = np.nan
-                compute_stats(var, elevation)
-            else:
-                ds = xarray.open_dataset(
-                    os.path.join(
-                        args.data_dir_cruts, CRUTSConfig.file_pattern.format(var)
+
+        for var in CRUTSConfig.variables_cts:
+            logger.info(f"Computing stats for CRU-TS - '{var}'")
+            for fp in tqdm(
+                sorted(
+                    glob(
+                        os.path.join(
+                            args.out_dir_cruts, CRUTSConfig.full_res_dir, var, "*.tif"
+                        )
                     )
                 )
-                compute_stats(var, ds[var].values)
+            ):
+                year_from_filename = int(os.path.basename(fp).split("-")[-3])
+                month_from_filename = int(os.path.basename(fp).split("-")[-2])
+                results.append(
+                    (
+                        "cru-ts",
+                        fp,
+                        os.path.basename(fp),
+                        var,
+                        year_from_filename,
+                        month_from_filename,
+                        *compute_stats(fp),
+                    )
+                )
+
+        for var in WorldClimConfig.variables_wc + [WorldClimConfig.elevation]:
+            logger.info(f"Computing stats for World Clim - '{var}'")
+            for fp in tqdm(
+                sorted(
+                    glob(
+                        os.path.join(
+                            args.out_dir_world_clim,
+                            var,
+                            WorldClimConfig.resized_dir,
+                            WorldClimConfig.resolution_multipliers[args.res_mult_inx][
+                                0
+                            ],
+                            "*.tif",
+                        )
+                    )
+                )
+            ):
+                year_from_filename = (
+                    int(os.path.basename(fp).split("-")[0].split("_")[-1])
+                    if var != WorldClimConfig.elevation
+                    else -1
+                )
+                month_from_filename = (
+                    int(os.path.basename(fp).split("-")[1].split(".")[0])
+                    if var != WorldClimConfig.elevation
+                    else -1
+                )
+                results.append(
+                    (
+                        "world-clim",
+                        fp,
+                        os.path.basename(fp),
+                        var,
+                        year_from_filename,
+                        month_from_filename,
+                        *compute_stats(fp),
+                    )
+                )
 
         output_file = os.path.join(args.dataframe_output_path, "statistics.csv")
-        df = pd.DataFrame(results, columns=["variable", "mean", "std"])
+        columns = [
+            "dataset",
+            "file_path",
+            "filename",
+            "variable",
+            "year",
+            "month",
+            "min",
+            "max",
+        ]
+        df = pd.DataFrame(results, columns=columns)
         df.to_csv(output_file, header=True, index=False)
 
 
@@ -537,15 +599,30 @@ def run_train_val_test_split(args: argparse.Namespace) -> None:
             filename = os.path.basename(file_path)
             x = int(file_path.split(".")[-3])
             y = int(file_path.split(".")[-2])
+            original_filename = os.path.basename(file_path).replace(f".{x}.{y}.", ".")
             year_from_filename = (
                 int(filename.split("-")[0].split("_")[-1])
+                if var != WorldClimConfig.elevation
+                else -1
+            )
+            month_from_filename = (
+                int(filename.split("-")[1].split(".")[0])
                 if var != WorldClimConfig.elevation
                 else -1
             )
 
             if train_years_lower_bound <= year_from_filename <= train_years_upper_bound:
                 train_images.append(
-                    (file_path, var, multiplier, year_from_filename, x, y)
+                    (
+                        file_path,
+                        original_filename,
+                        var,
+                        multiplier,
+                        year_from_filename,
+                        month_from_filename,
+                        x,
+                        y,
+                    )
                 )
 
             elif (
@@ -554,7 +631,16 @@ def run_train_val_test_split(args: argparse.Namespace) -> None:
                 and y % args.patch_size[0] == 0
             ):
                 val_images.append(
-                    (file_path, var, multiplier, year_from_filename, x, y)
+                    (
+                        file_path,
+                        original_filename,
+                        var,
+                        multiplier,
+                        year_from_filename,
+                        month_from_filename,
+                        x,
+                        y,
+                    )
                 )
 
             elif (
@@ -563,7 +649,16 @@ def run_train_val_test_split(args: argparse.Namespace) -> None:
                 and y % args.patch_size[0] == 0
             ):
                 test_images.append(
-                    (file_path, var, multiplier, year_from_filename, x, y)
+                    (
+                        file_path,
+                        original_filename,
+                        var,
+                        multiplier,
+                        year_from_filename,
+                        month_from_filename,
+                        x,
+                        y,
+                    )
                 )
 
             elif WorldClimConfig.elevation in file_path:
@@ -577,7 +672,16 @@ def run_train_val_test_split(args: argparse.Namespace) -> None:
                 columns = (
                     ["file_path", "variable", "multiplier", "x", "y"]
                     if stage == WorldClimConfig.elevation
-                    else ["file_path", "variable", "multiplier", "year", "x", "y"]
+                    else [
+                        "tile_file_path",
+                        "filename",
+                        "variable",
+                        "multiplier",
+                        "year",
+                        "month",
+                        "x",
+                        "y",
+                    ]
                 )
                 df = pd.DataFrame(
                     images,

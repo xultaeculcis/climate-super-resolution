@@ -12,18 +12,16 @@ import pytorch_lightning as pl
 import rasterio as rio
 import torch
 from affine import Affine
+from pre_processing.preprocessing import get_tiles
+from pre_processing.world_clim_config import WorldClimConfig
 from rasterio.enums import Resampling
 from rasterio.merge import merge
 from torchvision.transforms import transforms
 from tqdm import tqdm
 
-from pre_processing.preprocessing import get_tiles
-from pre_processing.world_clim_config import WorldClimConfig
-from sr.data.utils import normalize_inverse_transform, normalize
+from sr.data.utils import denormalize, normalize
 from sr.lightning_modules.utils import prepare_pl_module
 from sr.pre_processing.cruts_config import CRUTSConfig
-
-import matplotlib.pyplot as plt
 
 
 def parse_args() -> argparse.Namespace:
@@ -240,11 +238,7 @@ def run_inference_on_single_tile(
     arr = out.squeeze_(0).squeeze_(0).cpu().numpy()
 
     # denormalize
-    arr = np.flipud(
-        normalize_inverse_transform(arr, input_min, input_max).clip(
-            input_min, input_max
-        )
-    )
+    arr = np.flipud(denormalize(arr, input_min, input_max).clip(input_min, input_max))
 
     # get filename
     filename = os.path.basename(os.path.splitext(tile)[0])
@@ -295,12 +289,6 @@ def resize_and_normalize_input_raster(fp, scaling_factor, tmp_normalized_rasters
             tmp_raster.write(data, 1)
 
         return fp, input_max, input_min
-
-
-def plot_array(arr):
-    plt.figure(figsize=(20, 10))
-    plt.imshow(arr, cmap="jet")
-    plt.show()
 
 
 def generate_temp_raster_tiles(fp, tmp_tiles_dir, tile_shape, stride):

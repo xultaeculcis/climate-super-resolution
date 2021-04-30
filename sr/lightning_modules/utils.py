@@ -3,7 +3,6 @@ import argparse
 from typing import Tuple
 
 import pytorch_lightning as pl
-
 from lightning_modules.pl_gan import GANLightningModule
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import (
@@ -115,6 +114,7 @@ def prepare_training(
     :param args: The arguments.
     :returns: A tuple with model and the trainer.
     """
+
     pl.seed_everything(args.seed)
     data_module = prepare_pl_datamodule(args)
     lightning_module = prepare_pl_module(args)

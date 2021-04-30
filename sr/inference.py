@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from sr.data.datasets import CRUTSInferenceDataset
-from sr.data.utils import normalize_inverse_transform
+from sr.data.utils import denormalize
 from sr.lightning_modules.utils import prepare_pl_module
 from sr.pre_processing.cruts_config import CRUTSConfig
 
@@ -111,9 +111,7 @@ def run_inference_on_full_images(
 
         for idx, output in enumerate(outputs):
             arr = output.squeeze(0)
-            arr = normalize_inverse_transform(arr, min[idx], max[idx]).clip(
-                min[idx], max[idx]
-            )
+            arr = denormalize(arr, min[idx], max[idx]).clip(min[idx], max[idx])
             arr[mask] = np.nan
 
             with rio.open(

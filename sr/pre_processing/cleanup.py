@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import argparse
+import logging
 import os
 from glob import glob
-import logging
 
 import dask.bag
 from distributed import Client

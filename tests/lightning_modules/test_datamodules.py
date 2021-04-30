@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-from sr.pre_processing.world_clim_config import WorldClimConfig
 from sr.lightning_modules.datamodules import SuperResolutionDataModule
+from sr.pre_processing.world_clim_config import WorldClimConfig
 
 
 class Args:
@@ -77,5 +77,6 @@ def test_val_dl():
 
 
 def test_test_dl():
-    test_dl = dm.test_dataloader()
-    common_asserts(test_dl)
+    test_dls = dm.test_dataloader()
+    for test_dl in test_dls:
+        common_asserts(test_dl)

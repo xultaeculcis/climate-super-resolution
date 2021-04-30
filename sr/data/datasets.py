@@ -1,17 +1,19 @@
 # -*- coding: utf-8 -*-
 from random import random
-from typing import Optional, Dict, Union
+from typing import Dict, Optional, Union
 
 import numpy as np
 import pandas as pd
+import rasterio as rio
+import xarray as xr
 from PIL import Image
 from torch import Tensor
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from torchvision import transforms as transforms
 from torchvision.transforms import functional as TF
-import xarray as xr
+
+from sr.data.utils import get_variable_from_ds_fp, normalize
 from sr.pre_processing.cruts_config import CRUTSConfig
-from sr.data.utils import plot_single_batch, normalize, get_variable_from_ds_fp
 
 
 class CRUTSInferenceDataset(Dataset):
@@ -106,14 +108,35 @@ class ClimateDataset(Dataset):
 
     def __getitem__(self, index) -> Dict[str, Union[Tensor, list]]:
         row = self.df.iloc[index]
-        img_hr = Image.open(row["file_path"])
+        min = row["min"]
+        max = row["max"]
+
+        # original, hr
+        with rio.open(row["tile_file_path"]) as ds:
+            original_image = ds.read(1)
+            img_hr = original_image.copy()
+
+        # normalize
+        img_hr, min, max = normalize(img_hr, min, max)
+        img_hr = Image.fromarray(img_hr)
+
+        # land mask
+        mask = np.isnan(original_image)
+
+        # lr
         img_lr = self.resize(img_hr)
-        img_sr_nearest = []
+        img_lr = self.resize(img_hr)
+
+        # elevation
         elev_fp = self.elevation_df[
             (self.elevation_df["x"] == row["x"]) & (self.elevation_df["y"] == row["y"])
         ]["file_path"].values[0]
-        img_elev = Image.open(elev_fp)
+        with rio.open(elev_fp) as ds:
+            img_elev = ds.read(1)
+        img_elev, elev_min, elev_max = normalize(img_elev, missing_indicator=-32768)
+        img_elev = Image.fromarray(img_elev)
 
+        # transforms
         if self.stage == "train":
             if random() > 0.5:
                 img_lr = TF.vflip(img_lr)
@@ -125,11 +148,9 @@ class ClimateDataset(Dataset):
                 img_hr = TF.hflip(img_hr)
                 img_elev = TF.hflip(img_elev)
 
-        if self.generator_type == "srcnn" or self.stage != "train":
-            img_sr_nearest = self.to_tensor(
-                np.array(self.upscale(img_lr), dtype=np.float32)
-            )
-
+        img_sr_nearest = self.to_tensor(
+            np.array(self.upscale(img_lr), dtype=np.float32)
+        )
         img_lr = self.to_tensor(np.array(img_lr, dtype=np.float32))
         img_hr = self.to_tensor(np.array(img_hr, dtype=np.float32))
         img_elev = self.to_tensor(np.array(img_elev, dtype=np.float32))
@@ -139,32 +160,11 @@ class ClimateDataset(Dataset):
             "hr": img_hr,
             "elevation": img_elev,
             "nearest": img_sr_nearest,
+            "original_data": original_image,
+            "mask": mask,
+            "min": min,
+            "max": max,
         }
 
     def __len__(self) -> int:
         return len(self.df)
-
-
-if __name__ == "__main__":
-    ds = CRUTSInferenceDataset(
-        ds_path="/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.pre.dat.nc",
-        elevation_file="/media/xultaeculcis/2TB/datasets/wc/pre-processed/elevation/resized/4x/wc2.1_2.5m_elev.tif",
-        land_mask_file="/media/xultaeculcis/2TB/datasets/wc/pre-processed/prec/resized/4x/wc2.1_2.5m_prec_1961-01.tif",
-        generator_type="srcnn",
-        scaling_factor=4,
-    )
-
-    dl = DataLoader(dataset=ds, batch_size=1, pin_memory=True, num_workers=1)
-    _ = plot_single_batch(loader=dl, keys=["lr", "elevation"])
-
-    ds = ClimateDataset(
-        df=pd.read_csv("../../datasets/prec/4x/train.csv"),
-        elevation_df=pd.read_csv("../../datasets/elevation/4x/elevation.csv"),
-        hr_size=128,
-        stage="train",
-        generator_type="srcnn",
-        scaling_factor=4,
-    )
-
-    dl = DataLoader(dataset=ds, batch_size=32, pin_memory=True, num_workers=1)
-    _ = plot_single_batch(loader=dl, keys=["lr", "hr", "elevation", "nearest"])

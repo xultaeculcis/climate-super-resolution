@@ -31,7 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser = GANLightningModule.add_model_specific_args(parser)
 
     # training config args
-    parser.add_argument("--precision", type=int, default=16)
+    parser.add_argument("--precision", type=int, default=32)
     parser.add_argument("--gpus", type=int, default=1)
     parser.add_argument("--val_check_interval", type=Union[int, float], default=1.0)
     parser.add_argument("--max_epochs", type=int, default=15)
@@ -55,7 +55,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--pretrained_model",
         type=str,
-        default="../model_weights/gen-pre-training-srcnn-tmax-4x-epoch=14-step=0-hp_metric=0.00402.ckpt",
+        # default="../model_weights/gen-pre-training-srcnn-prec-4x-epoch=14-step=41354-hp_metric=0.00212.ckpt",
+        # default="../model_weights/gen-pre-training-srcnn-tmax-4x-epoch=14-step=41354-hp_metric=0.01191.ckpt",
+        default="../model_weights/gen-pre-training-srcnn-tmin-4x-epoch=14-step=41354-hp_metric=0.00278.ckpt",
         help="A path to pre-trained model checkpoint. Required for fine tuning.",
     )
 

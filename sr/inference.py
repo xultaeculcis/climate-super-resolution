@@ -29,8 +29,8 @@ def parse_args() -> argparse.Namespace:
         "--ds_path",
         type=str,
         # default="/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.tmn.dat.nc",
-        default="/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.tmp.dat.nc",
-        # default="/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.tmx.dat.nc",
+        # default="/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.tmp.dat.nc",
+        default="/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.tmx.dat.nc",
         # default="/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.pre.dat.nc",
     )
     parser.add_argument(
@@ -56,12 +56,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--pretrained_model",
         type=str,
-        # default="../model_weights/gen-pre-training-srcnn-tmin-4x-epoch=14-step=41354-hp_metric=0.00587.ckpt",
-        default="../model_weights/gen-pre-training-srcnn-tmax-4x-epoch=14-step=41354-hp_metric=0.00560.ckpt",
-        # default="../model_weights/gen-pre-training-srcnn-prec-4x-epoch=14-step=41354-hp_metric=0.00152.ckpt",
+        default="../model_weights/gen-pre-training-srcnn-temp-4x-epoch=29-step=165419-hp_metric=0.00083.ckpt",
+        # default="../model_weights/gen-pre-training-srcnn-prec-4x-epoch=29-step=82709-hp_metric=0.00007.ckpt",
     )
     parser.add_argument("--experiment_name", type=str, default="inference")
-    parser.add_argument("--cruts_variable", type=str, default=CRUTSConfig.tmp)
+    parser.add_argument("--cruts_variable", type=str, default=CRUTSConfig.tmx)
     parser.add_argument("--scaling_factor", type=int, default=4)
     parser.add_argument("--precision", type=int, default=32)
     parser.add_argument("--gpus", type=int, default=1)

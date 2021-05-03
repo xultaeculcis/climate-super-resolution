@@ -122,6 +122,7 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
         denormalized_mae = []
         denormalized_mse = []
         denormalized_rmse = []
+        denormalized_r2 = []
 
         original = original.squeeze(1).cpu().numpy()
         sr = sr.squeeze(1).cpu().numpy()
@@ -141,18 +142,28 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             i_original[mask[i]] = 0.0
 
             # compute metrics
-            denormalized_mae.append(np.sum(np.absolute(i_sr - i_original)))
-            denormalized_mse.append(((i_original - i_sr) ** 2).mean())
+            diff = i_sr - i_original
+            denormalized_mae.append(np.absolute(diff).mean())
+            denormalized_mse.append((diff ** 2).mean())
             denormalized_rmse.append(np.sqrt(denormalized_mse[-1]))
+            denormalized_r2.append(
+                1
+                - (
+                    np.sum(diff ** 2)
+                    / (np.sum((i_original - np.mean(i_original)) ** 2) + 1e-5)
+                )
+            )
 
         denormalized_mae = np.mean(denormalized_mae)
         denormalized_mse = np.mean(denormalized_mse)
         denormalized_rmse = np.mean(denormalized_rmse)
+        denormalized_r2 = np.mean(denormalized_r2)
 
         return (
             denormalized_mae,
             denormalized_mse,
             denormalized_rmse,
+            denormalized_r2,
             l1_loss,
             mae,
             mse,
@@ -219,6 +230,7 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             denormalized_mae,
             denormalized_mse,
             denormalized_rmse,
+            denormalized_r2,
             l1_loss,
             mae,
             mse,
@@ -232,11 +244,12 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             "val/psnr": psnr_score,
             "val/ssim": ssim_score,
             "val/mae": mae,
-            "val/denormalized_mae": denormalized_mae,
             "val/mse": mse,
-            "val/denormalized_mse": denormalized_mse,
             "val/rmse": rmse,
+            "val/denormalized_mae": denormalized_mae,
+            "val/denormalized_mse": denormalized_mse,
             "val/denormalized_rmse": denormalized_rmse,
+            "val/denormalized_r2": denormalized_r2,
         }
 
         self.log_dict(log_dict, on_step=False, on_epoch=True)
@@ -271,6 +284,7 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             denormalized_mae,
             denormalized_mse,
             denormalized_rmse,
+            denormalized_r2,
             l1_loss,
             mae,
             mse,
@@ -284,11 +298,12 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             "test/psnr": psnr_score,
             "test/ssim": ssim_score,
             "test/mae": mae,
-            "test/denormalized_mae": denormalized_mae,
             "test/mse": mse,
-            "test/denormalized_mse": denormalized_mse,
             "test/rmse": rmse,
+            "test/denormalized_mae": denormalized_mae,
+            "test/denormalized_mse": denormalized_mse,
             "test/denormalized_rmse": denormalized_rmse,
+            "test/denormalized_r2": denormalized_r2,
         }
 
         self.log_dict(log_dict, on_step=False, on_epoch=True)
@@ -345,7 +360,7 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             sr = self(x)
             self.logger.experiment.add_images(
                 "sr_images",
-                norm_ip(sr, float(sr.min()), float(sr.max())),
+                norm_ip(sr, float(hr.min()), float(hr.max())).clamp(0.0, 1.0),
                 self.global_step,
             )
 

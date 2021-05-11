@@ -260,7 +260,7 @@ if __name__ == "__main__":
         mse = []
         rmse = []
 
-        items = 32
+        items = 16
         fig, axes = plt.subplots(
             nrows=items,
             ncols=4,

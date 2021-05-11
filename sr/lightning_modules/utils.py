@@ -1,8 +1,16 @@
 # -*- coding: utf-8 -*-
 import argparse
-from typing import Tuple
+import math
+from typing import Tuple, Any
 
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
 import pytorch_lightning as pl
+import torch
+from torch import Tensor
+from torchvision.utils import make_grid
+
 from lightning_modules.pl_gan import GANLightningModule
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import (
@@ -121,3 +129,59 @@ def prepare_training(
     pl_trainer = prepare_pl_trainer(args)
 
     return lightning_module, data_module, pl_trainer
+
+
+def batch_tensor_to_grid(
+    tensor: Tensor, nrow: int = 8, padding: int = 2, pad_value: Any = False
+):
+    """
+    Make the mini-batch of images into a grid
+
+    Args:
+        tensor (Tensor): The tensor.
+        nrow (int): Number of rows
+        padding (int): The padding.
+        pad_value (Any): The padding value.
+
+    Returns:
+
+    """
+    nmaps = tensor.size(0)
+    xmaps = min(nrow, nmaps)
+    ymaps = int(math.ceil(float(nmaps) / xmaps))
+    height, width = int(tensor.size(1) + padding), int(tensor.size(2) + padding)
+    grid = tensor.new_full(
+        (1, height * ymaps + padding, width * xmaps + padding), pad_value
+    )
+    k = 0
+    for y in range(ymaps):
+        for x in range(xmaps):
+            if k >= nmaps:
+                break
+            grid.narrow(1, y * height + padding, height - padding).narrow(
+                2, x * width + padding, width - padding
+            ).copy_(tensor[k])
+            k = k + 1
+    return grid
+
+
+def save_tensor_batch_as_image(
+    out_path: str, images_tensor: Tensor, mask_tensor: Tensor = None
+):
+    """Save a given Tensor into an image file."""
+
+    img_grid = (
+        make_grid(images_tensor)[0].to("cpu", torch.float32).numpy()
+    )  # select only single channel since we deal with 2D data anyway
+
+    if mask_tensor:
+        mask_grid = batch_tensor_to_grid(mask_tensor).squeeze(0).to("cpu").numpy()
+        img_grid[mask_grid] = np.nan
+
+    cmap = matplotlib.cm.jet.copy()
+    cmap.set_bad("black", 1.0)
+    plt.figure(figsize=(20, 20))
+    plt.imshow(img_grid, cmap=cmap, aspect="auto")
+    plt.axis("off")
+
+    plt.savefig(out_path, bbox_inches="tight")

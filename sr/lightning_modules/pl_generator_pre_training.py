@@ -20,6 +20,7 @@ from pytorch_lightning.metrics.functional import (
 from torch import Tensor
 from torchvision.utils import save_image
 
+from lightning_modules.utils import save_tensor_batch_as_image
 from sr.models.drln import DRLN
 from sr.models.esrgan import ESRGANGenerator
 from sr.models.rfb_esrgan import RFBESRGANGenerator
@@ -102,7 +103,12 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             batch["nearest"],
             batch["elevation"],
         )
-        x = torch.cat([sr_nearest, elev], dim=1)
+
+        if self.hparams.use_elevation:
+            x = torch.cat([sr_nearest, elev], dim=1)
+        else:
+            x = sr_nearest
+
         sr = self(x if self.hparams.generator == "srcnn" else lr, elev)
 
         return hr, sr
@@ -355,12 +361,13 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
                 else lr.to(self.device)
             )
 
-            x = torch.cat([sr_nearest, elev], dim=1).to(self.device)
+            if self.hparams.use_elevation:
+                x = torch.cat([sr_nearest, elev], dim=1).to(self.device)
 
             sr = self(x)
             self.logger.experiment.add_images(
                 "sr_images",
-                norm_ip(sr, float(hr.min()), float(hr.max())).clamp(0.0, 1.0),
+                norm_ip(sr, float(sr.min()), float(sr.max())).clamp(0.0, 1.0),
                 self.global_step,
             )
 
@@ -373,32 +380,33 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             if self.current_epoch == 0:
                 os.makedirs(img_dir, exist_ok=True)
                 save_image(
-                    norm_ip(hr, float(hr.min()), float(hr.max())),
                     os.path.join(img_dir, f"hr-{self.hparams.experiment_name}.png"),
+                    hr,
+                    mask,
                 )
                 save_image(
-                    norm_ip(lr, float(lr.min()), float(lr.max())),
                     os.path.join(img_dir, f"lr-{self.hparams.experiment_name}.png"),
+                    lr,
                 )
                 save_image(
-                    norm_ip(elev, float(elev.min()), float(elev.max())),
                     os.path.join(img_dir, f"elev-{self.hparams.experiment_name}.png"),
+                    elev,
+                    mask,
                 )
-                save_image(
-                    norm_ip(
-                        sr_nearest, float(sr_nearest.min()), float(sr_nearest.max())
-                    ),
+                save_tensor_batch_as_image(
                     os.path.join(
                         img_dir, f"sr-nearest-{self.hparams.experiment_name}.png"
                     ),
+                    sr_nearest,
                 )
 
             save_image(
-                norm_ip(sr, float(sr.min()), float(sr.max())),
                 os.path.join(
                     img_dir,
                     f"sr-{self.hparams.experiment_name}-epoch={self.current_epoch}.png",
                 ),
+                sr,
+                mask,
             )
 
             self.save_fig(hr, sr_nearest, sr, elev, mask, img_dir)
@@ -427,7 +435,11 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
 
         """
         fig, axes = plt.subplots(
-            nrows=items, ncols=4, figsize=(5, 1.5 * items), sharey=True
+            nrows=items,
+            ncols=4,
+            figsize=(5, 1.5 * items),
+            sharey=True,
+            constrained_layout=True,
         )
 
         cmap = matplotlib.cm.jet.copy()
@@ -508,11 +520,12 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             type=float,
             help="Determines the minimum learning rate via min_lr = initial_lr/final_div_factor",
         )
-        parser.add_argument("--gen_in_channels", default=2, type=int)
+        parser.add_argument("--gen_in_channels", default=1, type=int)
         parser.add_argument("--gen_out_channels", default=1, type=int)
         parser.add_argument("--nf", default=64, type=int)
         parser.add_argument("--nb", default=23, type=int)
         parser.add_argument("--gc", default=32, type=int)
         parser.add_argument("--num_rrdb_blocks", default=16, type=int)
         parser.add_argument("--num_rrfdb_blocks", default=8, type=int)
+        parser.add_argument("--use_elevation", default=False, type=bool)
         return parser

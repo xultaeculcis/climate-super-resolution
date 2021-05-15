@@ -96,14 +96,15 @@ class ClimateDataset(Dataset):
         self.generator_type = generator_type
 
         self.to_tensor = transforms.ToTensor()
-
         self.resize = transforms.Resize(
             (self.hr_size // self.scaling_factor, self.hr_size // self.scaling_factor),
             Image.NEAREST,
         )
-
-        self.upscale = transforms.Resize(
+        self.upscale_nearest = transforms.Resize(
             (self.hr_size, self.hr_size), interpolation=Image.NEAREST
+        )
+        self.upscale_cubic = transforms.Resize(
+            (self.hr_size, self.hr_size), interpolation=Image.CUBIC
         )
 
     def __getitem__(self, index) -> Dict[str, Union[Tensor, list]]:
@@ -124,7 +125,6 @@ class ClimateDataset(Dataset):
         mask = np.isnan(original_image)
 
         # lr
-        img_lr = self.resize(img_hr)
         img_lr = self.resize(img_hr)
 
         # elevation
@@ -149,7 +149,11 @@ class ClimateDataset(Dataset):
                 img_elev = TF.hflip(img_elev)
 
         img_sr_nearest = self.to_tensor(
-            np.array(self.upscale(img_lr), dtype=np.float32)
+            np.array(self.upscale_nearest(img_lr), dtype=np.float32)
+        )
+
+        img_sr_cubic = self.to_tensor(
+            np.array(self.upscale_cubic(img_lr), dtype=np.float32)
         )
         img_lr = self.to_tensor(np.array(img_lr, dtype=np.float32))
         img_hr = self.to_tensor(np.array(img_hr, dtype=np.float32))
@@ -160,6 +164,7 @@ class ClimateDataset(Dataset):
             "hr": img_hr,
             "elevation": img_elev,
             "nearest": img_sr_nearest,
+            "cubic": img_sr_cubic,
             "original_data": original_image,
             "mask": mask,
             "min": min,

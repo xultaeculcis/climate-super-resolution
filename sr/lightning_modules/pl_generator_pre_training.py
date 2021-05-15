@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 import argparse
+import dataclasses
+import math
 import os
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import matplotlib
@@ -9,7 +12,7 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
-from data.utils import denormalize
+from PIL import Image
 from pytorch_lightning.loggers.base import DummyLogger
 from pytorch_lightning.metrics.functional import (
     mean_absolute_error,
@@ -18,9 +21,10 @@ from pytorch_lightning.metrics.functional import (
     ssim,
 )
 from torch import Tensor
-from torchvision.utils import save_image
+from torchvision.transforms import ToTensor
+from torchvision.utils import make_grid
 
-from lightning_modules.utils import save_tensor_batch_as_image
+from sr.data.utils import denormalize
 from sr.models.drln import DRLN
 from sr.models.esrgan import ESRGANGenerator
 from sr.models.rfb_esrgan import RFBESRGANGenerator
@@ -113,7 +117,7 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
 
         return hr, sr
 
-    def common_val_test_step(self, batch: Any):
+    def common_val_test_step(self, batch: Any) -> "MetricsResult":
         original = batch["original_data"]
         mask = batch["mask"].cpu().numpy()
         max_vals = batch["max"].cpu().numpy()
@@ -121,9 +125,7 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
 
         hr, sr = self.common_step(batch)
 
-        l1_loss, psnr_score, ssim_score, mae, mse, rmse = self.compute_metrics_common(
-            hr, sr
-        )
+        metrics = self.compute_metrics_common(hr, sr)
 
         denormalized_mae = []
         denormalized_mse = []
@@ -165,22 +167,20 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
         denormalized_rmse = np.mean(denormalized_rmse)
         denormalized_r2 = np.mean(denormalized_r2)
 
-        return (
-            denormalized_mae,
-            denormalized_mse,
-            denormalized_rmse,
-            denormalized_r2,
-            l1_loss,
-            mae,
-            mse,
-            psnr_score,
-            rmse,
-            ssim_score,
+        return MetricsResult(
+            denormalized_mae=denormalized_mae,
+            denormalized_mse=denormalized_mse,
+            denormalized_rmse=denormalized_rmse,
+            denormalized_r2=denormalized_r2,
+            pixel_level_loss=metrics.pixel_level_loss,
+            mae=metrics.mae,
+            mse=metrics.mse,
+            psnr=metrics.psnr,
+            rmse=metrics.rmse,
+            ssim=metrics.ssim,
         )
 
-    def compute_metrics_common(
-        self, hr: Tensor, sr: Tensor
-    ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+    def compute_metrics_common(self, hr: Tensor, sr: Tensor) -> "MetricsSimple":
         """
         Common step to compute all of the metrics.
 
@@ -188,8 +188,7 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             hr (Tensor): The ground truth HR image.
             sr (Tensor): The hallucinated SR image.
 
-        Returns (Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]): A tuple with metrics in following order:
-            L1_Loss, PSNR, SSIM, MAE, MSE, RMSE.
+        Returns (MetricsSimple): A dataclass with metrics: L1_Loss, PSNR, SSIM, MAE, MSE, RMSE.
 
         """
         loss = self.loss(sr, hr)
@@ -199,7 +198,14 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
         mse = mean_squared_error(sr, hr)
         rmse = torch.sqrt(mse)
 
-        return loss, psnr_score, ssim_score, mae, mse, rmse
+        return MetricsSimple(
+            pixel_level_loss=loss,
+            psnr=psnr_score,
+            ssim=ssim_score,
+            mae=mae,
+            mse=mse,
+            rmse=rmse,
+        )
 
     def training_step(self, batch: Any, batch_idx: int) -> Any:
         """
@@ -232,31 +238,11 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
         Returns (Dict[str, Union[float, int, Tensor]]): A dictionary with outputs for further processing.
 
         """
-        (
-            denormalized_mae,
-            denormalized_mse,
-            denormalized_rmse,
-            denormalized_r2,
-            l1_loss,
-            mae,
-            mse,
-            psnr_score,
-            rmse,
-            ssim_score,
-        ) = self.common_val_test_step(batch)
+        metrics = self.common_val_test_step(batch)
 
-        log_dict = {
-            "val/pixel_level_loss": l1_loss,
-            "val/psnr": psnr_score,
-            "val/ssim": ssim_score,
-            "val/mae": mae,
-            "val/mse": mse,
-            "val/rmse": rmse,
-            "val/denormalized_mae": denormalized_mae,
-            "val/denormalized_mse": denormalized_mse,
-            "val/denormalized_rmse": denormalized_rmse,
-            "val/denormalized_r2": denormalized_r2,
-        }
+        log_dict = dict(
+            list((f"val/{k}", v) for k, v in dataclasses.asdict(metrics).items())
+        )
 
         self.log_dict(log_dict, on_step=False, on_epoch=True)
 
@@ -264,7 +250,6 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
 
     def validation_epoch_end(self, outputs: List[Any]) -> None:
         """Compute and log hp_metric at the epoch level."""
-
         pixel_level_loss_mean = torch.stack(
             [output["val/pixel_level_loss"] for output in outputs]
         ).mean()
@@ -286,135 +271,141 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
         Returns (Dict[str, Union[float, int, Tensor]]): A dictionary with outputs for further processing.
 
         """
-        (
-            denormalized_mae,
-            denormalized_mse,
-            denormalized_rmse,
-            denormalized_r2,
-            l1_loss,
-            mae,
-            mse,
-            psnr_score,
-            rmse,
-            ssim_score,
-        ) = self.common_val_test_step(batch)
 
-        log_dict = {
-            "test/pixel_level_loss": l1_loss,
-            "test/psnr": psnr_score,
-            "test/ssim": ssim_score,
-            "test/mae": mae,
-            "test/mse": mse,
-            "test/rmse": rmse,
-            "test/denormalized_mae": denormalized_mae,
-            "test/denormalized_mse": denormalized_mse,
-            "test/denormalized_rmse": denormalized_rmse,
-            "test/denormalized_r2": denormalized_r2,
-        }
+        metrics = self.common_val_test_step(batch)
+
+        log_dict = dict(
+            list((f"test/{k}", v) for k, v in dataclasses.asdict(metrics).items())
+        )
 
         self.log_dict(log_dict, on_step=False, on_epoch=True)
 
-        return l1_loss
+        return metrics.pixel_level_loss
 
     def log_images(self) -> None:
         """Log a single batch of images from the validation set to monitor image quality progress."""
-
-        def norm_ip(img, min, max):
-            img.add_(-min).div_(max - min + 1e-5)
-            return img
+        if isinstance(self.logger, DummyLogger):
+            return
 
         batch = next(iter(self.trainer.datamodule.val_dataloader()))
 
         with torch.no_grad():
-            lr, hr, sr_nearest, elev, mask = (
+            lr, hr, nearest, cubic, elev, mask = (
                 batch["lr"],
                 batch["hr"],
                 batch["nearest"],
+                batch["cubic"],
                 batch["elevation"],
                 batch["mask"],
             )
 
-            self.logger.experiment.add_images(
-                "hr_images",
-                norm_ip(hr, float(hr.min()), float(hr.max())),
-                self.global_step,
-            )
-            self.logger.experiment.add_images(
-                "lr_images",
-                norm_ip(lr, float(lr.min()), float(lr.max())),
-                self.global_step,
-            )
-            self.logger.experiment.add_images(
-                "elevation",
-                norm_ip(elev, float(elev.min()), float(elev.max())),
-                self.global_step,
-            )
-            self.logger.experiment.add_images(
-                "sr_nearest",
-                norm_ip(sr_nearest, float(sr_nearest.min()), float(sr_nearest.max())),
-                self.global_step,
-            )
-
             lr = (
-                sr_nearest.to(self.device)
+                nearest.to(self.device)
                 if self.hparams.generator == "srcnn"
                 else lr.to(self.device)
             )
 
             if self.hparams.use_elevation:
-                x = torch.cat([sr_nearest, elev], dim=1).to(self.device)
+                x = torch.cat([nearest, elev], dim=1).to(self.device)
+            else:
+                x = lr
 
             sr = self(x)
-            self.logger.experiment.add_images(
-                "sr_images",
-                norm_ip(sr, float(sr.min()), float(sr.max())).clamp(0.0, 1.0),
-                self.global_step,
-            )
-
-            if isinstance(self.logger, DummyLogger):
-                return
 
             img_dir = os.path.join(self.logger.log_dir, "images")
 
             # run only on first epoch
             if self.current_epoch == 0:
                 os.makedirs(img_dir, exist_ok=True)
-                save_image(
-                    os.path.join(img_dir, f"hr-{self.hparams.experiment_name}.png"),
-                    hr,
-                    mask,
-                )
-                save_image(
-                    os.path.join(img_dir, f"lr-{self.hparams.experiment_name}.png"),
-                    lr,
-                )
-                save_image(
-                    os.path.join(img_dir, f"elev-{self.hparams.experiment_name}.png"),
-                    elev,
-                    mask,
-                )
-                save_tensor_batch_as_image(
-                    os.path.join(
-                        img_dir, f"sr-nearest-{self.hparams.experiment_name}.png"
-                    ),
-                    sr_nearest,
-                )
+                names = [
+                    "hr_images",
+                    "lr_images",
+                    "elevation",
+                    "nearest_interpolation",
+                    "cubic_interpolation",
+                ]
+                tensors = [hr, lr, elev, nearest, cubic]
+                self._log_images(img_dir, names, tensors)
 
-            save_image(
-                os.path.join(
-                    img_dir,
-                    f"sr-{self.hparams.experiment_name}-epoch={self.current_epoch}.png",
-                ),
-                sr,
-                mask,
+            self._log_images(img_dir, ["sr_images"], [sr])
+            self.save_fig(
+                hr=hr,
+                sr_nearest=nearest,
+                sr_cubic=cubic,
+                sr=sr,
+                elev=elev,
+                mask=mask,
+                img_dir=img_dir,
             )
 
-            self.save_fig(hr, sr_nearest, sr, elev, mask, img_dir)
+    def _log_images(self, img_dir, names, tensors):
+        for name, tensor in zip(names, tensors):
+            image_fp = os.path.join(
+                img_dir,
+                f"{name}-{self.hparams.experiment_name}-step={self.global_step}.png",
+            )
+            self._save_tensor_batch_as_image(image_fp, tensor)
+            self._log_images_from_file(image_fp, name)
+
+    def _log_images_from_file(self, fp: str, name: str) -> None:
+        img = Image.open(fp).convert("RGB")
+        tensor = ToTensor()(img).unsqueeze(0)  # make it NxCxHxW
+        self.logger.experiment.add_images(
+            name,
+            tensor,
+            self.global_step,
+        )
+
+    def _save_tensor_batch_as_image(
+        self, out_path: str, images_tensor: Tensor, mask_tensor: Optional[Tensor] = None
+    ) -> None:
+        """Save a given Tensor into an image file.
+
+        Args:
+            out_path (str): The output filename.
+            images_tensor (Tensor): The tensor with images.
+            mask_tensor (Optional[Tensor]): The optional tensor with masks.
+        """
+
+        if mask_tensor is not None:
+            assert mask_tensor.shape[0] == images_tensor.shape[0], (
+                "Images tensor has to have the same number of elements as mask tensor, the shapes were: "
+                f"{images_tensor.shape} (images) and {mask_tensor.shape} (masks)."
+            )
+
+        # ensure we only plot max of 88 images
+        nitems = np.minimum(88, images_tensor.shape[0])
+        nrows = 8
+        ncols = nitems // nrows
+
+        img_grid = (
+            make_grid(images_tensor[:nitems], nrow=nrows)[0]
+            .to("cpu", torch.float32)
+            .numpy()
+        )  # select only single channel since we deal with 2D data anyway
+
+        if mask_tensor is not None:
+            mask_grid = (
+                self.batch_tensor_to_grid(mask_tensor[:nitems], nrow=nrows)
+                .squeeze(0)
+                .to("cpu")
+                .numpy()
+            )
+            img_grid[mask_grid] = np.nan
+
+        cmap = matplotlib.cm.jet.copy()
+        cmap.set_bad("black", 1.0)
+        plt.figure(figsize=(2 * nrows, 2 * ncols))
+        plt.imshow(img_grid, cmap=cmap, aspect="auto")
+        plt.axis("off")
+
+        plt.savefig(out_path, bbox_inches="tight")
 
     def save_fig(
         self,
         hr: Tensor,
         sr_nearest: Tensor,
+        sr_cubic: Tensor,
         sr: Tensor,
         elev: Tensor,
         mask: Tensor,
@@ -427,6 +418,7 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
         Args:
             hr (Tensor): The HR image tensor.
             sr_nearest (Tensor):The Nearest Interpolation image tensor.
+            sr_cubic (Tensor):The Cubic Interpolation image tensor.
             sr (Tensor): The SR image tensor.
             elev (Tensor): The Elevation image tensor.
             mask (Tensor): The Land Mask image tensor.
@@ -434,10 +426,11 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             items (Optional[int]): Optional number of items from batch to save. 16 by default.
 
         """
+        ncols = 5 if self.hparams.use_elevation else 4
         fig, axes = plt.subplots(
             nrows=items,
-            ncols=4,
-            figsize=(5, 1.5 * items),
+            ncols=ncols,
+            figsize=(10, 2.2 * items),
             sharey=True,
             constrained_layout=True,
         )
@@ -445,33 +438,59 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
         cmap = matplotlib.cm.jet.copy()
         cmap.set_bad("black", 1.0)
 
-        cols = ["HR", "Nearest", "Elevation", "SR"]
+        cols = ["HR", "Elevation", "Nearest", "Cubic", "SR"]
+        if not self.hparams.use_elevation:
+            cols.remove("Elevation")
 
         for ax, col in zip(axes[0], cols):
             ax.set_title(col)
 
         nearest_arr = sr_nearest.squeeze(1).cpu().numpy()
+        cubic_arr = sr_cubic.squeeze(1).cpu().numpy()
         hr_arr = hr.squeeze(1).cpu().numpy()
         elev_arr = elev.squeeze(1).cpu().numpy()
         sr_arr = sr.squeeze(1).cpu().numpy()
 
         for i in range(items):
             hr_arr[i][mask[i]] = np.nan
-            nearest_arr[i][mask[i]] = np.nan
             elev_arr[i][mask[i]] = np.nan
+            nearest_arr[i][mask[i]] = np.nan
+            cubic_arr[i][mask[i]] = np.nan
             sr_arr[i][mask[i]] = np.nan
 
             axes[i][0].imshow(hr_arr[i], cmap=cmap, vmin=0, vmax=1)
-            axes[i][1].imshow(nearest_arr[i], cmap=cmap, vmin=0, vmax=1)
-            axes[i][2].imshow(elev_arr[i], cmap=cmap, vmin=0, vmax=1)
-            axes[i][3].imshow(sr_arr[i], cmap=cmap, vmin=0, vmax=1)
+            axes[i][0].set_xlabel("MAE/RMSE")
 
-        fig.suptitle(f"Validation batch, epoch={self.current_epoch}", fontsize=16)
+            if self.hparams.use_elevation:
+                axes[i][1].imshow(elev_arr[i], cmap=cmap, vmin=0, vmax=1)
+
+            hr_arr[i][mask[i]] = 0.0
+
+            offset = 2 if self.hparams.use_elevation else 1
+            for idx, arr in enumerate([nearest_arr, cubic_arr, sr_arr]):
+                axes[i][offset + idx].imshow(arr[i], cmap=cmap, vmin=0, vmax=1)
+                arr[i][mask[i]] = 0.0
+                diff = hr - arr
+                mae = np.absolute(diff).mean()
+                rmse = np.sqrt((diff ** 2).mean())
+                axes[i][offset + idx].set_xlabel(f"{rmse:.3f}/{mae:.3f}")
+
+            for j in range(ncols):
+                axes[i][j].xaxis.set_ticklabels([])
+                axes[i][j].xaxis.set_ticklabels([])
+
+        plt.xticks([])
+        plt.yticks([])
+
+        fig.suptitle(
+            f"Validation batch, epoch={self.current_epoch}, step={self.global_step}",
+            fontsize=16,
+        )
 
         plt.savefig(
             os.path.join(
                 img_dir,
-                f"figure-{self.hparams.experiment_name}-epoch={self.current_epoch}.png",
+                f"figure-{self.hparams.experiment_name}-epoch={self.current_epoch}-step={self.global_step}.png",
             )
         )
 
@@ -492,7 +511,44 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
         return [optimizer], [scheduler]
 
     @staticmethod
-    def add_model_specific_args(parent: argparse.ArgumentParser):
+    def batch_tensor_to_grid(
+        tensor: Tensor, nrow: int = 8, padding: int = 2, pad_value: Any = False
+    ):
+        """
+        Make the mini-batch of images into a grid
+
+        Args:
+            tensor (Tensor): The tensor.
+            nrow (int): Number of rows
+            padding (int): The padding.
+            pad_value (Any): The padding value.
+
+        Returns:
+
+        """
+        nmaps = tensor.size(0)
+        xmaps = min(nrow, nmaps)
+        ymaps = int(math.ceil(float(nmaps) / xmaps))
+        height, width = int(tensor.size(1) + padding), int(tensor.size(2) + padding)
+        grid = tensor.new_full(
+            (1, height * ymaps + padding, width * xmaps + padding), pad_value
+        )
+        k = 0
+        for y in range(ymaps):
+            for x in range(xmaps):
+                if k >= nmaps:
+                    break
+                grid.narrow(1, y * height + padding, height - padding).narrow(
+                    2, x * width + padding, width - padding
+                ).copy_(tensor[k])
+                k = k + 1
+
+        return grid
+
+    @staticmethod
+    def add_model_specific_args(
+        parent: argparse.ArgumentParser,
+    ) -> argparse.ArgumentParser:
         parser = argparse.ArgumentParser(
             parents=[parent], add_help=False, conflict_handler="resolve"
         )
@@ -529,3 +585,27 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
         parser.add_argument("--num_rrfdb_blocks", default=8, type=int)
         parser.add_argument("--use_elevation", default=False, type=bool)
         return parser
+
+
+@dataclass
+class MetricsResult:
+    denormalized_mae: Union[np.ndarray, Tensor, float]
+    denormalized_mse: Union[np.ndarray, Tensor, float]
+    denormalized_rmse: Union[np.ndarray, Tensor, float]
+    denormalized_r2: Union[np.ndarray, Tensor, float]
+    pixel_level_loss: Union[np.ndarray, Tensor, float]
+    mae: Union[np.ndarray, Tensor, float]
+    mse: Union[np.ndarray, Tensor, float]
+    psnr: Union[np.ndarray, Tensor, float]
+    rmse: Union[np.ndarray, Tensor, float]
+    ssim: Union[np.ndarray, Tensor, float]
+
+
+@dataclass
+class MetricsSimple:
+    pixel_level_loss: Union[np.ndarray, Tensor, float]
+    mae: Union[np.ndarray, Tensor, float]
+    mse: Union[np.ndarray, Tensor, float]
+    psnr: Union[np.ndarray, Tensor, float]
+    rmse: Union[np.ndarray, Tensor, float]
+    ssim: Union[np.ndarray, Tensor, float]

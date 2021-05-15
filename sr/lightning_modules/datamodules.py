@@ -188,7 +188,7 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         parser.add_argument(
             "--data_path",
             type=str,
-            default="../datasets/",
+            default="./datasets/",
         )
         parser.add_argument(
             "--world_clim_variable",

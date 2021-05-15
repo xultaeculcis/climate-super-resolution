@@ -109,7 +109,7 @@ def run_inference_on_tiles(
     # get elevation data
     elevation_df = pd.read_csv(
         os.path.join(
-            "../datasets",
+            "datasets",
             WorldClimConfig.elevation,
             f"{scaling_factor}x",
             f"{WorldClimConfig.elevation}.csv",

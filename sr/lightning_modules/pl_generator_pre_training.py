@@ -1,19 +1,13 @@
 # -*- coding: utf-8 -*-
 import argparse
 import dataclasses
-import math
-import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import matplotlib
-import matplotlib.pyplot as plt
 import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
-from PIL import Image
-from pytorch_lightning.loggers.base import DummyLogger
 from pytorch_lightning.metrics.functional import (
     mean_absolute_error,
     mean_squared_error,
@@ -21,8 +15,6 @@ from pytorch_lightning.metrics.functional import (
     ssim,
 )
 from torch import Tensor
-from torchvision.transforms import ToTensor
-from torchvision.utils import make_grid
 
 from sr.data.utils import denormalize
 from sr.models.drln import DRLN
@@ -207,6 +199,12 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             rmse=rmse,
         )
 
+    def on_train_start(self):
+        """Run additional steps when training starts."""
+        self.logger.log_hyperparams(
+            self.hparams, {"hp_metric": self.hparams.initial_hp_metric_val}
+        )
+
     def training_step(self, batch: Any, batch_idx: int) -> Any:
         """
         Runs training step.
@@ -255,7 +253,6 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
         ).mean()
 
         self.log("hp_metric", pixel_level_loss_mean)
-        self.log_images()
 
     def test_step(
         self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None
@@ -282,218 +279,6 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
 
         return metrics.pixel_level_loss
 
-    def log_images(self) -> None:
-        """Log a single batch of images from the validation set to monitor image quality progress."""
-        if isinstance(self.logger, DummyLogger):
-            return
-
-        batch = next(iter(self.trainer.datamodule.val_dataloader()))
-
-        with torch.no_grad():
-            lr, hr, nearest, cubic, elev, mask = (
-                batch["lr"],
-                batch["hr"],
-                batch["nearest"],
-                batch["cubic"],
-                batch["elevation"],
-                batch["mask"],
-            )
-
-            lr = (
-                nearest.to(self.device)
-                if self.hparams.generator == "srcnn"
-                else lr.to(self.device)
-            )
-
-            if self.hparams.use_elevation:
-                x = torch.cat([nearest, elev], dim=1).to(self.device)
-            else:
-                x = lr
-
-            sr = self(x)
-
-            img_dir = os.path.join(self.logger.log_dir, "images")
-
-            # run only on first epoch
-            if self.current_epoch == 0:
-                os.makedirs(img_dir, exist_ok=True)
-                names = [
-                    "hr_images",
-                    "lr_images",
-                    "elevation",
-                    "nearest_interpolation",
-                    "cubic_interpolation",
-                ]
-                tensors = [hr, lr, elev, nearest, cubic]
-                self._log_images(img_dir, names, tensors)
-
-            self._log_images(img_dir, ["sr_images"], [sr])
-            self.save_fig(
-                hr=hr,
-                sr_nearest=nearest,
-                sr_cubic=cubic,
-                sr=sr,
-                elev=elev,
-                mask=mask,
-                img_dir=img_dir,
-            )
-
-    def _log_images(self, img_dir, names, tensors):
-        for name, tensor in zip(names, tensors):
-            image_fp = os.path.join(
-                img_dir,
-                f"{name}-{self.hparams.experiment_name}-step={self.global_step}.png",
-            )
-            self._save_tensor_batch_as_image(image_fp, tensor)
-            self._log_images_from_file(image_fp, name)
-
-    def _log_images_from_file(self, fp: str, name: str) -> None:
-        img = Image.open(fp).convert("RGB")
-        tensor = ToTensor()(img).unsqueeze(0)  # make it NxCxHxW
-        self.logger.experiment.add_images(
-            name,
-            tensor,
-            self.global_step,
-        )
-
-    def _save_tensor_batch_as_image(
-        self, out_path: str, images_tensor: Tensor, mask_tensor: Optional[Tensor] = None
-    ) -> None:
-        """Save a given Tensor into an image file.
-
-        Args:
-            out_path (str): The output filename.
-            images_tensor (Tensor): The tensor with images.
-            mask_tensor (Optional[Tensor]): The optional tensor with masks.
-        """
-
-        if mask_tensor is not None:
-            assert mask_tensor.shape[0] == images_tensor.shape[0], (
-                "Images tensor has to have the same number of elements as mask tensor, the shapes were: "
-                f"{images_tensor.shape} (images) and {mask_tensor.shape} (masks)."
-            )
-
-        # ensure we only plot max of 88 images
-        nitems = np.minimum(88, images_tensor.shape[0])
-        nrows = 8
-        ncols = nitems // nrows
-
-        img_grid = (
-            make_grid(images_tensor[:nitems], nrow=nrows)[0]
-            .to("cpu", torch.float32)
-            .numpy()
-        )  # select only single channel since we deal with 2D data anyway
-
-        if mask_tensor is not None:
-            mask_grid = (
-                self.batch_tensor_to_grid(mask_tensor[:nitems], nrow=nrows)
-                .squeeze(0)
-                .to("cpu")
-                .numpy()
-            )
-            img_grid[mask_grid] = np.nan
-
-        cmap = matplotlib.cm.jet.copy()
-        cmap.set_bad("black", 1.0)
-        plt.figure(figsize=(2 * nrows, 2 * ncols))
-        plt.imshow(img_grid, cmap=cmap, aspect="auto")
-        plt.axis("off")
-
-        plt.savefig(out_path, bbox_inches="tight")
-
-    def save_fig(
-        self,
-        hr: Tensor,
-        sr_nearest: Tensor,
-        sr_cubic: Tensor,
-        sr: Tensor,
-        elev: Tensor,
-        mask: Tensor,
-        img_dir: str,
-        items: Optional[int] = 16,
-    ) -> None:
-        """
-        Save batch data as plot.
-
-        Args:
-            hr (Tensor): The HR image tensor.
-            sr_nearest (Tensor):The Nearest Interpolation image tensor.
-            sr_cubic (Tensor):The Cubic Interpolation image tensor.
-            sr (Tensor): The SR image tensor.
-            elev (Tensor): The Elevation image tensor.
-            mask (Tensor): The Land Mask image tensor.
-            img_dir (str): The output dir.
-            items (Optional[int]): Optional number of items from batch to save. 16 by default.
-
-        """
-        ncols = 5 if self.hparams.use_elevation else 4
-        fig, axes = plt.subplots(
-            nrows=items,
-            ncols=ncols,
-            figsize=(10, 2.2 * items),
-            sharey=True,
-            constrained_layout=True,
-        )
-
-        cmap = matplotlib.cm.jet.copy()
-        cmap.set_bad("black", 1.0)
-
-        cols = ["HR", "Elevation", "Nearest", "Cubic", "SR"]
-        if not self.hparams.use_elevation:
-            cols.remove("Elevation")
-
-        for ax, col in zip(axes[0], cols):
-            ax.set_title(col)
-
-        nearest_arr = sr_nearest.squeeze(1).cpu().numpy()
-        cubic_arr = sr_cubic.squeeze(1).cpu().numpy()
-        hr_arr = hr.squeeze(1).cpu().numpy()
-        elev_arr = elev.squeeze(1).cpu().numpy()
-        sr_arr = sr.squeeze(1).cpu().numpy()
-
-        for i in range(items):
-            hr_arr[i][mask[i]] = np.nan
-            elev_arr[i][mask[i]] = np.nan
-            nearest_arr[i][mask[i]] = np.nan
-            cubic_arr[i][mask[i]] = np.nan
-            sr_arr[i][mask[i]] = np.nan
-
-            axes[i][0].imshow(hr_arr[i], cmap=cmap, vmin=0, vmax=1)
-            axes[i][0].set_xlabel("MAE/RMSE")
-
-            if self.hparams.use_elevation:
-                axes[i][1].imshow(elev_arr[i], cmap=cmap, vmin=0, vmax=1)
-
-            hr_arr[i][mask[i]] = 0.0
-
-            offset = 2 if self.hparams.use_elevation else 1
-            for idx, arr in enumerate([nearest_arr, cubic_arr, sr_arr]):
-                axes[i][offset + idx].imshow(arr[i], cmap=cmap, vmin=0, vmax=1)
-                arr[i][mask[i]] = 0.0
-                diff = hr - arr
-                mae = np.absolute(diff).mean()
-                rmse = np.sqrt((diff ** 2).mean())
-                axes[i][offset + idx].set_xlabel(f"{rmse:.3f}/{mae:.3f}")
-
-            for j in range(ncols):
-                axes[i][j].xaxis.set_ticklabels([])
-                axes[i][j].xaxis.set_ticklabels([])
-
-        plt.xticks([])
-        plt.yticks([])
-
-        fig.suptitle(
-            f"Validation batch, epoch={self.current_epoch}, step={self.global_step}",
-            fontsize=16,
-        )
-
-        plt.savefig(
-            os.path.join(
-                img_dir,
-                f"figure-{self.hparams.experiment_name}-epoch={self.current_epoch}-step={self.global_step}.png",
-            )
-        )
-
     def configure_optimizers(
         self,
     ) -> Tuple[List[torch.optim.Optimizer], List[Dict[str, Union[str, Any]]]]:
@@ -509,41 +294,6 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
         )
         scheduler = {"scheduler": scheduler, "interval": "step"}
         return [optimizer], [scheduler]
-
-    @staticmethod
-    def batch_tensor_to_grid(
-        tensor: Tensor, nrow: int = 8, padding: int = 2, pad_value: Any = False
-    ):
-        """
-        Make the mini-batch of images into a grid
-
-        Args:
-            tensor (Tensor): The tensor.
-            nrow (int): Number of rows
-            padding (int): The padding.
-            pad_value (Any): The padding value.
-
-        Returns:
-
-        """
-        nmaps = tensor.size(0)
-        xmaps = min(nrow, nmaps)
-        ymaps = int(math.ceil(float(nmaps) / xmaps))
-        height, width = int(tensor.size(1) + padding), int(tensor.size(2) + padding)
-        grid = tensor.new_full(
-            (1, height * ymaps + padding, width * xmaps + padding), pad_value
-        )
-        k = 0
-        for y in range(ymaps):
-            for x in range(xmaps):
-                if k >= nmaps:
-                    break
-                grid.narrow(1, y * height + padding, height - padding).narrow(
-                    2, x * width + padding, width - padding
-                ).copy_(tensor[k])
-                k = k + 1
-
-        return grid
 
     @staticmethod
     def add_model_specific_args(
@@ -575,6 +325,12 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             default=1e2,
             type=float,
             help="Determines the minimum learning rate via min_lr = initial_lr/final_div_factor",
+        )
+        parser.add_argument(
+            "--initial_hp_metric_val",
+            default=1e-2,
+            type=float,
+            help="The initial value for the `hp_metric`.",
         )
         parser.add_argument("--gen_in_channels", default=1, type=int)
         parser.add_argument("--gen_out_channels", default=1, type=int)

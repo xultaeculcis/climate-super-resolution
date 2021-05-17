@@ -11,6 +11,7 @@ from pytorch_lightning.callbacks import (
     ModelCheckpoint,
 )
 
+from sr.lightning_modules.callbacks import LogImagesCallback
 from sr.lightning_modules.pl_gan import GANLightningModule
 from sr.lightning_modules.datamodules import SuperResolutionDataModule
 from sr.lightning_modules.pl_generator_pre_training import (
@@ -54,7 +55,7 @@ def prepare_pl_trainer(args: argparse.Namespace) -> pl.Trainer:
     """
     experiment_name = f"{args.experiment_name}-{args.generator}-{args.world_clim_variable}-{args.world_clim_multiplier}"
     tb_logger = pl_loggers.TensorBoardLogger(
-        args.log_dir, name=experiment_name, default_hp_metric=True
+        args.log_dir, name=experiment_name, default_hp_metric=False
     )
     monitor_metric = args.checkpoint_monitor_metric
     mode = "min"
@@ -73,13 +74,19 @@ def prepare_pl_trainer(args: argparse.Namespace) -> pl.Trainer:
         save_top_k=args.save_top_k,
     )
     lr_monitor = LearningRateMonitor(logging_interval="step")
-    callbacks = [lr_monitor, early_stop_callback]
-    checkpoint_callback = model_checkpoint
+    image_logger_callback = LogImagesCallback(
+        args.generator, args.experiment_name, args.use_elevation
+    )
+    callbacks = [
+        lr_monitor,
+        early_stop_callback,
+        model_checkpoint,
+        image_logger_callback,
+    ]
     pl_trainer = pl.Trainer.from_argparse_args(
         args,
         logger=tb_logger,
         callbacks=callbacks,
-        checkpoint_callback=checkpoint_callback,
     )
     return pl_trainer
 

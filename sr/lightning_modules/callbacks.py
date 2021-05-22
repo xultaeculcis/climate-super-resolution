@@ -16,6 +16,8 @@ from torch import Tensor
 from torchvision.transforms import ToTensor
 from torchvision.utils import make_grid
 
+MAX_ITEMS = 88
+
 
 class LogImagesCallback(Callback):
     def __init__(
@@ -80,9 +82,9 @@ class LogImagesCallback(Callback):
                     "cubic_interpolation",
                 ]
                 tensors = [hr, lr, elev, nearest, cubic]
-                self._log_images(pl_module, img_dir, names, tensors)
+                self._log_images(pl_module, img_dir, names, tensors, mask)
 
-            self._log_images(pl_module, img_dir, ["sr_images"], [sr])
+            self._log_images(pl_module, img_dir, ["sr_images"], [sr], mask)
             self._save_fig(
                 hr=hr,
                 sr_nearest=nearest,
@@ -101,13 +103,14 @@ class LogImagesCallback(Callback):
         img_dir: str,
         names: List[str],
         tensors: List[Tensor],
+        mask: Tensor,
     ):
         for name, tensor in zip(names, tensors):
             image_fp = os.path.join(
                 img_dir,
-                f"{name}-{self.experiment_name}-step={pl_module.global_step}.png",
+                f"{name}-{self.experiment_name}-epoch={pl_module.current_epoch}-step={pl_module.global_step}.png",
             )
-            self._save_tensor_batch_as_image(image_fp, tensor)
+            self._save_tensor_batch_as_image(image_fp, tensor, mask)
             self._log_images_from_file(pl_module, image_fp, name)
 
     def _save_tensor_batch_as_image(
@@ -128,7 +131,7 @@ class LogImagesCallback(Callback):
             )
 
         # ensure we only plot max of 88 images
-        nitems = np.minimum(88, images_tensor.shape[0])
+        nitems = np.minimum(MAX_ITEMS, images_tensor.shape[0])
         nrows = 8
         ncols = nitems // nrows
 
@@ -209,29 +212,47 @@ class LogImagesCallback(Callback):
         elev_arr = elev.squeeze(1).cpu().numpy()
         sr_arr = sr.squeeze(1).cpu().numpy()
 
-        for i in range(items):
-            hr_arr[i][mask[i]] = np.nan
-            elev_arr[i][mask[i]] = np.nan
-            nearest_arr[i][mask[i]] = np.nan
-            cubic_arr[i][mask[i]] = np.nan
-            sr_arr[i][mask[i]] = np.nan
+        hr_arr = hr_arr[:items]
+        elev_arr = elev_arr[:items]
+        nearest_arr = nearest_arr[:items]
+        cubic_arr = cubic_arr[:items]
+        sr_arr = sr_arr[:items]
+        mask = mask[:items]
 
+        hr_arr[mask] = 0.0
+        elev_arr[mask] = 0.0
+        nearest_arr[mask] = 0.0
+        cubic_arr[mask] = 0.0
+        sr_arr[mask] = 0.0
+
+        arrs = [nearest_arr, cubic_arr, sr_arr]
+        maes = []
+        rmses = []
+        for arr in arrs:
+            diff = hr_arr - arr
+            rmses.append(np.sqrt(np.mean(diff ** 2, axis=(1, 2))))
+            maes.append(np.mean(np.absolute(diff), axis=(1, 2)))
+
+        hr_arr[mask] = np.nan
+        elev_arr[mask] = np.nan
+        nearest_arr[mask] = np.nan
+        cubic_arr[mask] = np.nan
+        sr_arr[mask] = np.nan
+
+        for i in range(items):
             axes[i][0].imshow(hr_arr[i], cmap=cmap, vmin=0, vmax=1)
             axes[i][0].set_xlabel("MAE/RMSE")
 
             if self.use_elevation:
                 axes[i][1].imshow(elev_arr[i], cmap=cmap, vmin=0, vmax=1)
-
-            hr_arr[i][mask[i]] = 0.0
+                axes[i][0].set_xlabel("-/-")
 
             offset = 2 if self.use_elevation else 1
-            for idx, arr in enumerate([nearest_arr, cubic_arr, sr_arr]):
+            for idx, arr in enumerate(arrs):
                 axes[i][offset + idx].imshow(arr[i], cmap=cmap, vmin=0, vmax=1)
-                arr[i][mask[i]] = 0.0
-                diff = hr - arr
-                mae = np.absolute(diff).mean()
-                rmse = np.sqrt((diff ** 2).mean())
-                axes[i][offset + idx].set_xlabel(f"{rmse:.3f}/{mae:.3f}")
+                mae_value = maes[idx][i]
+                rmse_value = rmses[idx][i]
+                axes[i][offset + idx].set_xlabel(f"{mae_value:.3f}/{rmse_value:.3f}")
 
             for j in range(ncols):
                 axes[i][j].xaxis.set_ticklabels([])

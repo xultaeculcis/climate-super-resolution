@@ -5,6 +5,7 @@ class WorldClimConfig:
     elevation = "elevation"
     tmin = "tmin"
     tmax = "tmax"
+    temp = "temp"
     prec = "prec"
     variables_wc = [
         "tmin",

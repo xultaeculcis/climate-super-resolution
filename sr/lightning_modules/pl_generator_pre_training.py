@@ -304,7 +304,7 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
         )
         parser.add_argument(
             "--max_lr",
-            default=1e-4,
+            default=6e-4,
             type=float,
             help="The max learning rate for the 1Cycle LR Scheduler",
         )
@@ -332,14 +332,14 @@ class GeneratorPreTrainingLightningModule(pl.LightningModule):
             type=float,
             help="The initial value for the `hp_metric`.",
         )
-        parser.add_argument("--gen_in_channels", default=1, type=int)
+        parser.add_argument("--gen_in_channels", default=2, type=int)
         parser.add_argument("--gen_out_channels", default=1, type=int)
         parser.add_argument("--nf", default=64, type=int)
         parser.add_argument("--nb", default=23, type=int)
         parser.add_argument("--gc", default=32, type=int)
         parser.add_argument("--num_rrdb_blocks", default=16, type=int)
         parser.add_argument("--num_rrfdb_blocks", default=8, type=int)
-        parser.add_argument("--use_elevation", default=False, type=bool)
+        parser.add_argument("--use_elevation", default=True, type=bool)
         return parser
 
 

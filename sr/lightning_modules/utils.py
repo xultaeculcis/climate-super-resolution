@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import argparse
+import os
 from typing import Tuple
 
 import pytorch_lightning as pl
@@ -69,7 +70,10 @@ def prepare_pl_trainer(args: argparse.Namespace) -> pl.Trainer:
         monitor=monitor_metric,
         verbose=True,
         mode=mode,
-        dirpath=args.save_model_path,
+        dirpath=os.path.join(
+            args.save_model_path,
+            f"use_elevation={args.use_elevation}-batch_size={args.batch_size}",
+        ),
         filename=f"{experiment_name}-{{epoch:02d}}-{{step:05d}}-{{{monitor_metric}:.5f}}",
         save_top_k=args.save_top_k,
     )

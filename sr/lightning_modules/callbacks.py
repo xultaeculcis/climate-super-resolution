@@ -245,7 +245,7 @@ class LogImagesCallback(Callback):
 
             if self.use_elevation:
                 axes[i][1].imshow(elev_arr[i], cmap=cmap, vmin=0, vmax=1)
-                axes[i][0].set_xlabel("-/-")
+                axes[i][1].set_xlabel("-/-")
 
             offset = 2 if self.use_elevation else 1
             for idx, arr in enumerate(arrs):

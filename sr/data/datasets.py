@@ -155,6 +155,8 @@ class ClimateDataset(Dataset):
         img_sr_cubic = self.to_tensor(
             np.array(self.upscale_cubic(img_lr), dtype=np.float32)
         )
+
+        img_elev_lr = self.to_tensor(np.array(self.resize(img_elev), dtype=np.float32))
         img_lr = self.to_tensor(np.array(img_lr, dtype=np.float32))
         img_hr = self.to_tensor(np.array(img_hr, dtype=np.float32))
         img_elev = self.to_tensor(np.array(img_elev, dtype=np.float32))
@@ -163,6 +165,7 @@ class ClimateDataset(Dataset):
             "lr": img_lr,
             "hr": img_hr,
             "elevation": img_elev,
+            "elevation_lr": img_elev_lr,
             "nearest": img_sr_nearest,
             "cubic": img_sr_cubic,
             "original_data": original_image,

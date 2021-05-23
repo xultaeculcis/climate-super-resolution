@@ -107,7 +107,7 @@ if __name__ == "__main__":
     arguments = parser.parse_args()
     arguments = parse_args(arguments)
 
-    for var in [WorldClimConfig.variables_wc] + [WorldClimConfig.temp]:
+    for var in [WorldClimConfig.tmin, WorldClimConfig.tmax]:
         for use_elev in [True, False]:
             pl.seed_everything(seed=arguments.seed)
 

@@ -2,13 +2,16 @@
 import logging
 import os
 from argparse import ArgumentParser
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Union
 
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
+from sr.data import normalization
+from sr.pre_processing.cruts_config import CRUTSConfig
+from sr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
 from sr.data.datasets import ClimateDataset
 from sr.pre_processing.world_clim_config import WorldClimConfig
 
@@ -28,6 +31,8 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         num_workers: Optional[int] = 4,
         hr_size: Optional[int] = 128,
         seed: Optional[int] = 42,
+        normalization_method: Optional[str] = normalization.minmax,
+        normalization_range: Optional[Tuple[float, float]] = (0.0, 1.0),
     ):
         super(SuperResolutionDataModule, self).__init__()
 
@@ -42,8 +47,10 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         self.hr_size = hr_size
         self.seed = seed
         self.generator_type = generator_type
+        self.normalization_method = normalization_method
+        self.normalization_range = normalization_range
 
-        train_df, val_df, test_dfs, elevation_df = self.load_data()
+        train_df, val_df, test_dfs, elevation_df, standardize_stats = self.load_data()
 
         logging.info(
             f"'{self.world_clim_variable}' - Train/Validation/Test split sizes (HR): "
@@ -56,7 +63,12 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             hr_size=self.hr_size,
             stage="train",
             generator_type=self.generator_type,
+            variable=self.world_clim_variable,
             scaling_factor=self.scale_factor,
+            normalize=self.normalization_method == normalization.minmax,
+            standardize=self.normalization_method == normalization.zscore,
+            standardize_stats=standardize_stats,
+            normalize_range=self.normalization_range,
         )
         self.val_dataset = ClimateDataset(
             df=val_df,
@@ -64,7 +76,12 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             hr_size=self.hr_size,
             stage="val",
             generator_type=self.generator_type,
+            variable=self.world_clim_variable,
             scaling_factor=self.scale_factor,
+            normalize=self.normalization_method == normalization.minmax,
+            standardize=self.normalization_method == normalization.zscore,
+            standardize_stats=standardize_stats,
+            normalize_range=self.normalization_range,
         )
         self.test_datasets = [
             ClimateDataset(
@@ -73,7 +90,12 @@ class SuperResolutionDataModule(pl.LightningDataModule):
                 hr_size=self.hr_size,
                 stage="test",
                 generator_type=self.generator_type,
+                variable=self.world_clim_variable,
                 scaling_factor=self.scale_factor,
+                normalize=self.normalization_method == normalization.minmax,
+                standardize=self.normalization_method == normalization.zscore,
+                standardize_stats=standardize_stats,
+                normalize_range=self.normalization_range,
             )
             for test_df in test_dfs
         ]
@@ -127,12 +149,18 @@ class SuperResolutionDataModule(pl.LightningDataModule):
 
     def load_data(
         self,
-    ) -> Tuple[pd.DataFrame, pd.DataFrame, List[pd.DataFrame], pd.DataFrame]:
+    ) -> Tuple[
+        pd.DataFrame,
+        pd.DataFrame,
+        List[pd.DataFrame],
+        pd.DataFrame,
+        Union[Dict[str, float], None],
+    ]:
         elevation_df = self.load_dataframe(
             WorldClimConfig.elevation, f"{WorldClimConfig.elevation}.csv"
         )
 
-        stats_df = pd.read_csv(os.path.join(self.data_path, "statistics.csv"))
+        stats_df = pd.read_csv(os.path.join(self.data_path, "statistics_min_max.csv"))
 
         if self.world_clim_variable == "temp":
             train_dfs = []
@@ -172,7 +200,7 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             )
             output_test_dfs.append(test_df)
 
-        return train_df, val_df, output_test_dfs, elevation_df
+        return train_df, val_df, output_test_dfs, elevation_df, CRUTSConfig.statistics
 
     @staticmethod
     def add_data_specific_args(parent_parser: ArgumentParser) -> ArgumentParser:
@@ -188,7 +216,7 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         parser.add_argument(
             "--data_path",
             type=str,
-            default="./datasets/",
+            default="datasets/",
         )
         parser.add_argument(
             "--world_clim_variable",
@@ -205,6 +233,17 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         parser.add_argument("--hr_size", type=int, default=128)
         parser.add_argument("--scale_factor", type=int, default=4)
         parser.add_argument("--seed", type=int, default=42)
+        parser.add_argument(
+            "--normalization_method",
+            type=str,
+            default=normalization.minmax,
+            choices=[normalization.minmax, normalization.zscore],
+        )
+        parser.add_argument(
+            "--normalization_range",
+            type=Tuple[float, float],
+            default=(-1.0, 1.0),
+        )
         return parser
 
 
@@ -215,7 +254,7 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser = SuperResolutionDataModule.add_data_specific_args(parser)
     args = parser.parse_args()
-    args.batch_size = 64
+    args.batch_size = 512
 
     def plot_array(arr, figsize=None):
         plt.figure(figsize=figsize)
@@ -223,7 +262,7 @@ if __name__ == "__main__":
         plt.show()
 
     dm = SuperResolutionDataModule(
-        data_path=os.path.join("..", args.data_path),
+        data_path=os.path.join("../..", args.data_path),
         world_clim_variable=args.world_clim_variable,
         world_clim_multiplier=args.world_clim_multiplier,
         generator_type="srcnn",
@@ -232,6 +271,8 @@ if __name__ == "__main__":
         hr_size=args.hr_size,
         scale_factor=args.scale_factor,
         seed=args.seed,
+        normalization_method=args.normalization_method,
+        normalization_range=args.normalization_range,
     )
 
     # plot_single_batch(dm.train_dataloader(), keys=["lr", "hr", "elevation", "nearest"])
@@ -244,6 +285,11 @@ if __name__ == "__main__":
         pin_memory=True,
         num_workers=1,
     )
+
+    stats = CRUTSConfig.statistics[
+        world_clim_to_cruts_mapping[args.world_clim_variable]
+    ]
+    stats_elev = CRUTSConfig.statistics[CRUTSConfig.elev]
 
     for _, batch in enumerate(dl):
         lr = batch["lr"]
@@ -281,16 +327,48 @@ if __name__ == "__main__":
         elev_arr = elev.squeeze(1).cpu().numpy()
         sr_arr = hr.squeeze(1).cpu().numpy()
 
+        standardize = args.normalization_method == normalization.zscore
+
         for i in range(items):
             hr_arr[i][mask[i]] = np.nan
             nearest_arr[i][mask[i]] = np.nan
             elev_arr[i][mask[i]] = np.nan
             sr_arr[i][mask[i]] = np.nan
 
-            axes[i][0].imshow(hr_arr[i], cmap=cmap, vmin=0, vmax=1)
-            axes[i][1].imshow(nearest_arr[i], cmap=cmap, vmin=0, vmax=1)
-            axes[i][2].imshow(elev_arr[i], cmap=cmap, vmin=0, vmax=1)
-            axes[i][3].imshow(sr_arr[i], cmap=cmap, vmin=0, vmax=1)
+            axes[i][0].imshow(
+                hr_arr[i],
+                cmap=cmap,
+                vmin=stats["normalized_min"]
+                if standardize
+                else args.normalization_range[0],
+                vmax=stats["normalized_max"]
+                if standardize
+                else args.normalization_range[1],
+            )
+            axes[i][1].imshow(
+                nearest_arr[i],
+                cmap=cmap,
+                vmin=stats["normalized_min"]
+                if standardize
+                else args.normalization_range[0],
+                vmax=stats["normalized_max"]
+                if standardize
+                else args.normalization_range[1],
+            )
+            axes[i][2].imshow(
+                elev_arr[i],
+                cmap=cmap,
+            )
+            axes[i][3].imshow(
+                sr_arr[i],
+                cmap=cmap,
+                vmin=stats["normalized_min"]
+                if standardize
+                else args.normalization_range[0],
+                vmax=stats["normalized_max"]
+                if standardize
+                else args.normalization_range[1],
+            )
 
         fig.suptitle(f"Validation batch, epoch={0}", fontsize=16)
         plt.show()

@@ -15,8 +15,11 @@ from pytorch_lightning.metrics.functional import (
 )
 from torch import Tensor
 
+from sr.data import normalization
+from sr.pre_processing.cruts_config import CRUTSConfig
+from sr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
 from sr.models.rcan import RCAN
-from sr.data.utils import denormalize
+from sr.data.normalization import MinMaxScaler, StandardScaler
 from sr.models.drln import DRLN
 from sr.models.esrgan import ESRGANGenerator
 from sr.models.rfb_esrgan import RFBESRGANGenerator
@@ -32,7 +35,44 @@ class SuperResolutionLightningModule(pl.LightningModule):
         super(SuperResolutionLightningModule, self).__init__()
 
         # store parameters
-        self.save_hyperparameters()
+        self.save_hyperparameters(
+            # model specific
+            "generator",
+            "gen_in_channels",
+            "gen_out_channels",
+            "disc_in_channels",
+            "nf",
+            "nb",
+            "gc",
+            "scale_factor",
+            "num_rrdb_blocks",
+            "num_rrfdb_blocks",
+            "n_resgroups",
+            "n_resblocks",
+            "n_feats",
+            "reduction",
+            # training specific
+            "precision",
+            "initial_hp_metric_val",
+            "max_lr",
+            "batch_size",
+            "max_epochs",
+            "accumulate_grad_batches",
+            # optimizer & scheduler specific
+            "pct_start",
+            "div_factor",
+            "final_div_factor",
+            "weight_decay",
+            # loss specific
+            "pixel_level_loss_factor",
+            "perceptual_loss_factor",
+            "adversarial_loss_factor",
+            # data specific
+            "use_elevation",
+            "normalization_method",
+            "normalization_range",
+            "world_clim_variable",
+        )
 
         # networks
         self.net_G = self.build_model()
@@ -42,6 +82,19 @@ class SuperResolutionLightningModule(pl.LightningModule):
             torch.nn.MSELoss()
             if self.hparams.generator == "srcnn"
             else torch.nn.L1Loss()
+        )
+
+        # standardization
+        self.stats = CRUTSConfig.statistics[
+            world_clim_to_cruts_mapping[self.hparams.world_clim_variable]
+        ]
+        self.scaler = (
+            StandardScaler(
+                self.stats["mean"],
+                self.stats["std"],
+            )
+            if self.hparams.normalization_method == normalization.zscore
+            else MinMaxScaler(feature_range=self.hparams.normalization_range)
         )
 
     def build_model(self) -> nn.Module:
@@ -88,7 +141,15 @@ class SuperResolutionLightningModule(pl.LightningModule):
 
     def forward(self, x: Tensor, elevation: Tensor = None) -> Tensor:
         if self.hparams.generator == "srcnn":
-            return self.net_G(x)
+            return self.net_G(x).clamp(
+                self.stats["normalized_min"]
+                if self.hparams.normalization_method == normalization.zscore
+                else self.hparams.normalization_range[0],
+                self.stats["normalized_max"]
+                if self.hparams.normalization_method == normalization.zscore
+                else self.hparams.normalization_range[1],
+            )
+
         else:
             return self.net_G(x, elevation)
 
@@ -145,9 +206,11 @@ class SuperResolutionLightningModule(pl.LightningModule):
             i_original = original[i]
             i_sr = sr[i]
 
-            # denormalize
-            i_sr = denormalize(i_sr, min_vals[i], max_vals[i]).clip(
-                min_vals[i], max_vals[i]
+            # denormalize/destandardize
+            i_sr = (
+                self.scaler.denormalize(i_sr)
+                if self.hparams.normalization_method == normalization.zscore
+                else self.scaler.denormalize(i_sr, min_vals[i], max_vals[i])
             )
 
             # ocean mask
@@ -251,7 +314,7 @@ class SuperResolutionLightningModule(pl.LightningModule):
         )
         parser.add_argument(
             "--initial_hp_metric_val",
-            default=1e-2,
+            default=3e-1,
             type=float,
             help="The initial value for the `hp_metric`.",
         )

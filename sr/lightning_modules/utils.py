@@ -12,6 +12,7 @@ from pytorch_lightning.callbacks import (
     ModelCheckpoint,
 )
 
+from sr.data import normalization
 from sr.lightning_modules.callbacks import LogImagesCallback
 from sr.lightning_modules.pl_gan import GANLightningModule
 from sr.lightning_modules.datamodules import SuperResolutionDataModule
@@ -79,7 +80,12 @@ def prepare_pl_trainer(args: argparse.Namespace) -> pl.Trainer:
     )
     lr_monitor = LearningRateMonitor(logging_interval="step")
     image_logger_callback = LogImagesCallback(
-        args.generator, args.experiment_name, args.use_elevation
+        generator=args.generator,
+        experiment_name=args.experiment_name,
+        use_elevation=args.use_elevation,
+        world_clim_variable=args.world_clim_variable,
+        standardize=args.normalization_method == normalization.zscore,
+        normalization_range=args.normalization_range,
     )
     callbacks = [
         lr_monitor,
@@ -112,6 +118,8 @@ def prepare_pl_datamodule(args: argparse.Namespace) -> pl.LightningDataModule:
         num_workers=args.num_workers,
         hr_size=args.hr_size,
         seed=args.seed,
+        normalization_method=args.normalization_method,
+        normalization_range=args.normalization_range,
     )
     return data_module
 

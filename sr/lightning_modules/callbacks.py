@@ -2,7 +2,7 @@
 import logging
 import math
 import os
-from typing import Optional, Any, List
+from typing import Optional, Any, List, Tuple
 
 import matplotlib
 import numpy as np
@@ -16,6 +16,9 @@ from torch import Tensor
 from torchvision.transforms import ToTensor
 from torchvision.utils import make_grid
 
+from sr.pre_processing.cruts_config import CRUTSConfig
+from sr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
+
 MAX_ITEMS = 88
 
 
@@ -25,11 +28,20 @@ class LogImagesCallback(Callback):
         generator: str,
         experiment_name: str,
         use_elevation: bool,
+        world_clim_variable: str,
+        standardize: bool = False,
+        normalization_range: Optional[Tuple[float, float]] = (0.0, 1.0),
     ):
         super(LogImagesCallback, self).__init__()
         self.generator = generator
         self.experiment_name = experiment_name
         self.use_elevation = use_elevation
+        self.standardize = standardize
+        self.world_clim_variable = world_clim_variable
+        self.stats = CRUTSConfig.statistics[
+            world_clim_to_cruts_mapping[self.world_clim_variable]
+        ]
+        self.normalization_range = normalization_range
 
     def on_validation_end(self, trainer: Trainer, pl_module: LightningModule) -> None:
         """Log a single batch of images from the validation set to monitor image quality progress."""
@@ -110,11 +122,34 @@ class LogImagesCallback(Callback):
                 img_dir,
                 f"{name}-{self.experiment_name}-epoch={pl_module.current_epoch}-step={pl_module.global_step}.png",
             )
-            self._save_tensor_batch_as_image(image_fp, tensor, mask)
+
+            if name == "elevation":
+                value_range = (
+                    CRUTSConfig.statistics[CRUTSConfig.elev]["normalized_min"],
+                    CRUTSConfig.statistics[CRUTSConfig.elev]["normalized_max"],
+                )
+            else:
+                value_range = (
+                    self.stats["normalized_min"],
+                    self.stats["normalized_max"],
+                )
+
+            self._save_tensor_batch_as_image(
+                out_path=image_fp,
+                images_tensor=tensor,
+                mask_tensor=mask,
+                normalize=self.standardize,
+                value_range=value_range if name != "elevation" else None,
+            )
             self._log_images_from_file(pl_module, image_fp, name)
 
     def _save_tensor_batch_as_image(
-        self, out_path: str, images_tensor: Tensor, mask_tensor: Optional[Tensor] = None
+        self,
+        out_path: str,
+        images_tensor: Tensor,
+        mask_tensor: Optional[Tensor] = None,
+        normalize: Optional[bool] = False,
+        value_range: Optional[Tuple[float, float]] = None,
     ) -> None:
         """Save a given Tensor into an image file.
 
@@ -122,6 +157,10 @@ class LogImagesCallback(Callback):
             out_path (str): The output filename.
             images_tensor (Tensor): The tensor with images.
             mask_tensor (Optional[Tensor]): The optional tensor with masks.
+            normalize (Optional[bool]): If, True then the images will be normalized according to the value_range
+                parameter, False otherwise. False by default.
+            value_range (Optional[Tuple[float, float]]): The optional min, max value range for the image.
+                None by default.
         """
 
         if mask_tensor is not None:
@@ -136,7 +175,12 @@ class LogImagesCallback(Callback):
         ncols = nitems // nrows
 
         img_grid = (
-            make_grid(images_tensor[:nitems], nrow=nrows)[0]
+            make_grid(
+                images_tensor[:nitems],
+                nrow=nrows,
+                normalize=normalize,
+                value_range=value_range,
+            )[0]
             .to("cpu", torch.float32)
             .numpy()
         )  # select only single channel since we deal with 2D data anyway
@@ -240,16 +284,34 @@ class LogImagesCallback(Callback):
         sr_arr[mask] = np.nan
 
         for i in range(items):
-            axes[i][0].imshow(hr_arr[i], cmap=cmap, vmin=0, vmax=1)
+            axes[i][0].imshow(
+                hr_arr[i],
+                cmap=cmap,
+                vmin=self.stats["normalized_min"]
+                if self.standardize
+                else self.normalization_range[0],
+                vmax=self.stats["normalized_max"]
+                if self.standardize
+                else self.normalization_range[1],
+            )
             axes[i][0].set_xlabel("MAE/RMSE")
 
             if self.use_elevation:
-                axes[i][1].imshow(elev_arr[i], cmap=cmap, vmin=0, vmax=1)
+                axes[i][1].imshow(elev_arr[i], cmap=cmap)
                 axes[i][1].set_xlabel("-/-")
 
             offset = 2 if self.use_elevation else 1
             for idx, arr in enumerate(arrs):
-                axes[i][offset + idx].imshow(arr[i], cmap=cmap, vmin=0, vmax=1)
+                axes[i][offset + idx].imshow(
+                    arr[i],
+                    cmap=cmap,
+                    vmin=self.stats["normalized_min"]
+                    if self.standardize
+                    else self.normalization_range[0],
+                    vmax=self.stats["normalized_max"]
+                    if self.standardize
+                    else self.normalization_range[1],
+                )
                 mae_value = maes[idx][i]
                 rmse_value = rmses[idx][i]
                 axes[i][offset + idx].set_xlabel(f"{mae_value:.3f}/{rmse_value:.3f}")

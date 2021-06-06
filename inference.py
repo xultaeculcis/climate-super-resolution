@@ -3,6 +3,7 @@ import argparse
 import logging
 import os
 from glob import glob
+from typing import Tuple, Optional
 
 import numpy as np
 import pandas as pd
@@ -15,7 +16,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from sr.data.datasets import CRUTSInferenceDataset
-from sr.data.utils import denormalize
+from sr.data.normalization import MinMaxScaler
 from sr.lightning_modules.utils import prepare_pl_module
 from sr.pre_processing.cruts_config import CRUTSConfig
 
@@ -131,39 +132,46 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         f"--pretrained_model_{CRUTSConfig.tmn}",
         type=str,
-        default="./model_weights/with_elevation/gen-pre-training-srcnn-tmin-4x-epoch=29-step=82709-hp_metric=0.00165.ckpt",  # noqa E501
+        # default="./model_weights/with_elevation/gen-pre-training-srcnn-tmin-4x-epoch=29-step=82709-hp_metric=0.00165.ckpt",  # noqa E501
         # default="./model_weights/no_elevation/gen-pre-training-srcnn-tmin-4x-epoch=29-step=82709-hp_metric=0.00571.ckpt",  # noqa E501
+        default="./model_weights/use_elevation=True-batch_size=256/normalize-v2/gen-pre-training-srcnn-tmin-4x-epoch=29-step=20699-hp_metric=0.00064.ckpt",  # noqa E501
     )
     parser.add_argument(
         f"--pretrained_model_{CRUTSConfig.tmp}",
         type=str,
-        default="./model_weights/with_elevation/gen-pre-training-srcnn-temp-4x-epoch=29-step=165419-hp_metric=0.00083.ckpt",  # noqa E501
+        # default="./model_weights/with_elevation/gen-pre-training-srcnn-temp-4x-epoch=29-step=165419-hp_metric=0.00083.ckpt",  # noqa E501
         # default="./model_weights/no_elevation/gen-pre-training-srcnn-temp-4x-epoch=24-step=137849-hp_metric=0.00516.ckpt",  # noqa E501
+        default="./model_weights/use_elevation=True-batch_size=256/normalize-v2/gen-pre-training-srcnn-temp-4x-epoch=29-step=41369-hp_metric=0.00056.ckpt",  # noqa E501
     )
     parser.add_argument(
         f"--pretrained_model_{CRUTSConfig.tmx}",
         type=str,
-        default="./model_weights/with_elevation/gen-pre-training-srcnn-tmax-4x-epoch=29-step=82709-hp_metric=0.00142.ckpt",  # noqa E501
+        # default="./model_weights/with_elevation/gen-pre-training-srcnn-tmax-4x-epoch=29-step=82709-hp_metric=0.00142.ckpt",  # noqa E501
         # default="./model_weights/no_elevation/gen-pre-training-srcnn-tmax-4x-epoch=18-step=52382-hp_metric=0.00468.ckpt",  # noqa E501
+        default="./model_weights/use_elevation=True-batch_size=256/normalize-v2/gen-pre-training-srcnn-tmax-4x-epoch=29-step=20699-hp_metric=0.00059.ckpt",  # noqa E501
     )
     parser.add_argument(
         f"--pretrained_model_{CRUTSConfig.pre}",
         type=str,
         # default="./model_weights/with_elevation/gen-pre-training-srcnn-prec-4x-epoch=29-step=82709-hp_metric=0.00007.ckpt",  # noqa E501
-        default="./model_weights/no_elevation/gen-pre-training-srcnn-prec-4x-epoch=21-step=60653-hp_metric=0.00017.ckpt",  # noqa E501
+        # default="./model_weights/no_elevation/gen-pre-training-srcnn-prec-4x-epoch=21-step=60653-hp_metric=0.00017.ckpt",  # noqa E501
+        default="./model_weights/use_elevation=True-batch_size=256/normalize/gen-pre-training-srcnn-prec-4x-epoch=29-step=20699-hp_metric=0.00005.ckpt",  # noqa E501
     )
     parser.add_argument("--experiment_name", type=str, default="inference")
-    parser.add_argument("--temp_only", type=bool, default=True)
+    parser.add_argument("--temp_only", type=bool, default=False)
     parser.add_argument("--use_elevation", type=bool, default=True)
     parser.add_argument("--run_inference", type=bool, default=True)
     parser.add_argument("--extract_polygon_extent", type=bool, default=True)
     parser.add_argument("--with_lr_extent", type=bool, default=False)
     parser.add_argument("--to_netcdf", type=bool, default=True)
-    # parser.add_argument("--cruts_variable", type=str, default=None)
-    parser.add_argument(
-        "--cruts_variable", type=str, default=CRUTSConfig.tmp
-    )  # single variable
+    parser.add_argument("--cruts_variable", type=str, default=CRUTSConfig.tmn)
+    # parser.add_argument(
+    #     "--cruts_variable", type=str, default=CRUTSConfig.tmp
+    # )  # single variable
     parser.add_argument("--scaling_factor", type=int, default=4)
+    parser.add_argument(
+        "--normalization_range", type=Tuple[float, float], default=(-1.0, 1.0)
+    )
     parser.add_argument("--precision", type=int, default=32)
     parser.add_argument("--gpus", type=int, default=1)
 
@@ -177,6 +185,7 @@ def inference_on_full_images(
     land_mask_file: str,
     out_dir: str,
     use_elevation: bool = False,
+    normalization_range: Optional[Tuple[float, float]] = (-1.0, 1.0),
 ) -> None:
     # ensure gpu
     model = model.cuda()
@@ -195,10 +204,13 @@ def inference_on_full_images(
         land_mask_file=land_mask_file,
         generator_type="srcnn",
         scaling_factor=4,
+        normalize_range=normalization_range,
     )
 
     # prepare dataloader
     dl = DataLoader(dataset=ds, batch_size=1, pin_memory=True, num_workers=1)
+
+    scaler = MinMaxScaler(feature_range=normalization_range)
 
     # run inference
     for _, batch in tqdm(enumerate(dl), total=len(dl)):
@@ -214,7 +226,7 @@ def inference_on_full_images(
 
         for idx, output in enumerate(outputs):
             arr = output.squeeze(0)
-            arr = denormalize(arr, min[idx], max[idx]).clip(min[idx], max[idx])
+            arr = scaler.denormalize(arr, min[idx], max[idx]).clip(min[idx], max[idx])
             arr[mask] = np.nan
 
             with rio.open(
@@ -287,6 +299,7 @@ def run_inference(arguments, cruts_variables):
                 elevation_file=arguments.elevation_file,
                 out_dir=out_path,
                 use_elevation=arguments.use_elevation,
+                normalization_range=arguments.normalization_range,
             )
 
         logging.info(f"Inference for variable {var} finished. Removing network.")

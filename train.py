@@ -58,6 +58,7 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     parser.add_argument("--flush_logs_every_n_steps", type=int, default=10)
     parser.add_argument("--generator", type=str, default="srcnn")
     parser.add_argument("--resume_from_checkpoint", type=str, default=None)
+    parser.add_argument("--compare", type=bool, default=False)
 
     # args for training from pre-trained model
     parser.add_argument(
@@ -107,8 +108,9 @@ if __name__ == "__main__":
     arguments = parser.parse_args()
     arguments = parse_args(arguments)
 
-    for var in [WorldClimConfig.tmin, WorldClimConfig.tmax]:
-        for use_elev in [True, False]:
+    for var in [WorldClimConfig.tmin, WorldClimConfig.tmax, WorldClimConfig.temp]:
+        grid = [True, False] if arguments.compare else [True]
+        for use_elev in [True]:
             pl.seed_everything(seed=arguments.seed)
 
             if use_elev:

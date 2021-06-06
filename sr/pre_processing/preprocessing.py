@@ -77,8 +77,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run_cruts_to_cog", type=bool, default=False)
     parser.add_argument("--run_statistics_computation", type=bool, default=True)
     parser.add_argument("--run_world_clim_resize", type=bool, default=False)
-    parser.add_argument("--run_world_clim_tiling", type=bool, default=True)
+    parser.add_argument("--run_world_clim_tiling", type=bool, default=False)
     parser.add_argument("--run_world_clim_elevation_resize", type=bool, default=False)
+    parser.add_argument("--run_train_val_test_split", type=bool, default=False)
     parser.add_argument("--patch_size", type=Tuple[int, int], default=(128, 128))
     parser.add_argument("--patch_stride", type=int, default=64)
     parser.add_argument("--normalize_patches", type=bool, default=False)
@@ -354,6 +355,147 @@ def run_cruts_to_cog(args: argparse.Namespace) -> None:
         ).compute()
 
 
+def compute_stats_for_zscore(args: argparse.Namespace) -> None:
+    """
+    Computes dataset statistics for z-score standardization.
+
+    Args:
+        args (argparse.Namespace): The arguments.
+
+    """
+
+    def compute_stats(var_name, arr):
+        mean = np.nanmean(arr)
+        std = np.nanstd(arr)
+        min = np.nanmin(arr)
+        max = np.nanmax(arr)
+        normalized_min = (min - mean) / (std + 1e-5)
+        normalized_max = (max - mean) / (std + 1e-5)
+        results.append((var_name, mean, std, min, max, normalized_min, normalized_max))
+
+    results = []
+    for var in tqdm(CRUTSConfig.variables_cts + [WorldClimConfig.elevation]):
+        if var == WorldClimConfig.elevation:
+            elevation = rio.open(args.world_clim_elevation_fp).read().astype(np.float32)
+            elevation[elevation == -32768.0] = np.nan
+            compute_stats(var, elevation)
+        else:
+            ds = xarray.open_dataset(
+                os.path.join(args.data_dir_cruts, CRUTSConfig.file_pattern.format(var))
+            )
+            compute_stats(var, ds[var].values)
+
+    output_file = os.path.join(args.dataframe_output_path, "statistics_zscore.csv")
+    df = pd.DataFrame(
+        results,
+        columns=[
+            "variable",
+            "mean",
+            "std",
+            "min",
+            "max",
+            "normalized_min",
+            "normalized_max",
+        ],
+    )
+    df.to_csv(output_file, header=True, index=False)
+
+
+def compute_stats_for_min_max_normalization(args: argparse.Namespace) -> None:
+    """
+    Computes dataset statistics for min max normalization.
+
+    Args:
+        args (argparse.Namespace): The arguments.
+
+    """
+
+    def compute_stats(fp):
+        with rio.open(fp) as ds:
+            arr = ds.read(1)
+            min = np.nanmin(arr)
+            max = np.nanmax(arr)
+            return min, max
+
+    results = []
+
+    for var in CRUTSConfig.variables_cts:
+        logger.info(f"Computing stats for CRU-TS - '{var}'")
+        for fp in tqdm(
+            sorted(
+                glob(
+                    os.path.join(
+                        args.out_dir_cruts, CRUTSConfig.full_res_dir, var, "*.tif"
+                    )
+                )
+            )
+        ):
+            year_from_filename = int(os.path.basename(fp).split("-")[-3])
+            month_from_filename = int(os.path.basename(fp).split("-")[-2])
+            results.append(
+                (
+                    "cru-ts",
+                    fp,
+                    os.path.basename(fp),
+                    var,
+                    year_from_filename,
+                    month_from_filename,
+                    *compute_stats(fp),
+                )
+            )
+
+    for var in WorldClimConfig.variables_wc + [WorldClimConfig.elevation]:
+        logger.info(f"Computing stats for World Clim - '{var}'")
+        for fp in tqdm(
+            sorted(
+                glob(
+                    os.path.join(
+                        args.out_dir_world_clim,
+                        var,
+                        WorldClimConfig.resized_dir,
+                        WorldClimConfig.resolution_multipliers[args.res_mult_inx][0],
+                        "*.tif",
+                    )
+                )
+            )
+        ):
+            year_from_filename = (
+                int(os.path.basename(fp).split("-")[0].split("_")[-1])
+                if var != WorldClimConfig.elevation
+                else -1
+            )
+            month_from_filename = (
+                int(os.path.basename(fp).split("-")[1].split(".")[0])
+                if var != WorldClimConfig.elevation
+                else -1
+            )
+            results.append(
+                (
+                    "world-clim",
+                    fp,
+                    os.path.basename(fp),
+                    var,
+                    year_from_filename,
+                    month_from_filename,
+                    *compute_stats(fp),
+                )
+            )
+
+    output_file = os.path.join(args.dataframe_output_path, "statistics_min_max.csv")
+    columns = [
+        "dataset",
+        "file_path",
+        "filename",
+        "variable",
+        "year",
+        "month",
+        "min",
+        "max",
+    ]
+    df = pd.DataFrame(results, columns=columns)
+    df.to_csv(output_file, header=True, index=False)
+
+
 def run_statistics_computation(args: argparse.Namespace) -> None:
     """
     Runs CRU-TS and World Clim statistics computation.
@@ -365,92 +507,8 @@ def run_statistics_computation(args: argparse.Namespace) -> None:
     if args.run_statistics_computation:
         logger.info("Running statistics computation")
 
-        def compute_stats(fp):
-            with rio.open(fp) as ds:
-                arr = ds.read(1)
-                min = np.nanmin(arr)
-                max = np.nanmax(arr)
-                return min, max
-
-        results = []
-
-        for var in CRUTSConfig.variables_cts:
-            logger.info(f"Computing stats for CRU-TS - '{var}'")
-            for fp in tqdm(
-                sorted(
-                    glob(
-                        os.path.join(
-                            args.out_dir_cruts, CRUTSConfig.full_res_dir, var, "*.tif"
-                        )
-                    )
-                )
-            ):
-                year_from_filename = int(os.path.basename(fp).split("-")[-3])
-                month_from_filename = int(os.path.basename(fp).split("-")[-2])
-                results.append(
-                    (
-                        "cru-ts",
-                        fp,
-                        os.path.basename(fp),
-                        var,
-                        year_from_filename,
-                        month_from_filename,
-                        *compute_stats(fp),
-                    )
-                )
-
-        for var in WorldClimConfig.variables_wc + [WorldClimConfig.elevation]:
-            logger.info(f"Computing stats for World Clim - '{var}'")
-            for fp in tqdm(
-                sorted(
-                    glob(
-                        os.path.join(
-                            args.out_dir_world_clim,
-                            var,
-                            WorldClimConfig.resized_dir,
-                            WorldClimConfig.resolution_multipliers[args.res_mult_inx][
-                                0
-                            ],
-                            "*.tif",
-                        )
-                    )
-                )
-            ):
-                year_from_filename = (
-                    int(os.path.basename(fp).split("-")[0].split("_")[-1])
-                    if var != WorldClimConfig.elevation
-                    else -1
-                )
-                month_from_filename = (
-                    int(os.path.basename(fp).split("-")[1].split(".")[0])
-                    if var != WorldClimConfig.elevation
-                    else -1
-                )
-                results.append(
-                    (
-                        "world-clim",
-                        fp,
-                        os.path.basename(fp),
-                        var,
-                        year_from_filename,
-                        month_from_filename,
-                        *compute_stats(fp),
-                    )
-                )
-
-        output_file = os.path.join(args.dataframe_output_path, "statistics.csv")
-        columns = [
-            "dataset",
-            "file_path",
-            "filename",
-            "variable",
-            "year",
-            "month",
-            "min",
-            "max",
-        ]
-        df = pd.DataFrame(results, columns=columns)
-        df.to_csv(output_file, header=True, index=False)
+        compute_stats_for_zscore(args)
+        compute_stats_for_min_max_normalization(args)
 
 
 def run_world_clim_resize(args: argparse.Namespace) -> None:
@@ -560,153 +618,170 @@ def run_train_val_test_split(args: argparse.Namespace) -> None:
         args (argparse.Namespace): The arguments.
 
     """
-    variables = WorldClimConfig.variables_wc + [WorldClimConfig.elevation]
+    if args.run_train_val_test_split:
+        variables = WorldClimConfig.variables_wc + [WorldClimConfig.elevation]
 
-    for var in variables:
-        multiplier, scale = WorldClimConfig.resolution_multipliers[args.res_mult_inx]
-        if var != WorldClimConfig.elevation:
-            logger.info(
-                f"Generating Train/Validation/Test splits for variable: {var}, "
-                f"multiplier: {multiplier}, scale:{scale:.4f}"
-            )
-
-        files = sorted(
-            glob(
-                os.path.join(
-                    args.out_dir_world_clim,
-                    var,
-                    WorldClimConfig.tiles_dir,
-                    multiplier,
-                    "*.tif",
-                )
-            )
-        )
-
-        train_images = []
-        val_images = []
-        test_images = []
-        elevation_images = []
-
-        train_years_lower_bound, train_years_upper_bound = args.train_years
-        val_years_lower_bound, val_years_upper_bound = args.val_years
-        test_years_lower_bound, test_years_upper_bound = args.test_years
-
-        os.makedirs(
-            os.path.join(args.dataframe_output_path, var, multiplier), exist_ok=True
-        )
-
-        for file_path in files:
-            filename = os.path.basename(file_path)
-            x = int(file_path.split(".")[-3])
-            y = int(file_path.split(".")[-2])
-            original_filename = os.path.basename(file_path).replace(f".{x}.{y}.", ".")
-            year_from_filename = (
-                int(filename.split("-")[0].split("_")[-1])
-                if var != WorldClimConfig.elevation
-                else -1
-            )
-            month_from_filename = (
-                int(filename.split("-")[1].split(".")[0])
-                if var != WorldClimConfig.elevation
-                else -1
-            )
-
-            if train_years_lower_bound <= year_from_filename <= train_years_upper_bound:
-                train_images.append(
-                    (
-                        file_path,
-                        original_filename,
-                        var,
-                        multiplier,
-                        year_from_filename,
-                        month_from_filename,
-                        x,
-                        y,
-                    )
+        for var in variables:
+            multiplier, scale = WorldClimConfig.resolution_multipliers[
+                args.res_mult_inx
+            ]
+            if var != WorldClimConfig.elevation:
+                logger.info(
+                    f"Generating Train/Validation/Test splits for variable: {var}, "
+                    f"multiplier: {multiplier}, scale:{scale:.4f}"
                 )
 
-            elif (
-                (val_years_lower_bound <= year_from_filename <= val_years_upper_bound)
-                and x % args.patch_size[1] == 0
-                and y % args.patch_size[0] == 0
-            ):
-                val_images.append(
-                    (
-                        file_path,
-                        original_filename,
-                        var,
-                        multiplier,
-                        year_from_filename,
-                        month_from_filename,
-                        x,
-                        y,
-                    )
-                )
-
-            elif (
-                (test_years_lower_bound <= year_from_filename <= test_years_upper_bound)
-                and x % args.patch_size[1] == 0
-                and y % args.patch_size[0] == 0
-            ):
-                test_images.append(
-                    (
-                        file_path,
-                        original_filename,
-                        var,
-                        multiplier,
-                        year_from_filename,
-                        month_from_filename,
-                        x,
-                        y,
-                    )
-                )
-
-            elif WorldClimConfig.elevation in file_path:
-                elevation_images.append((file_path, var, multiplier, x, y))
-
-        for stage, images in zip(
-            ["train", "val", "test", WorldClimConfig.elevation],
-            [train_images, val_images, test_images, elevation_images],
-        ):
-            if images:
-                columns = (
-                    ["file_path", "variable", "multiplier", "x", "y"]
-                    if stage == WorldClimConfig.elevation
-                    else [
-                        "tile_file_path",
-                        "filename",
-                        "variable",
-                        "multiplier",
-                        "year",
-                        "month",
-                        "x",
-                        "y",
-                    ]
-                )
-                df = pd.DataFrame(
-                    images,
-                    columns=columns,
-                )
-                df.to_csv(
+            files = sorted(
+                glob(
                     os.path.join(
-                        args.dataframe_output_path, var, multiplier, f"{stage}.csv"
-                    ),
-                    index=False,
-                    header=True,
+                        args.out_dir_world_clim,
+                        var,
+                        WorldClimConfig.tiles_dir,
+                        multiplier,
+                        "*.tif",
+                    )
+                )
+            )
+
+            train_images = []
+            val_images = []
+            test_images = []
+            elevation_images = []
+
+            train_years_lower_bound, train_years_upper_bound = args.train_years
+            val_years_lower_bound, val_years_upper_bound = args.val_years
+            test_years_lower_bound, test_years_upper_bound = args.test_years
+
+            os.makedirs(
+                os.path.join(args.dataframe_output_path, var, multiplier), exist_ok=True
+            )
+
+            for file_path in files:
+                filename = os.path.basename(file_path)
+                x = int(file_path.split(".")[-3])
+                y = int(file_path.split(".")[-2])
+                original_filename = os.path.basename(file_path).replace(
+                    f".{x}.{y}.", "."
+                )
+                year_from_filename = (
+                    int(filename.split("-")[0].split("_")[-1])
+                    if var != WorldClimConfig.elevation
+                    else -1
+                )
+                month_from_filename = (
+                    int(filename.split("-")[1].split(".")[0])
+                    if var != WorldClimConfig.elevation
+                    else -1
                 )
 
-        if var != WorldClimConfig.elevation:
-            logger.info(
-                f"Generated Train ({len(train_images)}) / "
-                f"Validation ({len(val_images)}) / "
-                f"Test ({len(test_images)}) splits "
-                f"for variable: {var}, multiplier: {multiplier}, scale:{scale:.4f}"
-            )
-        else:
-            logger.info(
-                f"({len(elevation_images)}) images "
-                f"for variable: {var}, multiplier: {multiplier}, scale:{scale:.4f}"
-            )
+                if (
+                    train_years_lower_bound
+                    <= year_from_filename
+                    <= train_years_upper_bound
+                ):
+                    train_images.append(
+                        (
+                            file_path,
+                            original_filename,
+                            var,
+                            multiplier,
+                            year_from_filename,
+                            month_from_filename,
+                            x,
+                            y,
+                        )
+                    )
+
+                elif (
+                    (
+                        val_years_lower_bound
+                        <= year_from_filename
+                        <= val_years_upper_bound
+                    )
+                    and x % args.patch_size[1] == 0
+                    and y % args.patch_size[0] == 0
+                ):
+                    val_images.append(
+                        (
+                            file_path,
+                            original_filename,
+                            var,
+                            multiplier,
+                            year_from_filename,
+                            month_from_filename,
+                            x,
+                            y,
+                        )
+                    )
+
+                elif (
+                    (
+                        test_years_lower_bound
+                        <= year_from_filename
+                        <= test_years_upper_bound
+                    )
+                    and x % args.patch_size[1] == 0
+                    and y % args.patch_size[0] == 0
+                ):
+                    test_images.append(
+                        (
+                            file_path,
+                            original_filename,
+                            var,
+                            multiplier,
+                            year_from_filename,
+                            month_from_filename,
+                            x,
+                            y,
+                        )
+                    )
+
+                elif WorldClimConfig.elevation in file_path:
+                    elevation_images.append((file_path, var, multiplier, x, y))
+
+            for stage, images in zip(
+                ["train", "val", "test", WorldClimConfig.elevation],
+                [train_images, val_images, test_images, elevation_images],
+            ):
+                if images:
+                    columns = (
+                        ["file_path", "variable", "multiplier", "x", "y"]
+                        if stage == WorldClimConfig.elevation
+                        else [
+                            "tile_file_path",
+                            "filename",
+                            "variable",
+                            "multiplier",
+                            "year",
+                            "month",
+                            "x",
+                            "y",
+                        ]
+                    )
+                    df = pd.DataFrame(
+                        images,
+                        columns=columns,
+                    )
+                    df.to_csv(
+                        os.path.join(
+                            args.dataframe_output_path, var, multiplier, f"{stage}.csv"
+                        ),
+                        index=False,
+                        header=True,
+                    )
+
+            if var != WorldClimConfig.elevation:
+                logger.info(
+                    f"Generated Train ({len(train_images)}) / "
+                    f"Validation ({len(val_images)}) / "
+                    f"Test ({len(test_images)}) splits "
+                    f"for variable: {var}, multiplier: {multiplier}, scale:{scale:.4f}"
+                )
+            else:
+                logger.info(
+                    f"({len(elevation_images)}) images "
+                    f"for variable: {var}, multiplier: {multiplier}, scale:{scale:.4f}"
+                )
 
 
 if __name__ == "__main__":

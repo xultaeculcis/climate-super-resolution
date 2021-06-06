@@ -1,7 +1,4 @@
 # -*- coding: utf-8 -*-
-from typing import Optional, Tuple
-
-import numpy as np
 import torchvision
 from matplotlib import pyplot as plt
 
@@ -48,31 +45,6 @@ def get_variable_from_ds_fp(fp):
 
     if f".{CRUTSConfig.tmx}." in fp:
         return CRUTSConfig.tmx
-
-
-def normalize(
-    arr: np.ndarray,
-    min: Optional[float] = None,
-    max: Optional[float] = None,
-    missing_indicator: Optional[float] = None,
-) -> Tuple[np.ndarray, float, float]:
-    if missing_indicator:
-        arr[arr == missing_indicator] = np.nan
-
-    if min is None or max is None:
-        max = np.nanmax(arr)
-        min = np.nanmin(arr)
-
-    arr = (arr + (-min)) / (max - min + 1e-5)
-
-    arr[np.isnan(arr)] = 0.0
-
-    return arr.astype(np.float32), min, max
-
-
-def denormalize(arr: np.ndarray, min: float, max: float) -> np.ndarray:
-    arr = arr * (max - min) + min
-    return arr
 
 
 def plot_array(arr):

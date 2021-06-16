@@ -175,11 +175,11 @@ class SuperResolutionLightningModule(pl.LightningModule):
             if self.hparams.generator == "srcnn":
                 x = torch.cat([sr_nearest, elev], dim=1)
             else:
-                x = torch.cat([sr_nearest, elev_lr], dim=1)
+                x = torch.cat([lr, elev_lr], dim=1)
         else:
-            x = sr_nearest
+            x = lr
 
-        sr = self(x if self.hparams.generator == "srcnn" else lr, elev)
+        sr = self(x, elev)
 
         return hr, sr
 
@@ -290,7 +290,7 @@ class SuperResolutionLightningModule(pl.LightningModule):
         )
         parser.add_argument(
             "--max_lr",
-            default=6e-4,
+            default=1e-4,
             type=float,
             help="The max learning rate for the 1Cycle LR Scheduler",
         )

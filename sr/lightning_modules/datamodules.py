@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from sr.data import normalization
 from sr.pre_processing.cruts_config import CRUTSConfig
 from sr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
-from sr.data.datasets import ClimateDataset
+from sr.data.climate_dataset import ClimateDataset
 from sr.pre_processing.world_clim_config import WorldClimConfig
 
 logging.basicConfig(level=logging.INFO)

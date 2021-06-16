@@ -59,27 +59,25 @@ class LogImagesCallback(Callback):
         batch = next(iter(dl))
 
         with torch.no_grad():
-            lr, hr, nearest, cubic, elev, mask = (
-                batch["lr"],
-                batch["hr"],
-                batch["nearest"],
+            lr, hr, nearest, cubic, elev, elev_lr, mask = (
+                batch["lr"].to(pl_module.device),
+                batch["hr"].to(pl_module.device),
+                batch["nearest"].to(pl_module.device),
                 batch["cubic"],
-                batch["elevation"],
+                batch["elevation"].to(pl_module.device),
+                batch["elevation_lr"].to(pl_module.device),
                 batch["mask"],
             )
 
-            lr = (
-                nearest.to(pl_module.device)
-                if pl_module.hparams.generator == "srcnn"
-                else lr.to(pl_module.device)
-            )
-
             if pl_module.hparams.use_elevation:
-                x = torch.cat([nearest, elev], dim=1).to(pl_module.device)
+                if pl_module.hparams.generator == "srcnn":
+                    x = torch.cat([nearest, elev], dim=1)
+                else:
+                    x = torch.cat([lr, elev_lr], dim=1)
             else:
                 x = lr
 
-            sr = pl_module(x)
+            sr = pl_module(x, elev)
 
             img_dir = os.path.join(pl_module.logger.log_dir, "images")
 
@@ -88,12 +86,11 @@ class LogImagesCallback(Callback):
                 os.makedirs(img_dir, exist_ok=True)
                 names = [
                     "hr_images",
-                    "lr_images",
                     "elevation",
                     "nearest_interpolation",
                     "cubic_interpolation",
                 ]
-                tensors = [hr, lr, elev, nearest, cubic]
+                tensors = [hr, elev, nearest, cubic]
                 self._log_images(pl_module, img_dir, names, tensors, mask)
 
             self._log_images(pl_module, img_dir, ["sr_images"], [sr], mask)
@@ -118,6 +115,7 @@ class LogImagesCallback(Callback):
         mask: Tensor,
     ):
         for name, tensor in zip(names, tensors):
+            os.makedirs(img_dir, exist_ok=True)
             image_fp = os.path.join(
                 img_dir,
                 f"{name}-{self.experiment_name}-epoch={pl_module.current_epoch}-step={pl_module.global_step}.png",

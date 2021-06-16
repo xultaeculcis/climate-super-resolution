@@ -16,12 +16,6 @@ class GeneratorPreTrainingLightningModule(SuperResolutionLightningModule):
     def __init__(self, **kwargs):
         super(GeneratorPreTrainingLightningModule, self).__init__(**kwargs)
 
-    def forward(self, x: Tensor, elevation: Tensor = None) -> Tensor:
-        if self.hparams.generator == "srcnn":
-            return self.net_G(x)
-        else:
-            return self.net_G(x, elevation)
-
     def training_step(self, batch: Any, batch_idx: int) -> Any:
         """
         Runs training step.

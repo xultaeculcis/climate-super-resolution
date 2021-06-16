@@ -184,7 +184,7 @@ class RCAN(nn.Module):
         self.head = nn.Sequential(*modules_head)
         self.body = nn.Sequential(*modules_body)
         self.tail = nn.Sequential(*modules_tail)
-        self.srcnn = SRCNN(2, out_channels)
+        self.srcnn = SRCNN(in_channels=2, out_channels=out_channels)
 
     def forward(self, x: Tensor, elev: Tensor) -> Tensor:
         x = self.head(x)

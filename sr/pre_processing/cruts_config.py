@@ -2,6 +2,7 @@
 class CRUTSConfig:
     """Config class with default values for the CRU-TS dataset."""
 
+    europe_extent = "europe-extent"
     tmn = "tmn"
     tmx = "tmx"
     tmp = "tmp"

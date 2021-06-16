@@ -4,7 +4,7 @@ import logging
 import os
 from glob import glob
 from itertools import product
-from typing import Any, Optional, Tuple
+from typing import Any, Optional, Tuple, List, Dict
 
 import dask.bag
 import datacube.utils.geometry as dcug
@@ -17,6 +17,7 @@ from datacube.utils.cog import write_cog
 from distributed import Client
 from rasterio import Affine, windows
 from rasterio.enums import Resampling
+from rasterio.mask import mask
 from tqdm import tqdm
 
 from sr.pre_processing.cruts_config import CRUTSConfig
@@ -33,6 +34,59 @@ ch.setLevel(logging.DEBUG)
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 ch.setFormatter(formatter)
 logger.addHandler(ch)
+
+# consts
+europe_bbox_lr = ((-16.0, 84.5), (40.5, 33.0))
+europe_bbox_hr = ((-16.0, 84.5), (40.5, 33.0))
+left_upper_lr = [-16.0, 84.5]
+left_lower_lr = [-16.0, 33.0]
+right_upper_lr = [40.5, 84.5]
+right_lower_lr = [40.5, 33.0]
+
+left_upper_hr = [-16.0, 84.5]
+left_lower_hr = [-16.0, 33.0]
+right_upper_hr = [40.5, 84.5]
+right_lower_hr = [40.5, 33.0]
+
+lr_polygon = [
+    [
+        left_upper_lr,
+        right_upper_lr,
+        right_lower_lr,
+        left_lower_lr,
+        left_upper_lr,
+    ]
+]
+hr_polygon = [
+    [
+        left_upper_hr,
+        right_upper_hr,
+        right_lower_hr,
+        left_lower_hr,
+        left_upper_hr,
+    ]
+]
+
+var_to_variable = {
+    CRUTSConfig.pre: "Precipitation",
+    CRUTSConfig.tmn: "Minimum Temperature",
+    CRUTSConfig.tmp: "Average Temperature",
+    CRUTSConfig.tmx: "Maximum Temperature",
+}
+
+lr_bbox = [
+    {
+        "coordinates": lr_polygon,
+        "type": "Polygon",
+    }
+]
+
+hr_bbox = [
+    {
+        "coordinates": hr_polygon,
+        "type": "Polygon",
+    }
+]
 
 
 def parse_args() -> argparse.Namespace:
@@ -74,12 +128,23 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default="../../datasets/",
     )
+    parser.add_argument(
+        "--elevation_file",
+        type=str,
+        default="/media/xultaeculcis/2TB/datasets/wc/pre-processed/elevation/resized/4x/wc2.1_2.5m_elev.tif",
+    )
+    parser.add_argument(
+        "--land_mask_file",
+        type=str,
+        default="/media/xultaeculcis/2TB/datasets/wc/pre-processed/prec/resized/4x/wc2.1_2.5m_prec_1961-01.tif",
+    )
     parser.add_argument("--run_cruts_to_cog", type=bool, default=False)
-    parser.add_argument("--run_statistics_computation", type=bool, default=True)
+    parser.add_argument("--run_statistics_computation", type=bool, default=False)
     parser.add_argument("--run_world_clim_resize", type=bool, default=False)
     parser.add_argument("--run_world_clim_tiling", type=bool, default=False)
     parser.add_argument("--run_world_clim_elevation_resize", type=bool, default=False)
     parser.add_argument("--run_train_val_test_split", type=bool, default=False)
+    parser.add_argument("--run_extent_extraction", type=bool, default=True)
     parser.add_argument("--patch_size", type=Tuple[int, int], default=(128, 128))
     parser.add_argument("--patch_stride", type=int, default=64)
     parser.add_argument("--normalize_patches", type=bool, default=False)
@@ -784,6 +849,111 @@ def run_train_val_test_split(args: argparse.Namespace) -> None:
                 )
 
 
+def extract_extent_single(
+    fp: str,
+    bbox: List[Dict[str, Any]],
+    variable: str,
+    extent_out_path: str,
+) -> None:
+    """
+    Extracts polygon extent form a single Geo-Tiff file.
+
+    Args:
+        fp (str): The Geo-Tiff file path.
+        bbox (List[Dict[str, Any]]): The bounding box acceptable by `rasterio.mask()` method.
+        variable (str): The name of the variable.
+        extent_out_path (str): The out file path.
+
+    """
+    filename = os.path.basename(fp)
+
+    with rio.open(fp) as ds:
+        crop, transform = mask(ds, bbox, crop=True)
+        meta = ds.meta
+
+    meta.update(
+        {
+            "driver": "GTiff",
+            "height": crop.shape[1],
+            "width": crop.shape[2],
+            "transform": transform,
+        }
+    )
+
+    with rio.open(
+        os.path.join(extent_out_path, variable, filename), "w", **meta
+    ) as dest:
+        dest.write(crop)
+
+
+def extract_extent(
+    src_dir: str,
+    extent_out_path: str,
+    cruts_variables: List[str],
+    bbox: List[Dict[str, Any]],
+) -> None:
+    """
+    Extracts the polygon extent from the CRU-TS variable Geo-Tiff files.
+
+    Args:
+        src_dir (str): The source Geo-Tiff directory.
+        extent_out_path (str): The extent out path.
+        cruts_variables (List[str]): The CRU-TS variables.
+        bbox (List[Dict[str, Any]]): The bounding box of the extent.
+
+    """
+
+    for var in cruts_variables:
+        logger.info(f"Extracting Europe polygon extents for variable '{var}'")
+        files = sorted(glob(os.path.join(src_dir, var, "*.tif")))
+        os.makedirs(os.path.join(extent_out_path, var), exist_ok=True)
+        dask.bag.from_sequence(files).map(
+            extract_extent_single,
+            bbox=bbox,
+            variable=var,
+            extent_out_path=extent_out_path,
+        ).compute()
+        logger.info(f"Done for variable '{var}'")
+
+
+def run_cruts_extent_extraction(args: argparse.Namespace) -> None:
+    """
+    Run Europe extent extraction for Geo-Tiff files.
+
+    Args:
+        args (argparse.Namespace): The arguments.
+
+    """
+
+    if args.run_extent_extraction:
+        # handle extent dirs
+        extent_dir = os.path.join(args.out_dir_cruts, CRUTSConfig.europe_extent)
+        os.makedirs(os.path.join(extent_dir, "mask"), exist_ok=True)
+        os.makedirs(os.path.join(extent_dir, CRUTSConfig.elev), exist_ok=True)
+
+        logger.info("Extracting polygon extents for Europe.")
+        extract_extent(
+            os.path.join(args.out_dir_cruts, CRUTSConfig.full_res_dir),
+            extent_dir,
+            CRUTSConfig.variables_cts,
+            lr_bbox,
+        )
+        logger.info("Extracting polygon extents for Europe for land mask file.")
+        extract_extent_single(
+            args.land_mask_file,
+            hr_bbox,
+            "mask",
+            extent_dir,
+        )
+        logger.info("Extracting polygon extents for Europe for elevation file.")
+        extract_extent_single(
+            args.elevation_file,
+            hr_bbox,
+            CRUTSConfig.elev,
+            extent_dir,
+        )
+
+
 if __name__ == "__main__":
     arguments = parse_args()
 
@@ -801,6 +971,7 @@ if __name__ == "__main__":
         run_world_clim_elevation_resize(arguments)
         run_world_clim_tiling(arguments)
         run_train_val_test_split(arguments)
+        run_cruts_extent_extraction(arguments)
         logger.info("DONE")
     finally:
         client.close()

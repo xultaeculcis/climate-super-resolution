@@ -3,7 +3,7 @@ import argparse
 import logging
 import os
 from glob import glob
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
 
 import numpy as np
 import pandas as pd
@@ -11,56 +11,18 @@ import pytorch_lightning as pl
 import rasterio as rio
 import torch
 import xarray as xr
-from rasterio.mask import mask
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
-from sr.data.datasets import CRUTSInferenceDataset
+from data.cruts_inference_dataset import CRUTSInferenceDataset
+from data.geo_tiff_inference_dataset import GeoTiffInferenceDataset
+from pre_processing.preprocessing import extract_extent, hr_bbox, var_to_variable
 from sr.data.normalization import MinMaxScaler
 from sr.lightning_modules.utils import prepare_pl_module
 from sr.pre_processing.cruts_config import CRUTSConfig
 
 
-europe_bbox_lr = ((-16, 84), (40.25, 33))
-europe_bbox_hr = ((-16, 84.25), (40.25, 32.875))
-left_upper_lr = [-16, 84.375]
-left_lower_lr = [-16, 33.125]
-right_upper_lr = [40.25, 84.375]
-right_lower_lr = [40.25, 33.125]
-
-left_upper_hr = [-16, 84.375]
-left_lower_hr = [-16, 33]
-right_upper_hr = [40.25, 84.375]
-right_lower_hr = [40.25, 33]
-
-lr_polygon = [
-    [
-        left_upper_lr,
-        right_upper_lr,
-        right_lower_lr,
-        left_lower_lr,
-        left_upper_lr,
-    ]
-]
-hr_polygon = [
-    [
-        left_upper_hr,
-        right_upper_hr,
-        right_lower_hr,
-        left_lower_hr,
-        left_upper_hr,
-    ]
-]
-
-var_to_variable = {
-    CRUTSConfig.pre: "Precipitation",
-    CRUTSConfig.tmn: "Minimum Temperature",
-    CRUTSConfig.tmp: "Average Temperature",
-    CRUTSConfig.tmx: "Maximum Temperature",
-}
-
-
-def parse_args() -> argparse.Namespace:
+def parse_args(arg_str: Optional[str] = None) -> argparse.Namespace:
     """
     Parses the arguments.
 
@@ -95,14 +57,19 @@ def parse_args() -> argparse.Namespace:
         default="/media/xultaeculcis/2TB/datasets/cruts/pre-processed/full-res",
     )
     parser.add_argument(
+        "--tiff_dir",
+        type=str,
+        default="/media/xultaeculcis/2TB/datasets/cruts/pre-processed/europe-extent",
+    )
+    parser.add_argument(
         "--elevation_file",
         type=str,
-        default="/media/xultaeculcis/2TB/datasets/wc/pre-processed/elevation/resized/4x/wc2.1_2.5m_elev.tif",
+        default="/media/xultaeculcis/2TB/datasets/cruts/pre-processed/europe-extent/elevation/wc2.1_2.5m_elev.tif",
     )
     parser.add_argument(
         "--land_mask_file",
         type=str,
-        default="/media/xultaeculcis/2TB/datasets/wc/pre-processed/prec/resized/4x/wc2.1_2.5m_prec_1961-01.tif",
+        default="/media/xultaeculcis/2TB/datasets/cruts/pre-processed/europe-extent/mask/wc2.1_2.5m_prec_1961-01.tif",
     )
     parser.add_argument(
         "--inference_out_path",
@@ -130,6 +97,11 @@ def parse_args() -> argparse.Namespace:
         default="/media/xultaeculcis/2TB/datasets/cruts/inference-europe-extent-nc",
     )
     parser.add_argument(
+        "--min_max_lookup",
+        type=str,
+        default="./datasets/statistics_min_max.csv",
+    )
+    parser.add_argument(
         f"--pretrained_model_{CRUTSConfig.tmn}",
         type=str,
         # default="./model_weights/with_elevation/gen-pre-training-srcnn-tmin-4x-epoch=29-step=82709-hp_metric=0.00165.ckpt",  # noqa E501
@@ -141,7 +113,8 @@ def parse_args() -> argparse.Namespace:
         type=str,
         # default="./model_weights/with_elevation/gen-pre-training-srcnn-temp-4x-epoch=29-step=165419-hp_metric=0.00083.ckpt",  # noqa E501
         # default="./model_weights/no_elevation/gen-pre-training-srcnn-temp-4x-epoch=24-step=137849-hp_metric=0.00516.ckpt",  # noqa E501
-        default="./model_weights/use_elevation=True-batch_size=256/normalize-v2/gen-pre-training-srcnn-temp-4x-epoch=29-step=41369-hp_metric=0.00056.ckpt",  # noqa E501
+        # default="./model_weights/use_elevation=True-batch_size=256/normalize-v2/gen-pre-training-srcnn-temp-4x-epoch=29-step=41369-hp_metric=0.00056.ckpt",  # noqa E501
+        default="./model_weights/use_elevation=True-batch_size=48/gen-pre-training-rcan-temp-4x-epoch=29-step=220559-hp_metric=0.00317.ckpt",  # noqa E501
     )
     parser.add_argument(
         f"--pretrained_model_{CRUTSConfig.tmx}",
@@ -158,35 +131,50 @@ def parse_args() -> argparse.Namespace:
         default="./model_weights/use_elevation=True-batch_size=256/normalize/gen-pre-training-srcnn-prec-4x-epoch=29-step=20699-hp_metric=0.00005.ckpt",  # noqa E501
     )
     parser.add_argument("--experiment_name", type=str, default="inference")
-    parser.add_argument("--temp_only", type=bool, default=False)
+    parser.add_argument("--use_netcdf_datasets", type=bool, default=False)
+    parser.add_argument("--temp_only", type=bool, default=True)
     parser.add_argument("--use_elevation", type=bool, default=True)
     parser.add_argument("--run_inference", type=bool, default=True)
     parser.add_argument("--extract_polygon_extent", type=bool, default=True)
     parser.add_argument("--with_lr_extent", type=bool, default=False)
     parser.add_argument("--to_netcdf", type=bool, default=True)
-    parser.add_argument("--cruts_variable", type=str, default=CRUTSConfig.tmn)
+    parser.add_argument("--cruts_variable", type=str, default=CRUTSConfig.tmp)
+    parser.add_argument("--generator_type", type=str, default="rcan")
     # parser.add_argument(
     #     "--cruts_variable", type=str, default=CRUTSConfig.tmp
     # )  # single variable
     parser.add_argument("--scaling_factor", type=int, default=4)
+    parser.add_argument("--normalize", type=bool, default=True)
     parser.add_argument(
         "--normalization_range", type=Tuple[float, float], default=(-1.0, 1.0)
     )
-    parser.add_argument("--precision", type=int, default=32)
+    parser.add_argument("--precision", type=int, default=16)
     parser.add_argument("--gpus", type=int, default=1)
 
-    return parser.parse_args()
+    return parser.parse_args(arg_str)
 
 
 def inference_on_full_images(
     model: pl.LightningModule,
-    ds_path: str,
-    elevation_file: str,
+    ds: Dataset,
     land_mask_file: str,
     out_dir: str,
-    use_elevation: bool = False,
+    use_elevation: Optional[bool] = False,
     normalization_range: Optional[Tuple[float, float]] = (-1.0, 1.0),
 ) -> None:
+    """
+    Runs inference pipeline on full sized images.
+
+    Args:
+        model (pl.LightningModule): The model.
+        ds (Dataset): The dataset.
+        land_mask_file (str): The HR land mask file.
+        out_dir (str): The output SR Geo-Tiff dir.
+        use_elevation (Optional[bool]): Optional use elevation flag. `False` by default.
+        normalization_range (Optional[Tuple[float, float]]): Optional normalization range. `(-1, 1)` by default.
+
+    """
+
     # ensure gpu
     model = model.cuda()
 
@@ -197,16 +185,6 @@ def inference_on_full_images(
 
     mask = np.isnan(mask_data).squeeze(0)
 
-    # prepare dataset
-    ds = CRUTSInferenceDataset(
-        ds_path=ds_path,
-        elevation_file=elevation_file,
-        land_mask_file=land_mask_file,
-        generator_type="srcnn",
-        scaling_factor=4,
-        normalize_range=normalization_range,
-    )
-
     # prepare dataloader
     dl = DataLoader(dataset=ds, batch_size=1, pin_memory=True, num_workers=1)
 
@@ -216,12 +194,13 @@ def inference_on_full_images(
     for _, batch in tqdm(enumerate(dl), total=len(dl)):
         lr = batch["lr"].cuda()
         elev = batch["elevation"].cuda()
+        elev_lr = batch["elevation_lr"].cuda()
         min = batch["min"].numpy()
         max = batch["max"].numpy()
         filename = batch["filename"]
 
-        x = torch.cat([lr, elev], dim=1) if use_elevation else lr
-        outputs = model(x)
+        x = torch.cat([lr, elev_lr], dim=1) if use_elevation else lr
+        outputs = model(x, elev)
         outputs = outputs.cpu().numpy()
 
         for idx, output in enumerate(outputs):
@@ -235,43 +214,16 @@ def inference_on_full_images(
                 dataset.write(arr, 1)
 
 
-def extract_extent(src_dir, extent_out_path, cruts_variables, polygon):
-    bbox = [
-        {
-            "coordinates": polygon,
-            "type": "Polygon",
-        }
-    ]
+def run_inference(arguments: argparse.Namespace, cruts_variables: List[str]) -> None:
+    """
+    Runs the inference on specified variables.
 
-    for var in cruts_variables:
-        logging.info(f"Extracting Europe polygon extents for variable '{var}'")
-        files = sorted(glob(os.path.join(src_dir, var, "*.tif")))
-        os.makedirs(os.path.join(extent_out_path, var), exist_ok=True)
-        for fp in tqdm(files):
-            filename = os.path.basename(fp)
+    Args:
+        arguments (argparse.Namespace): The arguments.
+        cruts_variables (List[str]): The CRU-TS variables.
 
-            with rio.open(fp) as ds:
-                crop, transform = mask(ds, bbox, crop=True)
-                meta = ds.meta
+    """
 
-            meta.update(
-                {
-                    "driver": "GTiff",
-                    "height": crop.shape[1],
-                    "width": crop.shape[2],
-                    "transform": transform,
-                }
-            )
-
-            with rio.open(
-                os.path.join(extent_out_path, var, filename), "w", **meta
-            ) as dest:
-                dest.write(crop)
-
-        logging.info(f"Done for variable '{var}'")
-
-
-def run_inference(arguments, cruts_variables):
     for var in cruts_variables:
         out_path = os.path.join(arguments.inference_out_path, var)
         os.makedirs(out_path, exist_ok=True)
@@ -291,12 +243,37 @@ def run_inference(arguments, cruts_variables):
         logging.info(f"Running inference for variable: {var}")
         logging.info(f"Running inference with model: {model_file}")
 
+        # prepare dataset
+        dataset = (
+            CRUTSInferenceDataset(
+                ds_path=arguments.ds_path,
+                elevation_file=arguments.elevation_file,
+                land_mask_file=arguments.land_mask_file,
+                generator_type=arguments.generator_type,
+                scaling_factor=4,
+                normalize=arguments.normalize,
+                standardize=not arguments.normalize,
+                normalize_range=arguments.normalization_range,
+            )
+            if args.use_netcdf_datasets
+            else GeoTiffInferenceDataset(
+                tiff_folder_path=os.path.join(arguments.extent_out_path_lr, var),
+                elevation_file=arguments.elevation_file,
+                land_mask_file=arguments.land_mask_file,
+                generator_type=arguments.generator_type,
+                scaling_factor=4,
+                normalize=arguments.normalize,
+                standardize=not arguments.normalize,
+                normalize_range=arguments.normalization_range,
+                min_max_lookup_df=pd.read_csv(args.min_max_lookup),
+            )
+        )
+
         with torch.no_grad():
             inference_on_full_images(
                 model=net,
-                ds_path=param_dict[f"ds_path_{var}"],
+                ds=dataset,
                 land_mask_file=arguments.land_mask_file,
-                elevation_file=arguments.elevation_file,
                 out_dir=out_path,
                 use_elevation=arguments.use_elevation,
                 normalization_range=arguments.normalization_range,
@@ -307,7 +284,19 @@ def run_inference(arguments, cruts_variables):
         del net
 
 
-def transform_tiff_files_to_net_cdf(tiff_dir, nc_out_path, cruts_variables):
+def transform_tiff_files_to_net_cdf(
+    tiff_dir: str, nc_out_path: str, cruts_variables: str
+) -> None:
+    """
+    Transforms generated Geo-Tiff files into Net-CDF datasets.
+
+    Args:
+        tiff_dir (str): The directory with tiff files to convert.
+        nc_out_path (str): The out directory where to place the Net-CDF Datasets.
+        cruts_variables (str): The name of the CRU-TS variable.
+
+    """
+
     os.makedirs(nc_out_path, exist_ok=True)
 
     for var in cruts_variables:
@@ -377,17 +366,8 @@ if __name__ == "__main__":
     if args.extract_polygon_extent:
         logging.info("Extracting SR polygon extents for Europe.")
         extract_extent(
-            args.inference_out_path, args.extent_out_path_sr, variables, hr_polygon
+            args.inference_out_path, args.extent_out_path_sr, variables, hr_bbox
         )
-
-        if args.with_lr_extent:
-            logging.info("Extracting LR polygon extents for Europe.")
-            extract_extent(
-                args.original_full_res_cruts_data_path,
-                args.extent_out_path_lr,
-                variables,
-                lr_polygon,
-            )
 
     # Run tiff file transformation to net-cdf datasets.
     if args.to_netcdf:

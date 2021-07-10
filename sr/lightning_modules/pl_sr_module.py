@@ -7,7 +7,7 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
-from pytorch_lightning.metrics.functional import (
+from torchmetrics.functional import (
     mean_absolute_error,
     mean_squared_error,
     psnr,
@@ -327,8 +327,8 @@ class SuperResolutionLightningModule(pl.LightningModule):
         parser.add_argument("--disc_in_channels", default=1, type=int)
         # esrgan specific
         parser.add_argument("--nf", default=64, type=int)
-        parser.add_argument("--nb", default=23, type=int)
-        parser.add_argument("--gc", default=32, type=int)
+        parser.add_argument("--nb", default=11, type=int)
+        parser.add_argument("--gc", default=16, type=int)
         # rfbesrgan specific
         parser.add_argument("--num_rrdb_blocks", default=16, type=int)
         parser.add_argument("--num_rrfdb_blocks", default=8, type=int)

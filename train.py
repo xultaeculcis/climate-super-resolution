@@ -44,7 +44,7 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     parser.add_argument("--gpus", type=int, default=1)
     parser.add_argument("--val_check_interval", type=Union[int, float], default=1.0)
     parser.add_argument("--max_epochs", type=int, default=30)
-    parser.add_argument("--batch_size", type=int, default=48)
+    parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--lr_find_only", type=bool, default=False)
     parser.add_argument("--fast_dev_run", type=bool, default=False)
     parser.add_argument("--print_config", type=bool, default=True)
@@ -56,12 +56,12 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     parser.add_argument("--save_top_k", type=int, default=5)
     parser.add_argument("--log_every_n_steps", type=int, default=5)
     parser.add_argument("--flush_logs_every_n_steps", type=int, default=10)
-    parser.add_argument("--generator", type=str, default="rcan")
-    parser.add_argument(
-        "--resume_from_checkpoint",
-        type=str,
-        default="./model_weights/use_elevation=True-batch_size=48/gen-pre-training-rcan-temp-4x-epoch=14-step=110279-hp_metric=0.00405.ckpt",  # noqa E501
-    )
+    parser.add_argument("--generator", type=str, default="esrgan")
+    # parser.add_argument(
+    #     "--resume_from_checkpoint",
+    #     type=str,
+    #     default="./model_weights/use_elevation=True-batch_size=48/gen-pre-training-rcan-temp-4x-epoch=14-step=110279-hp_metric=0.00405.ckpt",  # noqa E501
+    # )
     parser.add_argument("--compare", type=bool, default=False)
 
     # args for training from pre-trained model

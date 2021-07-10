@@ -106,7 +106,8 @@ def parse_args(arg_str: Optional[str] = None) -> argparse.Namespace:
         type=str,
         # default="./model_weights/with_elevation/gen-pre-training-srcnn-tmin-4x-epoch=29-step=82709-hp_metric=0.00165.ckpt",  # noqa E501
         # default="./model_weights/no_elevation/gen-pre-training-srcnn-tmin-4x-epoch=29-step=82709-hp_metric=0.00571.ckpt",  # noqa E501
-        default="./model_weights/use_elevation=True-batch_size=256/normalize-v2/gen-pre-training-srcnn-tmin-4x-epoch=29-step=20699-hp_metric=0.00064.ckpt",  # noqa E501
+        # default="./model_weights/use_elevation=True-batch_size=256/normalize-v2/gen-pre-training-srcnn-tmin-4x-epoch=29-step=20699-hp_metric=0.00064.ckpt",  # noqa E501
+        default="./model_weights/use_elevation=True-batch_size=48/gen-pre-training-rcan-tmin-4x-epoch=29-step=110279-hp_metric=0.00397.ckpt",  # noqa E501
     )
     parser.add_argument(
         f"--pretrained_model_{CRUTSConfig.tmp}",
@@ -114,14 +115,17 @@ def parse_args(arg_str: Optional[str] = None) -> argparse.Namespace:
         # default="./model_weights/with_elevation/gen-pre-training-srcnn-temp-4x-epoch=29-step=165419-hp_metric=0.00083.ckpt",  # noqa E501
         # default="./model_weights/no_elevation/gen-pre-training-srcnn-temp-4x-epoch=24-step=137849-hp_metric=0.00516.ckpt",  # noqa E501
         # default="./model_weights/use_elevation=True-batch_size=256/normalize-v2/gen-pre-training-srcnn-temp-4x-epoch=29-step=41369-hp_metric=0.00056.ckpt",  # noqa E501
-        default="./model_weights/use_elevation=True-batch_size=48/gen-pre-training-rcan-temp-4x-epoch=29-step=220559-hp_metric=0.00317.ckpt",  # noqa E501
+        # default="./model_weights/use_elevation=True-batch_size=48/gen-pre-training-rcan-temp-4x-epoch=29-step=220559-hp_metric=0.00317.ckpt",  # noqa E501
+        # default="./model_weights/use_elevation=True-batch_size=48/gen-pre-training-rcan-tmax-4x-epoch=29-step=110279-hp_metric=0.00417.ckpt",  # noqa E501
+        default="./model_weights/use_elevation=True-batch_size=64/gen-pre-training-esrgan-temp-4x-epoch=29-step=165419-hp_metric=0.00608.ckpt",  # noqa E501
     )
     parser.add_argument(
         f"--pretrained_model_{CRUTSConfig.tmx}",
         type=str,
         # default="./model_weights/with_elevation/gen-pre-training-srcnn-tmax-4x-epoch=29-step=82709-hp_metric=0.00142.ckpt",  # noqa E501
         # default="./model_weights/no_elevation/gen-pre-training-srcnn-tmax-4x-epoch=18-step=52382-hp_metric=0.00468.ckpt",  # noqa E501
-        default="./model_weights/use_elevation=True-batch_size=256/normalize-v2/gen-pre-training-srcnn-tmax-4x-epoch=29-step=20699-hp_metric=0.00059.ckpt",  # noqa E501
+        # default="./model_weights/use_elevation=True-batch_size=256/normalize-v2/gen-pre-training-srcnn-tmax-4x-epoch=29-step=20699-hp_metric=0.00059.ckpt",  # noqa E501
+        default="./model_weights/use_elevation=True-batch_size=48/gen-pre-training-rcan-tmax-4x-epoch=29-step=110279-hp_metric=0.00417.ckpt",  # noqa E501
     )
     parser.add_argument(
         f"--pretrained_model_{CRUTSConfig.pre}",
@@ -136,13 +140,9 @@ def parse_args(arg_str: Optional[str] = None) -> argparse.Namespace:
     parser.add_argument("--use_elevation", type=bool, default=True)
     parser.add_argument("--run_inference", type=bool, default=True)
     parser.add_argument("--extract_polygon_extent", type=bool, default=True)
-    parser.add_argument("--with_lr_extent", type=bool, default=False)
     parser.add_argument("--to_netcdf", type=bool, default=True)
     parser.add_argument("--cruts_variable", type=str, default=CRUTSConfig.tmp)
-    parser.add_argument("--generator_type", type=str, default="rcan")
-    # parser.add_argument(
-    #     "--cruts_variable", type=str, default=CRUTSConfig.tmp
-    # )  # single variable
+    parser.add_argument("--generator_type", type=str, default="esrgan")
     parser.add_argument("--scaling_factor", type=int, default=4)
     parser.add_argument("--normalize", type=bool, default=True)
     parser.add_argument(
@@ -285,7 +285,7 @@ def run_inference(arguments: argparse.Namespace, cruts_variables: List[str]) -> 
 
 
 def transform_tiff_files_to_net_cdf(
-    tiff_dir: str, nc_out_path: str, cruts_variables: str
+    tiff_dir: str, nc_out_path: str, cruts_variables: str, generator: str
 ) -> None:
     """
     Transforms generated Geo-Tiff files into Net-CDF datasets.
@@ -294,6 +294,7 @@ def transform_tiff_files_to_net_cdf(
         tiff_dir (str): The directory with tiff files to convert.
         nc_out_path (str): The out directory where to place the Net-CDF Datasets.
         cruts_variables (str): The name of the CRU-TS variable.
+        generator (str): The name of the generator network that was used.
 
     """
 
@@ -341,7 +342,10 @@ def transform_tiff_files_to_net_cdf(
 
         logging.info("Saving the dataset...")
         ds.to_netcdf(
-            os.path.join(nc_out_path, f"cru_ts4.04.nn.inference.1901.2019.{var}.dat.nc")
+            os.path.join(
+                nc_out_path,
+                f"{generator}.cru_ts4.04.nn.inference.1901.2019.{var}.dat.nc",
+            )
         )
         logging.info(f"Done for {var}")
 
@@ -373,7 +377,10 @@ if __name__ == "__main__":
     if args.to_netcdf:
         logging.info("Building NET CDF datasets from extent tiff files.")
         transform_tiff_files_to_net_cdf(
-            args.extent_out_path_sr, args.extent_out_path_sr_nc, variables
+            args.extent_out_path_sr,
+            args.extent_out_path_sr_nc,
+            variables,
+            args.generator,
         )
 
     logging.info("Done")

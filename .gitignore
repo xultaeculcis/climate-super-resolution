@@ -249,3 +249,4 @@ model_weights/*
 lightning_logs/
 dask-worker-space/
 results/
+/logs_archive/

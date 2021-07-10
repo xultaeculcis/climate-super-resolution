@@ -2,6 +2,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch import Tensor
+
+from sr.models.srcnn import SRCNN
 
 
 class ESRGANDiscriminator(nn.Module):
@@ -126,7 +129,9 @@ class ESRGANGenerator(nn.Module):
 
         self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
 
-    def forward(self, x):
+        self.srcnn = SRCNN(in_channels=2, out_channels=out_channels)
+
+    def forward(self, x: Tensor, elev: Tensor):
         fea = self.conv_first(x)
         trunk = self.trunk_conv(self.RRDB_trunk(fea))
         fea = fea + trunk
@@ -141,5 +146,6 @@ class ESRGANGenerator(nn.Module):
             )
 
         out = self.conv_last(self.lrelu(self.HRconv(fea)))
+        out = self.srcnn(torch.cat([out, elev], 1))
 
         return out

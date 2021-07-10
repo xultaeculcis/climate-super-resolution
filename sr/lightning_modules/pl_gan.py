@@ -10,7 +10,7 @@ from sr.lightning_modules.pl_sr_module import SuperResolutionLightningModule
 
 class GANLightningModule(SuperResolutionLightningModule):
     """
-    LightningModule for pre-training the GAN based models.
+    LightningModule for training the GAN based models.
     """
 
     def __init__(self, **kwargs):

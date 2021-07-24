@@ -2,13 +2,8 @@ name: sr
 channels:
   - conda-forge
   - defaults
-  - pytorch
 dependencies:
   - python=3.8
-  - cudatoolkit=11.1
-  - pytorch=1.8.1
-  - torchvision=0.2.2
-  - pytorch-lightning=1.2.8
   - geopandas=0.9.0
   - dask=2021.4.0
   - xarray=0.17.0
@@ -27,3 +22,4 @@ dependencies:
       - flake8==3.9.0
       - pytest==6.2.3
       - pre-commit==2.12.0
+      - beautifulsoup4==4.9.3

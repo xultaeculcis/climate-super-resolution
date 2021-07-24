@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 import argparse
 from dataclasses import dataclass
-from typing import Any, Tuple, Union
+from math import ceil
+from typing import Any, Tuple, Union, Optional
 
 import numpy as np
 import pytorch_lightning as pl
@@ -16,7 +17,7 @@ from torchmetrics.functional import (
 from torch import Tensor
 
 from sr.data import normalization
-from sr.pre_processing.cruts_config import CRUTSConfig
+from configs.cruts_config import CRUTSConfig
 from sr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
 from sr.models.rcan import RCAN
 from sr.data.normalization import MinMaxScaler, StandardScaler
@@ -68,6 +69,8 @@ class SuperResolutionLightningModule(pl.LightningModule):
             "perceptual_loss_factor",
             "adversarial_loss_factor",
             # data specific
+            "use_mask_as_3rd_channel",
+            "use_global_min_max",
             "use_elevation",
             "normalization_method",
             "normalization_range",
@@ -139,19 +142,13 @@ class SuperResolutionLightningModule(pl.LightningModule):
             )
         return generator
 
-    def forward(self, x: Tensor, elevation: Tensor = None) -> Tensor:
+    def forward(
+        self, x: Tensor, elevation: Tensor = None, mask: Tensor = None
+    ) -> Tensor:
         if self.hparams.generator == "srcnn":
-            return self.net_G(x).clamp(
-                self.stats["normalized_min"]
-                if self.hparams.normalization_method == normalization.zscore
-                else self.hparams.normalization_range[0],
-                self.stats["normalized_max"]
-                if self.hparams.normalization_method == normalization.zscore
-                else self.hparams.normalization_range[1],
-            )
-
+            return self.net_G(x)
         else:
-            return self.net_G(x, elevation)
+            return self.net_G(x, elevation, mask)
 
     def common_step(self, batch: Any) -> Tuple[Tensor, Tensor]:
         """
@@ -163,29 +160,29 @@ class SuperResolutionLightningModule(pl.LightningModule):
         Returns (Tuple[Tensor, Tensor]): A tuple with HR image and SR image.
 
         """
-        lr, hr, sr_nearest, elev, elev_lr = (
+        lr, hr, elev, mask = (
             batch["lr"],
             batch["hr"],
-            batch["nearest"],
             batch["elevation"],
-            batch["elevation_lr"],
+            batch["mask"],
         )
 
-        if self.hparams.use_elevation:
-            if self.hparams.generator == "srcnn":
-                x = torch.cat([sr_nearest, elev], dim=1)
-            else:
-                x = torch.cat([lr, elev_lr], dim=1)
-        else:
-            x = lr
-
-        sr = self(x, elev)
+        sr = self(lr, elev, mask)
 
         return hr, sr
 
     def common_val_test_step(self, batch: Any) -> "MetricsResult":
+        """
+        Rus common validation and test steps.
+
+        Args:
+            batch (Any): The batch of data.
+
+        Returns (MetricsResult): The MetricsResult.
+
+        """
         original = batch["original_data"]
-        mask = batch["mask"].cpu().numpy()
+        mask = batch["mask_np"].cpu().numpy()
         max_vals = batch["max"].cpu().numpy()
         min_vals = batch["min"].cpu().numpy()
 
@@ -199,12 +196,12 @@ class SuperResolutionLightningModule(pl.LightningModule):
         denormalized_r2 = []
 
         original = original.squeeze(1).cpu().numpy()
-        sr = sr.squeeze(1).cpu().numpy()
+        squeezed_sr = sr.squeeze(1).cpu().numpy()
 
-        for i in range(sr.shape[0]):
+        for i in range(squeezed_sr.shape[0]):
             # to numpy
             i_original = original[i]
-            i_sr = sr[i]
+            i_sr = squeezed_sr[i]
 
             # denormalize/destandardize
             i_sr = (
@@ -246,6 +243,7 @@ class SuperResolutionLightningModule(pl.LightningModule):
             psnr=metrics.psnr,
             rmse=metrics.rmse,
             ssim=metrics.ssim,
+            sr=sr,
         )
 
     def compute_metrics_common(self, hr: Tensor, sr: Tensor) -> "MetricsSimple":
@@ -281,6 +279,29 @@ class SuperResolutionLightningModule(pl.LightningModule):
             self.hparams, {"hp_metric": self.hparams.initial_hp_metric_val}
         )
 
+    @property
+    def num_training_steps(self) -> int:
+        """Total training steps inferred from datamodule and devices."""
+        if self.trainer.max_steps:
+            return self.trainer.max_steps
+
+        limit_batches = self.trainer.limit_train_batches
+        batches = len(self.train_dataloader())
+        batches = (
+            min(batches, limit_batches)
+            if isinstance(limit_batches, int)
+            else int(limit_batches * batches)
+        )
+
+        num_devices = max(1, self.trainer.num_gpus, self.trainer.num_processes)
+        if self.trainer.tpu_cores:
+            num_devices = max(num_devices, self.trainer.tpu_cores)
+
+        effective_accum = self.trainer.accumulate_grad_batches * num_devices
+        train_steps = ceil(batches / effective_accum) * self.trainer.max_epochs
+
+        return train_steps
+
     @staticmethod
     def add_model_specific_args(
         parent: argparse.ArgumentParser,
@@ -296,7 +317,7 @@ class SuperResolutionLightningModule(pl.LightningModule):
         )
         parser.add_argument(
             "--pct_start",
-            default=0.05,
+            default=0.1,
             type=Union[float, int],
             help="The percentage of the cycle (in number of steps) spent increasing the learning rate",
         )
@@ -322,7 +343,7 @@ class SuperResolutionLightningModule(pl.LightningModule):
         parser.add_argument("--pixel_level_loss_factor", default=1e-2, type=float)
         parser.add_argument("--perceptual_loss_factor", default=1.0, type=float)
         parser.add_argument("--adversarial_loss_factor", default=5e-3, type=float)
-        parser.add_argument("--gen_in_channels", default=2, type=int)
+        parser.add_argument("--gen_in_channels", default=3, type=int)
         parser.add_argument("--gen_out_channels", default=1, type=int)
         parser.add_argument("--disc_in_channels", default=1, type=int)
         # esrgan specific
@@ -354,6 +375,7 @@ class MetricsResult:
     psnr: Union[np.ndarray, Tensor, float]
     rmse: Union[np.ndarray, Tensor, float]
     ssim: Union[np.ndarray, Tensor, float]
+    sr: Optional[Union[np.ndarray, Tensor, float]]
 
 
 @dataclass

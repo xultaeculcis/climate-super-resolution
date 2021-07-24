@@ -13,7 +13,7 @@ import rasterio as rio
 import torch
 from affine import Affine
 from pre_processing.preprocessing import get_tiles
-from pre_processing.world_clim_config import WorldClimConfig
+from configs.world_clim_config import WorldClimConfig
 from rasterio.enums import Resampling
 from rasterio.merge import merge
 from torchvision.transforms import transforms
@@ -21,7 +21,7 @@ from tqdm import tqdm
 
 from sr.data.utils import denormalize, normalize
 from sr.lightning_modules.utils import prepare_pl_module
-from sr.pre_processing.cruts_config import CRUTSConfig
+from configs.cruts_config import CRUTSConfig
 
 
 def parse_args() -> argparse.Namespace:

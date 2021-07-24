@@ -149,7 +149,7 @@ class RCAN(nn.Module):
         n_feats: int = 64,
         reduction: int = 16,
         scaling_factor: int = 4,
-        in_channels: int = 2,
+        in_channels: int = 3,
         out_channels: int = 1,
         conv: nn.Module = default_conv,
     ):
@@ -184,9 +184,9 @@ class RCAN(nn.Module):
         self.head = nn.Sequential(*modules_head)
         self.body = nn.Sequential(*modules_body)
         self.tail = nn.Sequential(*modules_tail)
-        self.srcnn = SRCNN(in_channels=2, out_channels=out_channels)
+        self.srcnn = SRCNN(in_channels=3, out_channels=out_channels)
 
-    def forward(self, x: Tensor, elev: Tensor) -> Tensor:
+    def forward(self, x: Tensor, elev: Tensor, mask: Tensor) -> Tensor:
         x = self.head(x)
 
         res = self.body(x)
@@ -194,7 +194,7 @@ class RCAN(nn.Module):
 
         x = self.tail(res)
 
-        x = self.srcnn(torch.cat([x, elev], 1))
+        x = self.srcnn(torch.cat([x, elev, mask], 1))
 
         return x
 

@@ -20,8 +20,8 @@ from rasterio.enums import Resampling
 from rasterio.mask import mask
 from tqdm import tqdm
 
-from sr.pre_processing.cruts_config import CRUTSConfig
-from sr.pre_processing.world_clim_config import WorldClimConfig
+from configs.cruts_config import CRUTSConfig
+from configs.world_clim_config import WorldClimConfig
 
 pbar = progress.ProgressBar()
 pbar.register()
@@ -139,21 +139,30 @@ def parse_args() -> argparse.Namespace:
         default="/media/xultaeculcis/2TB/datasets/wc/pre-processed/prec/resized/4x/wc2.1_2.5m_prec_1961-01.tif",
     )
     parser.add_argument("--run_cruts_to_cog", type=bool, default=False)
+    parser.add_argument("--run_temp_rasters_generation", type=bool, default=False)
     parser.add_argument("--run_statistics_computation", type=bool, default=False)
     parser.add_argument("--run_world_clim_resize", type=bool, default=False)
     parser.add_argument("--run_world_clim_tiling", type=bool, default=False)
     parser.add_argument("--run_world_clim_elevation_resize", type=bool, default=False)
-    parser.add_argument("--run_train_val_test_split", type=bool, default=False)
-    parser.add_argument("--run_extent_extraction", type=bool, default=True)
+    parser.add_argument("--run_train_val_test_split", type=bool, default=True)
+    parser.add_argument("--run_extent_extraction", type=bool, default=False)
+    parser.add_argument("--run_z_score_stats_computation", type=bool, default=False)
+    parser.add_argument("--run_min_max_stats_computation", type=bool, default=True)
     parser.add_argument("--patch_size", type=Tuple[int, int], default=(128, 128))
     parser.add_argument("--patch_stride", type=int, default=64)
     parser.add_argument("--normalize_patches", type=bool, default=False)
     parser.add_argument("--n_workers", type=int, default=8)
     parser.add_argument("--res_mult_inx", type=int, default=2)
     parser.add_argument("--threads_per_worker", type=int, default=1)
-    parser.add_argument("--train_years", type=Tuple[int, int], default=(1961, 1999))
-    parser.add_argument("--val_years", type=Tuple[int, int], default=(2000, 2004))
-    parser.add_argument("--test_years", type=Tuple[int, int], default=(2005, 2019))
+    parser.add_argument(
+        "--train_years", type=Tuple[int, int], default=(1961, 2004)
+    )  # 1961, 1999
+    parser.add_argument(
+        "--val_years", type=Tuple[int, int], default=(2005, 2017)
+    )  # 2000, 2004
+    parser.add_argument(
+        "--test_years", type=Tuple[int, int], default=(2018, 2019)
+    )  # 2005, 2019
 
     return parser.parse_args()
 
@@ -428,6 +437,10 @@ def compute_stats_for_zscore(args: argparse.Namespace) -> None:
         args (argparse.Namespace): The arguments.
 
     """
+    if not args.run_z_score_stats_computation:
+        return
+
+    logger.info("Running statistical computation for z-score")
 
     def compute_stats(var_name, arr):
         mean = np.nanmean(arr)
@@ -474,77 +487,92 @@ def compute_stats_for_min_max_normalization(args: argparse.Namespace) -> None:
         args (argparse.Namespace): The arguments.
 
     """
+    if not args.run_min_max_stats_computation:
+        return
+
+    logger.info("Running statistical computation for min-max normalization")
 
     def compute_stats(fp):
         with rio.open(fp) as ds:
             arr = ds.read(1)
+            arr[arr == -32768.0] = 0.0  # handle elevation masked values
             min = np.nanmin(arr)
             max = np.nanmax(arr)
             return min, max
 
     results = []
 
+    def _stats_for_cruts(fp):
+        year_from_filename = int(os.path.basename(fp).split("-")[-3])
+        month_from_filename = int(os.path.basename(fp).split("-")[-2])
+        return (
+            "cru-ts",
+            fp,
+            os.path.basename(fp),
+            var,
+            year_from_filename,
+            month_from_filename,
+            *compute_stats(fp),
+        )
+
     for var in CRUTSConfig.variables_cts:
         logger.info(f"Computing stats for CRU-TS - '{var}'")
-        for fp in tqdm(
-            sorted(
-                glob(
-                    os.path.join(
-                        args.out_dir_cruts, CRUTSConfig.full_res_dir, var, "*.tif"
+        results.extend(
+            dask.bag.from_sequence(
+                sorted(
+                    glob(
+                        os.path.join(
+                            args.out_dir_cruts, CRUTSConfig.full_res_dir, var, "*.tif"
+                        )
                     )
                 )
             )
-        ):
-            year_from_filename = int(os.path.basename(fp).split("-")[-3])
-            month_from_filename = int(os.path.basename(fp).split("-")[-2])
-            results.append(
-                (
-                    "cru-ts",
-                    fp,
-                    os.path.basename(fp),
-                    var,
-                    year_from_filename,
-                    month_from_filename,
-                    *compute_stats(fp),
-                )
-            )
+            .map(_stats_for_cruts)
+            .compute()
+        )
+
+    def _stats_for_wc(fp):
+        year_from_filename = (
+            int(os.path.basename(fp).split("-")[0].split("_")[-1])
+            if var != WorldClimConfig.elevation
+            else -1
+        )
+        month_from_filename = (
+            int(os.path.basename(fp).split("-")[1].split(".")[0])
+            if var != WorldClimConfig.elevation
+            else -1
+        )
+        return (
+            "world-clim",
+            fp,
+            os.path.basename(fp),
+            var,
+            year_from_filename,
+            month_from_filename,
+            *compute_stats(fp),
+        )
 
     for var in WorldClimConfig.variables_wc + [WorldClimConfig.elevation]:
         logger.info(f"Computing stats for World Clim - '{var}'")
-        for fp in tqdm(
-            sorted(
-                glob(
-                    os.path.join(
-                        args.out_dir_world_clim,
-                        var,
-                        WorldClimConfig.resized_dir,
-                        WorldClimConfig.resolution_multipliers[args.res_mult_inx][0],
-                        "*.tif",
+        results.extend(
+            dask.bag.from_sequence(
+                sorted(
+                    glob(
+                        os.path.join(
+                            args.out_dir_world_clim,
+                            var,
+                            WorldClimConfig.resized_dir,
+                            WorldClimConfig.resolution_multipliers[args.res_mult_inx][
+                                0
+                            ],
+                            "*.tif",
+                        )
                     )
                 )
             )
-        ):
-            year_from_filename = (
-                int(os.path.basename(fp).split("-")[0].split("_")[-1])
-                if var != WorldClimConfig.elevation
-                else -1
-            )
-            month_from_filename = (
-                int(os.path.basename(fp).split("-")[1].split(".")[0])
-                if var != WorldClimConfig.elevation
-                else -1
-            )
-            results.append(
-                (
-                    "world-clim",
-                    fp,
-                    os.path.basename(fp),
-                    var,
-                    year_from_filename,
-                    month_from_filename,
-                    *compute_stats(fp),
-                )
-            )
+            .map(_stats_for_wc)
+            .compute()
+        )
 
     output_file = os.path.join(args.dataframe_output_path, "statistics_min_max.csv")
     columns = [
@@ -557,7 +585,50 @@ def compute_stats_for_min_max_normalization(args: argparse.Namespace) -> None:
         "min",
         "max",
     ]
+
     df = pd.DataFrame(results, columns=columns)
+
+    # compute global min & max
+    df["global_min"] = np.nan
+    df["global_max"] = np.nan
+
+    grouped_min_series = df.groupby("variable").min()["min"]
+    grouped_max_series = df.groupby("variable").max()["max"]
+    global_min_max_lookup = pd.DataFrame(
+        {
+            "global_min": grouped_min_series,
+            "global_max": grouped_max_series,
+        }
+    ).to_dict(orient="index")
+
+    cruts_global_min = 0.0
+    cruts_global_max = 0.0
+    wc_global_min = 0.0
+    wc_global_max = 0.0
+
+    for key, val in global_min_max_lookup.items():
+        if key in CRUTSConfig.temperature_vars:
+            cruts_global_min = np.minimum(cruts_global_min, val["global_min"])
+            cruts_global_max = np.maximum(cruts_global_max, val["global_max"])
+        if key in WorldClimConfig.temperature_vars:
+            wc_global_min = np.minimum(wc_global_min, val["global_min"])
+            wc_global_max = np.maximum(wc_global_max, val["global_max"])
+
+    for key, val in global_min_max_lookup.items():
+        if key in CRUTSConfig.temperature_vars:
+            val["global_min"] = cruts_global_min
+            val["global_max"] = cruts_global_max
+        if key in WorldClimConfig.temperature_vars:
+            val["global_min"] = wc_global_min
+            val["global_max"] = wc_global_max
+
+    global_min_max_lookup[WorldClimConfig.elevation]["global_min"] = 0.0
+
+    for idx, row in df.iterrows():
+        var = row["variable"]
+        df.loc[idx, "global_min"] = global_min_max_lookup[var]["global_min"]
+        df.loc[idx, "global_max"] = global_min_max_lookup[var]["global_max"]
+
     df.to_csv(output_file, header=True, index=False)
 
 
@@ -954,6 +1025,66 @@ def run_cruts_extent_extraction(args: argparse.Namespace) -> None:
         )
 
 
+def generate_temp_raster(tmin_raster_fname: str) -> None:
+    """
+    Generates temp raster from tmin and tmax rasters.
+    Args:
+        tmin_raster_fname (str): The filename of the tmin raster.
+    """
+    output_file_name = tmin_raster_fname.replace("/tmin/", "/temp/").replace(
+        "_tmin_", "_temp_"
+    )
+    tmax_raster_fname = tmin_raster_fname.replace("/tmin/", "/tmax/").replace(
+        "_tmin_", "_tmax_"
+    )
+
+    with rio.open(tmin_raster_fname) as tmin_raster:
+        with rio.open(tmax_raster_fname) as tmax_raster:
+            with rio.open(
+                output_file_name, **tmin_raster.profile, mode="w"
+            ) as temp_raster:
+                tmin_values = tmin_raster.read()
+                tmax_values = tmax_raster.read()
+                temp_values = (tmax_values + tmin_values) / 2.0
+                temp_raster.write(temp_values)
+
+
+def run_temp_rasters_generation(args: argparse.Namespace) -> None:
+    """
+    Runs temp raster generation from tmin and tmax rasters.
+    Args:
+        args (argparse.Namespace): The arguments.
+    """
+    if args.run_temp_rasters_generation:
+        logger.info("Running temp raster generation")
+        multiplier, scale = WorldClimConfig.resolution_multipliers[args.res_mult_inx]
+        os.makedirs(
+            os.path.join(
+                args.out_dir_world_clim,
+                WorldClimConfig.temp,
+                WorldClimConfig.resized_dir,
+                multiplier,
+            ),
+            exist_ok=True,
+        )
+
+        tmin_files = sorted(
+            glob(
+                os.path.join(
+                    args.out_dir_world_clim,
+                    WorldClimConfig.tmin,
+                    WorldClimConfig.resized_dir,
+                    multiplier,
+                    "*.tif",
+                )
+            )
+        )
+
+        dask.bag.from_sequence(tmin_files).map(generate_temp_raster).compute()
+
+        logger.info("Done with temp raster generation")
+
+
 if __name__ == "__main__":
     arguments = parse_args()
 
@@ -968,6 +1099,7 @@ if __name__ == "__main__":
         run_cruts_to_cog(arguments)
         run_statistics_computation(arguments)
         run_world_clim_resize(arguments)
+        run_temp_rasters_generation(arguments)
         run_world_clim_elevation_resize(arguments)
         run_world_clim_tiling(arguments)
         run_train_val_test_split(arguments)

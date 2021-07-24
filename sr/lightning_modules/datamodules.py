@@ -10,10 +10,10 @@ import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
 from sr.data import normalization
-from sr.pre_processing.cruts_config import CRUTSConfig
+from sr.configs.cruts_config import CRUTSConfig
 from sr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
 from sr.data.climate_dataset import ClimateDataset
-from sr.pre_processing.world_clim_config import WorldClimConfig
+from sr.configs.world_clim_config import WorldClimConfig
 
 logging.basicConfig(level=logging.INFO)
 os.environ["NUMEXPR_MAX_THREADS"] = "16"
@@ -27,12 +27,16 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         world_clim_multiplier: str,
         generator_type: str,
         scale_factor: Optional[int] = 4,
-        batch_size: Optional[int] = 32,
+        batch_size: Optional[int] = 128,
         num_workers: Optional[int] = 4,
         hr_size: Optional[int] = 128,
         seed: Optional[int] = 42,
         normalization_method: Optional[str] = normalization.minmax,
-        normalization_range: Optional[Tuple[float, float]] = (0.0, 1.0),
+        normalization_range: Optional[Tuple[float, float]] = (-1.0, 1.0),
+        pin_memory: Optional[bool] = True,
+        use_elevation: Optional[bool] = True,
+        use_mask_as_3rd_channel: Optional[bool] = True,
+        use_global_min_max: Optional[bool] = True,
     ):
         super(SuperResolutionDataModule, self).__init__()
 
@@ -49,6 +53,10 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         self.generator_type = generator_type
         self.normalization_method = normalization_method
         self.normalization_range = normalization_range
+        self.pin_memory = pin_memory
+        self.use_elevation = use_elevation
+        self.use_mask_as_3rd_channel = use_mask_as_3rd_channel
+        self.use_global_min_max = use_global_min_max
 
         train_df, val_df, test_dfs, elevation_df, standardize_stats = self.load_data()
 
@@ -69,6 +77,9 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             standardize=self.normalization_method == normalization.zscore,
             standardize_stats=standardize_stats,
             normalize_range=self.normalization_range,
+            use_elevation=self.use_elevation,
+            use_mask_as_3rd_channel=self.use_mask_as_3rd_channel,
+            use_global_min_max=self.use_global_min_max,
         )
         self.val_dataset = ClimateDataset(
             df=val_df,
@@ -82,6 +93,9 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             standardize=self.normalization_method == normalization.zscore,
             standardize_stats=standardize_stats,
             normalize_range=self.normalization_range,
+            use_elevation=self.use_elevation,
+            use_mask_as_3rd_channel=self.use_mask_as_3rd_channel,
+            use_global_min_max=self.use_global_min_max,
         )
         self.test_datasets = [
             ClimateDataset(
@@ -96,6 +110,9 @@ class SuperResolutionDataModule(pl.LightningDataModule):
                 standardize=self.normalization_method == normalization.zscore,
                 standardize_stats=standardize_stats,
                 normalize_range=self.normalization_range,
+                use_elevation=self.use_elevation,
+                use_mask_as_3rd_channel=self.use_mask_as_3rd_channel,
+                use_global_min_max=self.use_global_min_max,
             )
             for test_df in test_dfs
         ]
@@ -106,6 +123,7 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             shuffle=True,
             num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
         )
 
     def val_dataloader(self) -> DataLoader:
@@ -114,6 +132,7 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
         )
 
     def test_dataloader(self) -> List[DataLoader]:
@@ -124,6 +143,7 @@ class SuperResolutionDataModule(pl.LightningDataModule):
                     batch_size=self.batch_size,
                     shuffle=False,
                     num_workers=self.num_workers,
+                    pin_memory=self.pin_memory,
                 )
                 for test_dataset in self.test_datasets
             ]
@@ -166,7 +186,11 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             train_dfs = []
             val_dfs = []
             test_dfs = []
-            variables = [WorldClimConfig.tmin, WorldClimConfig.tmax]
+            variables = [
+                WorldClimConfig.tmin,
+                WorldClimConfig.tmax,
+                WorldClimConfig.temp,
+            ]
             for var in variables:
                 train_dfs.append(self.load_dataframe(var, "train.csv"))
                 val_dfs.append(self.load_dataframe(var, "val.csv"))
@@ -221,7 +245,7 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         parser.add_argument(
             "--world_clim_variable",
             type=str,
-            default="tmax",
+            default="temp",
         )
         parser.add_argument(
             "--world_clim_multiplier",
@@ -229,6 +253,10 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             default="4x",
         )
         parser.add_argument("--batch_size", type=int, default=64)
+        parser.add_argument("--pin_memory", type=bool, default=True)
+        parser.add_argument("--use_mask_as_3rd_channel", type=bool, default=True)
+        parser.add_argument("--use_elevation", type=bool, default=True)
+        parser.add_argument("--use_global_min_max", type=bool, default=True)
         parser.add_argument("--num_workers", type=int, default=8)
         parser.add_argument("--hr_size", type=int, default=128)
         parser.add_argument("--scale_factor", type=int, default=4)
@@ -254,7 +282,8 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser = SuperResolutionDataModule.add_data_specific_args(parser)
     args = parser.parse_args()
-    args.batch_size = 512
+    args.batch_size = 32
+    args.num_workers = 1
 
     def plot_array(arr, figsize=None):
         plt.figure(figsize=figsize)
@@ -265,7 +294,7 @@ if __name__ == "__main__":
         data_path=os.path.join("../..", args.data_path),
         world_clim_variable=args.world_clim_variable,
         world_clim_multiplier=args.world_clim_multiplier,
-        generator_type="srcnn",
+        generator_type="rcan",
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         hr_size=args.hr_size,
@@ -273,18 +302,14 @@ if __name__ == "__main__":
         seed=args.seed,
         normalization_method=args.normalization_method,
         normalization_range=args.normalization_range,
+        pin_memory=args.pin_memory,
     )
 
     # plot_single_batch(dm.train_dataloader(), keys=["lr", "hr", "elevation", "nearest"])
     # plot_single_batch(dm.val_dataloader(), keys=["lr", "hr", "elevation", "nearest"])
     # plot_single_batch(dm.test_dataloader(), keys=["lr", "hr", "elevation", "nearest"])
 
-    dl = DataLoader(
-        dataset=dm.val_dataset,
-        batch_size=args.batch_size,
-        pin_memory=True,
-        num_workers=1,
-    )
+    dl = dm.val_dataloader()
 
     stats = CRUTSConfig.statistics[
         world_clim_to_cruts_mapping[args.world_clim_variable]

@@ -5,7 +5,7 @@ import logging
 import xarray as xr
 import pandas as pd
 
-from pre_processing.cruts_config import CRUTSConfig
+from configs.cruts_config import CRUTSConfig
 from result_inspection.consts import lats, lons, alts
 from result_inspection.models import CompareStatsResults
 

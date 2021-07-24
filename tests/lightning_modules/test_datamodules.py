@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from sr.lightning_modules.datamodules import SuperResolutionDataModule
-from sr.pre_processing.world_clim_config import WorldClimConfig
+from sr.configs.world_clim_config import WorldClimConfig
 
 
 class Args:
@@ -33,12 +33,11 @@ def common_asserts(dl, stage="test"):
     for _, batch in enumerate(dl):
         lr = batch["lr"]
         hr = batch["hr"]
-        sr_nearest = batch["nearest"]
         elevation = batch["elevation"]
 
         expected_lr_shape = (
             args.batch_size,
-            1,
+            3,
             args.hr_size // args.scale_factor,
             args.hr_size // args.scale_factor,
         )
@@ -58,6 +57,8 @@ def common_asserts(dl, stage="test"):
         )
 
         if stage != "train":
+            sr_nearest = batch["nearest"]
+
             assert sr_nearest.shape == (args.batch_size, 1, 128, 128), (
                 f"Expected the SR batch to be in shape {expected_hr_shape}, "
                 f"but found: {sr_nearest.shape}"

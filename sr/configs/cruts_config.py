@@ -14,6 +14,7 @@ class CRUTSConfig:
         tmp,
         pre,
     ]
+    temperature_vars = [tmn, tmp, tmx]
     cts_variable_files = [f"cru_ts4.04.1901.2019.{var}.dat.nc" for var in variables_cts]
     full_res_dir = "full-res"
     tiles_dir = "tiles"

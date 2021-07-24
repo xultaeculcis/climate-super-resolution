@@ -5,8 +5,8 @@ from typing import List, Optional, Tuple
 import dask
 import dask.bag
 import numpy as np
-from distributed import Client
 from PIL import Image
+from distributed import Client
 
 
 class ClimScaler:

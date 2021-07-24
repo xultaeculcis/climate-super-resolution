@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
+import dataclasses
 from typing import Any, Dict, List, Tuple, Union, Optional
 
 import torch
 from torch import Tensor
 from torch.optim import Adam
 
+from sr.losses.perceptual import PerceptualLoss
+from sr.models.discriminator import Discriminator
 from sr.lightning_modules.pl_sr_module import SuperResolutionLightningModule
 
 
@@ -15,6 +18,10 @@ class GANLightningModule(SuperResolutionLightningModule):
 
     def __init__(self, **kwargs):
         super(GANLightningModule, self).__init__(**kwargs)
+        self.net_D = Discriminator(self.hparams.disc_in_channels)
+        self.perceptual_criterion = PerceptualLoss()
+        self.pixel_level_criterion = torch.nn.L1Loss()
+        self.adversarial_criterion = torch.nn.BCEWithLogitsLoss()
 
     def _real_fake(self, size: int) -> Tuple[Tensor, Tensor]:
         real_labels = torch.ones((size, 1), device=self.device)
@@ -61,15 +68,10 @@ class GANLightningModule(SuperResolutionLightningModule):
     def training_step(
         self, batch: Any, batch_idx: int, optimizer_idx: int
     ) -> Dict[str, Any]:
-        lr, hr, sr_nearest, elevation = (
-            batch["lr"],
-            batch["hr"],
-            batch["nearest"],
-            batch["elevation"],
-        )
+        hr = (batch["hr"],)
         real_labels, fake_labels = self._real_fake(hr.size(0))
 
-        sr = self(sr_nearest if self.hparams.generator == "srcnn" else lr, elevation)
+        hr, sr = self.common_step(batch)
 
         # train generator
         if optimizer_idx == 0:
@@ -120,26 +122,34 @@ class GANLightningModule(SuperResolutionLightningModule):
 
         """
 
-        lr, hr, sr_nearest, elevation = (
-            batch["lr"],
-            batch["hr"].half(),
-            batch["nearest"],
-            batch["elevation"],
-        )
+        hr = batch["hr"]
         real_labels, fake_labels = self._real_fake(hr.size(0))
 
-        sr = self(sr_nearest if self.hparams.generator == "srcnn" else lr, elevation)
+        metrics = self.common_val_test_step(batch)
 
         perceptual_loss, adversarial_loss, pixel_level_loss, loss_g = self.loss_g(
-            hr, sr, real_labels, fake_labels
+            hr, metrics.sr, real_labels, fake_labels
         )
 
-        return {
-            "val/perceptual_loss": perceptual_loss,
-            "val/adversarial_loss": adversarial_loss,
-            "val/pixel_level_loss": pixel_level_loss,
-            "val/loss_G": loss_g,
-        }
+        log_dict = dict(
+            list(
+                (f"val/{k}", v)
+                for k, v in dataclasses.asdict(metrics).items()
+                if k != "sr"
+            )
+        )
+
+        log_dict.update(
+            {
+                "val/perceptual_loss": perceptual_loss,
+                "val/adversarial_loss": adversarial_loss,
+                "val/loss_G": loss_g,
+            }
+        )
+
+        self.log_dict(log_dict, on_step=False, on_epoch=True)
+
+        return log_dict
 
     def validation_epoch_end(self, outputs: List[Any]) -> None:
         """Compute and log validation losses at the epoch level."""
@@ -161,14 +171,14 @@ class GANLightningModule(SuperResolutionLightningModule):
         )
         schedulerD = torch.optim.lr_scheduler.OneCycleLR(
             optimizerG,
-            max_lr=self.hparams.lr,
+            max_lr=self.hparams.max_lr,
             total_steps=len(self.trainer.datamodule.train_dataloader())
             * self.hparams.max_epochs,
             pct_start=self.hparams.pct_start,
         )
         schedulerG = torch.optim.lr_scheduler.OneCycleLR(
             optimizerD,
-            max_lr=self.hparams.lr,
+            max_lr=self.hparams.max_lr,
             total_steps=len(self.trainer.datamodule.train_dataloader())
             * self.hparams.max_epochs,
             pct_start=self.hparams.pct_start,

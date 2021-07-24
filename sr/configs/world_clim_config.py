@@ -8,10 +8,12 @@ class WorldClimConfig:
     temp = "temp"
     prec = "prec"
     variables_wc = [
-        "tmin",
-        "tmax",
-        "prec",
+        tmin,
+        tmax,
+        temp,
+        prec,
     ]
+    temperature_vars = [tmin, temp, tmax]
     pattern_wc = "*.tif"
     resized_dir = "resized"
     tiles_dir = "tiles"

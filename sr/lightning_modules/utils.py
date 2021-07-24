@@ -31,7 +31,7 @@ def prepare_pl_module(args: argparse.Namespace) -> pl.LightningModule:
     if args.pretrained_model:
         net = (
             GANLightningModule.load_from_checkpoint(
-                checkpoint_path=args.pretrained_model,
+                checkpoint_path=args.pretrained_model, strict=False
             )
             if args.experiment_name == "gan-training"
             else GeneratorPreTrainingLightningModule.load_from_checkpoint(
@@ -78,7 +78,7 @@ def prepare_pl_trainer(args: argparse.Namespace) -> pl.Trainer:
         filename=f"{experiment_name}-{{epoch:02d}}-{{step:05d}}-{{{monitor_metric}:.5f}}",
         save_top_k=args.save_top_k,
     )
-    lr_monitor = LearningRateMonitor(logging_interval="step")
+    lr_monitor = LearningRateMonitor(logging_interval="step", log_momentum=True)
     image_logger_callback = LogImagesCallback(
         generator=args.generator,
         experiment_name=args.experiment_name,

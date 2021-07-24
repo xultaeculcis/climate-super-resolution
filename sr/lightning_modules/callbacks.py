@@ -2,6 +2,7 @@
 import logging
 import math
 import os
+from copy import deepcopy
 from typing import Optional, Any, List, Tuple
 
 import matplotlib
@@ -16,7 +17,7 @@ from torch import Tensor
 from torchvision.transforms import ToTensor
 from torchvision.utils import make_grid
 
-from sr.pre_processing.cruts_config import CRUTSConfig
+from configs.cruts_config import CRUTSConfig
 from sr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
 
 MAX_ITEMS = 88
@@ -59,25 +60,17 @@ class LogImagesCallback(Callback):
         batch = next(iter(dl))
 
         with torch.no_grad():
-            lr, hr, nearest, cubic, elev, elev_lr, mask = (
+            lr, hr, nearest, cubic, elev, mask, mask_tensor = (
                 batch["lr"].to(pl_module.device),
                 batch["hr"].to(pl_module.device),
                 batch["nearest"].to(pl_module.device),
                 batch["cubic"],
                 batch["elevation"].to(pl_module.device),
-                batch["elevation_lr"].to(pl_module.device),
-                batch["mask"],
+                batch["mask_np"],
+                batch["mask"].to(pl_module.device),
             )
 
-            if pl_module.hparams.use_elevation:
-                if pl_module.hparams.generator == "srcnn":
-                    x = torch.cat([nearest, elev], dim=1)
-                else:
-                    x = torch.cat([lr, elev_lr], dim=1)
-            else:
-                x = lr
-
-            sr = pl_module(x, elev)
+            sr = pl_module(lr, elev, mask_tensor)
 
             img_dir = os.path.join(pl_module.logger.log_dir, "images")
 
@@ -192,7 +185,7 @@ class LogImagesCallback(Callback):
             )
             img_grid[mask_grid] = np.nan
 
-        cmap = matplotlib.cm.jet.copy()
+        cmap = deepcopy(matplotlib.cm.jet)
         cmap.set_bad("black", 1.0)
         plt.figure(figsize=(2 * nrows, 2 * ncols))
         plt.imshow(img_grid, cmap=cmap, aspect="auto")
@@ -238,7 +231,7 @@ class LogImagesCallback(Callback):
             constrained_layout=True,
         )
 
-        cmap = matplotlib.cm.jet.copy()
+        cmap = deepcopy(matplotlib.cm.jet)
         cmap.set_bad("black", 1.0)
 
         cols = ["HR", "Elevation", "Nearest", "Cubic", "SR"]

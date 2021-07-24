@@ -50,7 +50,11 @@ class GeneratorPreTrainingLightningModule(SuperResolutionLightningModule):
         metrics = self.common_val_test_step(batch)
 
         log_dict = dict(
-            list((f"val/{k}", v) for k, v in dataclasses.asdict(metrics).items())
+            list(
+                (f"val/{k}", v)
+                for k, v in dataclasses.asdict(metrics).items()
+                if k != "sr"
+            )
         )
 
         self.log_dict(log_dict, on_step=False, on_epoch=True)
@@ -97,11 +101,11 @@ class GeneratorPreTrainingLightningModule(SuperResolutionLightningModule):
         scheduler = torch.optim.lr_scheduler.OneCycleLR(
             optimizer,
             max_lr=self.hparams.max_lr,
-            steps_per_epoch=len(self.trainer.datamodule.train_dataloader()),
+            total_steps=self.num_training_steps,
             epochs=self.hparams.max_epochs,
             pct_start=self.hparams.pct_start,
             div_factor=self.hparams.div_factor,
             final_div_factor=self.hparams.final_div_factor,
         )
-        scheduler = {"scheduler": scheduler, "interval": "step"}
+        scheduler = {"scheduler": scheduler, "interval": "step", "name": "1cycle"}
         return [optimizer], [scheduler]

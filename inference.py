@@ -19,7 +19,7 @@ from data.geo_tiff_inference_dataset import GeoTiffInferenceDataset
 from pre_processing.preprocessing import extract_extent, hr_bbox, var_to_variable
 from sr.data.normalization import MinMaxScaler
 from sr.lightning_modules.utils import prepare_pl_module
-from sr.pre_processing.cruts_config import CRUTSConfig
+from configs.cruts_config import CRUTSConfig
 
 
 def parse_args(arg_str: Optional[str] = None) -> argparse.Namespace:
@@ -117,7 +117,8 @@ def parse_args(arg_str: Optional[str] = None) -> argparse.Namespace:
         # default="./model_weights/use_elevation=True-batch_size=256/normalize-v2/gen-pre-training-srcnn-temp-4x-epoch=29-step=41369-hp_metric=0.00056.ckpt",  # noqa E501
         # default="./model_weights/use_elevation=True-batch_size=48/gen-pre-training-rcan-temp-4x-epoch=29-step=220559-hp_metric=0.00317.ckpt",  # noqa E501
         # default="./model_weights/use_elevation=True-batch_size=48/gen-pre-training-rcan-tmax-4x-epoch=29-step=110279-hp_metric=0.00417.ckpt",  # noqa E501
-        default="./model_weights/use_elevation=True-batch_size=64/gen-pre-training-esrgan-temp-4x-epoch=29-step=165419-hp_metric=0.00608.ckpt",  # noqa E501
+        # default="./model_weights/use_elevation=True-batch_size=64/gen-pre-training-esrgan-temp-4x-epoch=29-step=165419-hp_metric=0.00608.ckpt",  # noqa E501
+        default="./model_weights/use_elevation=True-batch_size=64/gan-training-esrgan-temp-4x-epoch=18-step=104765-hp_metric=0.50164.ckpt",  # noqa E501
     )
     parser.add_argument(
         f"--pretrained_model_{CRUTSConfig.tmx}",
@@ -134,7 +135,7 @@ def parse_args(arg_str: Optional[str] = None) -> argparse.Namespace:
         # default="./model_weights/no_elevation/gen-pre-training-srcnn-prec-4x-epoch=21-step=60653-hp_metric=0.00017.ckpt",  # noqa E501
         default="./model_weights/use_elevation=True-batch_size=256/normalize/gen-pre-training-srcnn-prec-4x-epoch=29-step=20699-hp_metric=0.00005.ckpt",  # noqa E501
     )
-    parser.add_argument("--experiment_name", type=str, default="inference")
+    parser.add_argument("--experiment_name", type=str, default="gan-training")
     parser.add_argument("--use_netcdf_datasets", type=bool, default=False)
     parser.add_argument("--temp_only", type=bool, default=True)
     parser.add_argument("--use_elevation", type=bool, default=True)
@@ -380,7 +381,7 @@ if __name__ == "__main__":
             args.extent_out_path_sr,
             args.extent_out_path_sr_nc,
             variables,
-            args.generator,
+            args.generator_type,
         )
 
     logging.info("Done")

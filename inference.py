@@ -11,6 +11,7 @@ import pytorch_lightning as pl
 import rasterio as rio
 import torch
 import xarray as xr
+from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
@@ -140,6 +141,8 @@ def parse_args(arg_str: Optional[str] = None) -> argparse.Namespace:
     parser.add_argument("--use_netcdf_datasets", type=bool, default=False)
     parser.add_argument("--temp_only", type=bool, default=True)
     parser.add_argument("--use_elevation", type=bool, default=True)
+    parser.add_argument("--use_mask_as_3rd_channel", type=bool, default=True)
+    parser.add_argument("--use_global_min_max", type=bool, default=True)
     parser.add_argument("--run_inference", type=bool, default=True)
     parser.add_argument("--extract_polygon_extent", type=bool, default=True)
     parser.add_argument("--to_netcdf", type=bool, default=True)
@@ -161,7 +164,6 @@ def inference_on_full_images(
     ds: Dataset,
     land_mask_file: str,
     out_dir: str,
-    use_elevation: Optional[bool] = False,
     normalization_range: Optional[Tuple[float, float]] = (-1.0, 1.0),
 ) -> None:
     """
@@ -172,7 +174,6 @@ def inference_on_full_images(
         ds (Dataset): The dataset.
         land_mask_file (str): The HR land mask file.
         out_dir (str): The output SR Geo-Tiff dir.
-        use_elevation (Optional[bool]): Optional use elevation flag. `False` by default.
         normalization_range (Optional[Tuple[float, float]]): Optional normalization range. `(-1, 1)` by default.
 
     """
@@ -182,10 +183,9 @@ def inference_on_full_images(
 
     # load mask
     with rio.open(land_mask_file) as mask_src:
-        mask_data = mask_src.read()
         profile = mask_src.profile
-
-    mask = np.isnan(mask_data).squeeze(0)
+        plt.imshow(mask_src.read().squeeze(0), cmap="jet")
+        plt.show()
 
     # prepare dataloader
     dl = DataLoader(dataset=ds, batch_size=1, pin_memory=True, num_workers=1)
@@ -193,27 +193,39 @@ def inference_on_full_images(
     scaler = MinMaxScaler(feature_range=normalization_range)
 
     # run inference
-    for _, batch in tqdm(enumerate(dl), total=len(dl)):
+    for i, batch in tqdm(enumerate(dl), total=len(dl)):
         lr = batch["lr"].cuda()
         elev = batch["elevation"].cuda()
-        elev_lr = batch["elevation_lr"].cuda()
+        mask = batch["mask"].cuda()
+        mask_np = batch["mask_np"].squeeze(0).squeeze(0).numpy()
         min = batch["min"].numpy()
         max = batch["max"].numpy()
         filename = batch["filename"]
 
-        x = torch.cat([lr, elev_lr], dim=1) if use_elevation else lr
-        outputs = model(x, elev)
+        outputs = model(lr, elev, mask)
         outputs = outputs.cpu().numpy()
 
         for idx, output in enumerate(outputs):
             arr = output.squeeze(0)
             arr = scaler.denormalize(arr, min[idx], max[idx]).clip(min[idx], max[idx])
-            arr[mask] = np.nan
+            arr[~mask_np] = np.nan
 
             with rio.open(
                 os.path.join(out_dir, filename[idx]), "w", **profile
             ) as dataset:
                 dataset.write(arr, 1)
+
+        if i == 0:
+            plt.imshow(lr.cpu().squeeze(0).permute(1, 2, 0).numpy())
+            plt.show()
+            plt.imshow(mask_np, cmap="jet")
+            plt.show()
+            plt.imshow(mask.cpu().squeeze(0).squeeze(0).numpy(), cmap="jet")
+            plt.show()
+            plt.imshow(elev.cpu().squeeze(0).squeeze(0).numpy(), cmap="jet")
+            plt.show()
+            plt.imshow(arr, cmap="jet")
+            plt.show()
 
 
 def run_inference(arguments: argparse.Namespace, cruts_variables: List[str]) -> None:
@@ -245,6 +257,12 @@ def run_inference(arguments: argparse.Namespace, cruts_variables: List[str]) -> 
         logging.info(f"Running inference for variable: {var}")
         logging.info(f"Running inference with model: {model_file}")
 
+        min_max_lookup = pd.read_csv(arguments.min_max_lookup)
+        min_max_lookup = min_max_lookup[
+            (min_max_lookup["dataset"] == "cru-ts")
+            & (min_max_lookup["variable"] == var)
+        ]
+
         # prepare dataset
         dataset = (
             CRUTSInferenceDataset(
@@ -259,7 +277,9 @@ def run_inference(arguments: argparse.Namespace, cruts_variables: List[str]) -> 
             )
             if args.use_netcdf_datasets
             else GeoTiffInferenceDataset(
-                tiff_folder_path=os.path.join(arguments.extent_out_path_lr, var),
+                tiff_dir=os.path.join(arguments.extent_out_path_lr, var),
+                tiff_df=min_max_lookup,
+                variable=var,
                 elevation_file=arguments.elevation_file,
                 land_mask_file=arguments.land_mask_file,
                 generator_type=arguments.generator_type,
@@ -267,7 +287,10 @@ def run_inference(arguments: argparse.Namespace, cruts_variables: List[str]) -> 
                 normalize=arguments.normalize,
                 standardize=not arguments.normalize,
                 normalize_range=arguments.normalization_range,
-                min_max_lookup_df=pd.read_csv(args.min_max_lookup),
+                standardize_stats=None,
+                use_elevation=arguments.use_elevation,
+                use_mask_as_3rd_channel=arguments.use_mask_as_3rd_channel,
+                use_global_min_max=arguments.use_global_min_max,
             )
         )
 
@@ -277,7 +300,6 @@ def run_inference(arguments: argparse.Namespace, cruts_variables: List[str]) -> 
                 ds=dataset,
                 land_mask_file=arguments.land_mask_file,
                 out_dir=out_path,
-                use_elevation=arguments.use_elevation,
                 normalization_range=arguments.normalization_range,
             )
 

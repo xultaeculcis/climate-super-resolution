@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.INFO)
 logging.info("Python %s on %s" % (sys.version, sys.platform))
 
 ds_temp_nn = xr.open_dataset(
-    "/media/xultaeculcis/2TB/datasets/cruts/inference-europe-extent-nc/esrgan.cru_ts4.04.nn.inference.1901.2019.tmp.dat.nc"  # noqa E501
+    "/media/xultaeculcis/2TB/datasets/cruts/inference-europe-extent-nc/rcan.cru_ts4.04.nn.inference.1901.2019.tmp.dat.nc"  # noqa E501
 )
 ds_temp_cru = xr.open_dataset(
     "/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.tmp.dat.nc"

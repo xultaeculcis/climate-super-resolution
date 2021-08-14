@@ -17,7 +17,7 @@ from torchmetrics.functional import (
 from torch import Tensor
 
 from sr.data import normalization
-from configs.cruts_config import CRUTSConfig
+from sr.configs.cruts_config import CRUTSConfig
 from sr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
 from sr.models.rcan import RCAN
 from sr.data.normalization import MinMaxScaler, StandardScaler
@@ -311,13 +311,13 @@ class SuperResolutionLightningModule(pl.LightningModule):
         )
         parser.add_argument(
             "--max_lr",
-            default=1e-4,
+            default=1e-5,
             type=float,
             help="The max learning rate for the 1Cycle LR Scheduler",
         )
         parser.add_argument(
             "--pct_start",
-            default=0.1,
+            default=0.03,
             type=Union[float, int],
             help="The percentage of the cycle (in number of steps) spent increasing the learning rate",
         )

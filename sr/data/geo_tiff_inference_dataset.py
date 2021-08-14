@@ -10,9 +10,9 @@ from torch.utils.data import Dataset
 from torchvision import transforms as transforms
 from torchvision.transforms import InterpolationMode
 
-from data import utils as utils
-from data.normalization import StandardScaler, MinMaxScaler
-from configs.cruts_config import CRUTSConfig
+from sr.data import utils as utils
+from sr.data.normalization import StandardScaler, MinMaxScaler
+from sr.configs.cruts_config import CRUTSConfig
 
 
 class GeoTiffInferenceDataset(Dataset):

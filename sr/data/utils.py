@@ -2,7 +2,7 @@
 import torchvision
 from matplotlib import pyplot as plt
 
-from configs.cruts_config import CRUTSConfig
+from sr.configs.cruts_config import CRUTSConfig
 
 
 def matplotlib_imshow(batch, title=None):

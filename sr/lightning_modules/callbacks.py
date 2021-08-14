@@ -17,7 +17,7 @@ from torch import Tensor
 from torchvision.transforms import ToTensor
 from torchvision.utils import make_grid
 
-from configs.cruts_config import CRUTSConfig
+from sr.configs.cruts_config import CRUTSConfig
 from sr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
 
 MAX_ITEMS = 88

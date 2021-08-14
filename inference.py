@@ -19,7 +19,7 @@ from data.geo_tiff_inference_dataset import GeoTiffInferenceDataset
 from pre_processing.preprocessing import extract_extent, hr_bbox, var_to_variable
 from sr.data.normalization import MinMaxScaler
 from sr.lightning_modules.utils import prepare_pl_module
-from configs.cruts_config import CRUTSConfig
+from sr.configs.cruts_config import CRUTSConfig
 
 
 def parse_args(arg_str: Optional[str] = None) -> argparse.Namespace:
@@ -118,7 +118,8 @@ def parse_args(arg_str: Optional[str] = None) -> argparse.Namespace:
         # default="./model_weights/use_elevation=True-batch_size=48/gen-pre-training-rcan-temp-4x-epoch=29-step=220559-hp_metric=0.00317.ckpt",  # noqa E501
         # default="./model_weights/use_elevation=True-batch_size=48/gen-pre-training-rcan-tmax-4x-epoch=29-step=110279-hp_metric=0.00417.ckpt",  # noqa E501
         # default="./model_weights/use_elevation=True-batch_size=64/gen-pre-training-esrgan-temp-4x-epoch=29-step=165419-hp_metric=0.00608.ckpt",  # noqa E501
-        default="./model_weights/use_elevation=True-batch_size=64/gan-training-esrgan-temp-4x-epoch=18-step=104765-hp_metric=0.50164.ckpt",  # noqa E501
+        # default="./model_weights/use_elevation=True-batch_size=64/gan-training-esrgan-temp-4x-epoch=18-step=104765-hp_metric=0.50164.ckpt",  # noqa E501
+        default="./model_weights/use_elevation=True-batch_size=48/gen-pre-training-100epoch--rcan-temp-4x-epoch=99-step=155599-hp_metric=0.00261.ckpt",  # noqa E501
     )
     parser.add_argument(
         f"--pretrained_model_{CRUTSConfig.tmx}",
@@ -143,7 +144,7 @@ def parse_args(arg_str: Optional[str] = None) -> argparse.Namespace:
     parser.add_argument("--extract_polygon_extent", type=bool, default=True)
     parser.add_argument("--to_netcdf", type=bool, default=True)
     parser.add_argument("--cruts_variable", type=str, default=CRUTSConfig.tmp)
-    parser.add_argument("--generator_type", type=str, default="esrgan")
+    parser.add_argument("--generator_type", type=str, default="rcan")
     parser.add_argument("--scaling_factor", type=int, default=4)
     parser.add_argument("--normalize", type=bool, default=True)
     parser.add_argument(

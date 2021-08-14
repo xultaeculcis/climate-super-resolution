@@ -5,9 +5,9 @@ import logging
 import xarray as xr
 import pandas as pd
 
-from configs.cruts_config import CRUTSConfig
-from result_inspection.consts import lats, lons, alts
-from result_inspection.models import CompareStatsResults
+from sr.configs.cruts_config import CRUTSConfig
+from sr.result_inspection.consts import lats, lons, alts
+from sr.result_inspection.models import CompareStatsResults
 
 logging.basicConfig(level=logging.INFO)
 logging.info("Python %s on %s" % (sys.version, sys.platform))

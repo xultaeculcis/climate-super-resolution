@@ -194,11 +194,13 @@ logs/*
 *.h5
 datasets/*
 !datasets/README.md
+literature/*
+!literature/README.md
+model_weights/*
+!model_weights/README.md
 *.bin
 *.pth
 *.ckpt
-model_weights/*
-!model_weights/README.md
 lightning_logs/
 dask-worker-space/
 results/

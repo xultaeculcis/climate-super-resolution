@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
-from climsr.configs.cruts_config import CRUTSConfig
-from climsr.configs.world_clim_config import WorldClimConfig
+import climsr.consts as consts
 
 cruts_to_world_clim_mapping = {
-    CRUTSConfig.tmn: WorldClimConfig.tmin,
-    CRUTSConfig.tmp: WorldClimConfig.temp,
-    CRUTSConfig.tmx: WorldClimConfig.tmax,
-    CRUTSConfig.pre: WorldClimConfig.prec,
+    consts.cruts.tmn: consts.world_clim.tmin,
+    consts.cruts.tmp: consts.world_clim.temp,
+    consts.cruts.tmx: consts.world_clim.tmax,
+    consts.cruts.pre: consts.world_clim.prec,
 }
 
 world_clim_to_cruts_mapping = dict(

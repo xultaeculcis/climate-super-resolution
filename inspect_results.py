@@ -5,7 +5,7 @@ import logging
 import xarray as xr
 import pandas as pd
 
-from climsr.configs.cruts_config import CRUTSConfig
+import climsr.consts as consts
 from climsr.result_inspection.consts import lats, lons, alts
 from climsr.result_inspection.models import CompareStatsResults
 
@@ -28,7 +28,7 @@ if __name__ == "__main__":
     )
 
     results = CompareStatsResults.compute(
-        CRUTSConfig.tmp, may_only, lats, lons, alts, ds_temp_cru, ds_temp_nn
+        consts.cruts.tmp, may_only, lats, lons, alts, ds_temp_cru, ds_temp_nn
     )
     results.print_comparison_summary()
     results.line_plot()
@@ -37,7 +37,7 @@ if __name__ == "__main__":
     # mountain peaks
     logging.info("Mountain peaks")
     results = CompareStatsResults.compute(
-        CRUTSConfig.tmp,
+        consts.cruts.tmp,
         may_only,
         peaks["lat"].values,
         peaks["lon"].values,
@@ -53,7 +53,7 @@ if __name__ == "__main__":
     # only 2 locations
     logging.info("Only 2 locations")
     results = CompareStatsResults.compute(
-        CRUTSConfig.tmp,
+        consts.cruts.tmp,
         may_only,
         lats[-2:],
         lons[-2:],

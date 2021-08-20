@@ -9,9 +9,9 @@ from torch.utils.data import Dataset
 from torchvision import transforms as transforms
 from torchvision.transforms import InterpolationMode
 
+import climsr.consts as consts
 from climsr.data import utils as utils
 from climsr.data.normalization import StandardScaler, MinMaxScaler
-from climsr.configs.cruts_config import CRUTSConfig
 
 
 class CRUTSInferenceDataset(Dataset):
@@ -42,12 +42,12 @@ class CRUTSInferenceDataset(Dataset):
 
         if self.standardize:
             self.scaler = StandardScaler(
-                self.standardize_stats[self.variable]["mean"],
-                self.standardize_stats[self.variable]["std"],
+                self.standardize_stats[self.variable][consts.stats.mean],
+                self.standardize_stats[self.variable][consts.stats.std],
             )
             self.elevation_scaler = StandardScaler(
-                standardize_stats[CRUTSConfig.elev]["mean"],
-                standardize_stats[CRUTSConfig.elev]["std"],
+                standardize_stats[consts.cruts.elev][consts.stats.mean],
+                standardize_stats[consts.cruts.elev][consts.stats.std],
             )
         else:
             self.scaler = MinMaxScaler(feature_range=normalize_range)
@@ -58,8 +58,8 @@ class CRUTSInferenceDataset(Dataset):
 
         self.upscale = transforms.Resize(
             (
-                CRUTSConfig.cruts_original_shape[0] * self.scaling_factor,
-                CRUTSConfig.cruts_original_shape[1] * self.scaling_factor,
+                consts.cruts.cruts_original_shape[0] * self.scaling_factor,
+                consts.cruts.cruts_original_shape[1] * self.scaling_factor,
             ),
             interpolation=InterpolationMode.NEAREST,
         )
@@ -86,7 +86,7 @@ class CRUTSInferenceDataset(Dataset):
         else:
             input_img = self.scaler.normalize(input_img)
 
-        if self.generator_type == "srcnn":
+        if self.generator_type == consts.models.srcnn:
             input_img = Image.fromarray(input_img)
             input_img = np.array(self.upscale(input_img), dtype=np.float32)
 
@@ -96,13 +96,13 @@ class CRUTSInferenceDataset(Dataset):
         date_str = np.datetime_as_string(arr.time, unit="D")
 
         return {
-            "lr": img_lr,
-            "elevation": self.elevation_data,
-            "min": min,
-            "max": max,
-            "filename": f"cruts-{self.variable}-{date_str}.tif",
-            "normalized": self.normalize,
-            "standardize": self.standardize,
+            consts.batch_items.lr: img_lr,
+            consts.batch_items.elevation: self.elevation_data,
+            consts.batch_items.min: min,
+            consts.batch_items.max: max,
+            consts.batch_items.filename: f"cruts-{self.variable}-{date_str}.tif",
+            consts.batch_items.normalized: self.normalize,
+            consts.batch_items.standardized: self.standardize,
         }
 
     def __len__(self):

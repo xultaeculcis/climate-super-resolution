@@ -1,0 +1,10 @@
+# -*- coding: utf-8 -*-
+import climsr.consts.batch_items  # noqa F401
+import climsr.consts.cruts  # noqa F401
+import climsr.consts.datasets_and_preprocessing  # noqa F401
+import climsr.consts.models  # noqa F401
+import climsr.consts.plotting  # noqa F401
+import climsr.consts.stages  # noqa F401
+import climsr.consts.stats  # noqa F401
+import climsr.consts.training  # noqa F401
+import climsr.consts.world_clim  # noqa F401

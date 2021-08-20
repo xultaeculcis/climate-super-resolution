@@ -8,6 +8,7 @@ from typing import Union
 import numpy as np
 import pytorch_lightning as pl
 
+import climsr.consts as consts
 from climsr.lightning_modules.pl_sr_module import SuperResolutionLightningModule
 from climsr.lightning_modules.utils import prepare_training
 from climsr.lightning_modules.datamodules import SuperResolutionDataModule
@@ -49,7 +50,7 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
     parser.add_argument("--save_top_k", type=int, default=100)
     parser.add_argument("--flush_logs_every_n_steps", type=int, default=10)
     parser.add_argument("--log_every_n_steps", type=int, default=10)
-    parser.add_argument("--generator", type=str, default="rcan")
+    parser.add_argument("--generator", type=str, default=consts.models.rcan)
     # parser.add_argument(
     #     "--resume_from_checkpoint",
     #     type=str,
@@ -76,7 +77,11 @@ def parse_args(arguments: argparse.Namespace = None) -> argparse.Namespace:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(conflict_handler="resolve", add_help=False)
     # parser.add_argument("--experiment_name", type=str, default="gan-training")
-    parser.add_argument("--experiment_name", type=str, default="gen-ft")
+    parser.add_argument(
+        "--experiment_name",
+        type=str,
+        default=consts.training.experiment_name_gen_fine_tuning,
+    )
 
     arguments = parser.parse_args()
     arguments = parse_args(arguments)

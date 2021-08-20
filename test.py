@@ -9,6 +9,7 @@ import numpy as np
 import pytorch_lightning as pl
 from lightning_modules.utils import prepare_training
 
+import climsr.consts as consts
 from climsr.lightning_modules.datamodules import SuperResolutionDataModule
 from climsr.lightning_modules.pl_gan import GANLightningModule
 
@@ -40,7 +41,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fast_dev_run", type=bool, default=False)
     parser.add_argument("--print_config", type=bool, default=True)
     parser.add_argument("--log_dir", type=str, default="../logs")
-    parser.add_argument("--experiment_name", type=str, default="gen-pre-training")
+    parser.add_argument(
+        "--experiment_name",
+        type=str,
+        default=consts.training.experiment_name_gen_pre_training,
+    )
     parser.add_argument("--save_model_path", type=str, default="../model_weights")
     parser.add_argument("--early_stopping_patience", type=int, default=100)
     parser.add_argument("--checkpoint_monitor_metric", type=str, default="hp_metric")
@@ -48,7 +53,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--save_top_k", type=int, default=10)
     parser.add_argument("--log_every_n_steps", type=int, default=5)
     parser.add_argument("--flush_logs_every_n_steps", type=int, default=10)
-    parser.add_argument("--generator", type=str, default="srcnn")
+    parser.add_argument("--generator", type=str, default=consts.models.srcnn)
     parser.add_argument("--resume_from_checkpoint", type=str, default=None)
 
     # args for training from pre-trained model

@@ -12,6 +12,7 @@ from pytorch_lightning.callbacks import (
     ModelCheckpoint,
 )
 
+import climsr.consts as consts
 from climsr.data import normalization
 from climsr.lightning_modules.callbacks import LogImagesCallback
 from climsr.lightning_modules.pl_gan import GANLightningModule
@@ -33,7 +34,7 @@ def prepare_pl_module(args: argparse.Namespace) -> pl.LightningModule:
             GANLightningModule.load_from_checkpoint(
                 checkpoint_path=args.pretrained_model, strict=False
             )
-            if args.experiment_name == "gan-training"
+            if args.experiment_name == consts.training.experiment_name_gan_training
             else GeneratorPreTrainingLightningModule.load_from_checkpoint(
                 checkpoint_path=args.pretrained_model,
             )
@@ -41,7 +42,7 @@ def prepare_pl_module(args: argparse.Namespace) -> pl.LightningModule:
     else:
         net = (
             GANLightningModule(**vars(args))
-            if args.experiment_name == "gan-training"
+            if args.experiment_name == consts.training.experiment_name_gan_training
             else GeneratorPreTrainingLightningModule(**vars(args))
         )
 

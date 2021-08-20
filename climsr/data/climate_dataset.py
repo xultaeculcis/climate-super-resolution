@@ -12,9 +12,9 @@ from torch.utils.data import Dataset
 from torchvision import transforms as transforms
 from torchvision.transforms import functional as TF, InterpolationMode
 
+import climsr.consts as consts
 from climsr.data.normalization import StandardScaler, MinMaxScaler
 from climsr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
-from climsr.configs.cruts_config import CRUTSConfig
 
 
 class ClimateDataset(Dataset):
@@ -25,7 +25,7 @@ class ClimateDataset(Dataset):
         generator_type: str,
         variable: str,
         hr_size: Optional[int] = 128,
-        stage: Optional[str] = "train",
+        stage: Optional[str] = consts.stages.train,
         scaling_factor: Optional[int] = 4,
         normalize: Optional[bool] = True,
         standardize: Optional[bool] = False,
@@ -58,20 +58,22 @@ class ClimateDataset(Dataset):
         if self.standardize:
             self.scaler = StandardScaler(
                 mean=self.standardize_stats[world_clim_to_cruts_mapping[self.variable]][
-                    "mean"
+                    consts.stats.mean
                 ],
                 std=self.standardize_stats[world_clim_to_cruts_mapping[self.variable]][
-                    "std"
+                    consts.stats.std
                 ],
                 nan_substitution=self.standardize_stats[
                     world_clim_to_cruts_mapping[self.variable]
-                ]["normalized_min"],
+                ][consts.stats.normalized_min],
             )
             self.elevation_scaler = StandardScaler(
-                mean=standardize_stats[CRUTSConfig.elev]["mean"],
-                std=standardize_stats[CRUTSConfig.elev]["std"],
-                missing_indicator=-32768,
-                nan_substitution=self.standardize_stats[CRUTSConfig.elev]["nan_sub"],
+                mean=standardize_stats[consts.cruts.elev][consts.stats.mean],
+                std=standardize_stats[consts.cruts.elev][consts.stats.std],
+                missing_indicator=consts.world_clim.elevation_missing_indicator,
+                nan_substitution=self.standardize_stats[consts.cruts.elev][
+                    consts.stats.nan_sub
+                ],
             )
         else:
             self.scaler = MinMaxScaler(feature_range=self.normalize_range)
@@ -90,16 +92,24 @@ class ClimateDataset(Dataset):
         )
 
     def _concat_if_needed(
-        self, img_lr, img_sr_nearest, img_elev, img_elev_lr, mask_tensor, mask
+        self,
+        img_lr: Tensor,
+        img_sr_nearest: Tensor,
+        img_elev: Tensor,
+        img_elev_lr: Tensor,
+        mask_tensor: Tensor,
+        mask: np.ndarray,
     ) -> Tensor:
+        """Concatenates elevation and/or mask data as 2nd and/or 3rd channel to LR raster data."""
+
         if self.use_elevation:
-            if self.generator_type == "srcnn":
+            if self.generator_type == consts.models.srcnn:
                 img_lr = torch.cat([img_sr_nearest, img_elev], dim=0)
             else:
                 img_lr = torch.cat([img_lr, img_elev_lr], dim=0)
 
         if self.use_mask_as_3rd_channel:
-            if self.generator_type == "srcnn":
+            if self.generator_type == consts.models.srcnn:
                 img_lr = torch.cat([img_lr, mask_tensor], dim=0)
             else:
                 mask_lr = self.to_tensor(
@@ -110,8 +120,14 @@ class ClimateDataset(Dataset):
         return img_lr
 
     def _common_to_tensor(
-        self, img_lr, img_hr, img_elev, mask
-    ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+        self,
+        img_lr: np.ndarray,
+        img_hr: np.ndarray,
+        img_elev: np.ndarray,
+        mask: np.ndarray,
+    ) -> Tuple[Tensor, Tensor, Tensor, Tensor, np.ndarray, Tensor, Tensor]:
+        """Performs common `to_tensor` transformation on raster data."""
+
         img_sr_nearest = self.to_tensor(
             np.array(self.upscale_nearest(img_lr), dtype=np.float32)
         )
@@ -130,7 +146,8 @@ class ClimateDataset(Dataset):
     def _get_training_sample(
         self, img_lr, img_hr, img_elev, mask
     ) -> Dict[str, Union[Tensor, list]]:
-        # transforms
+        """Gets single training sample with applied transformations."""
+
         if random() > 0.5:
             img_lr = TF.vflip(img_lr)
             img_hr = TF.vflip(img_hr)
@@ -152,10 +169,10 @@ class ClimateDataset(Dataset):
         ) = self._common_to_tensor(img_lr, img_hr, img_elev, mask)
 
         return {
-            "lr": img_lr,
-            "hr": img_hr,
-            "elevation": img_elev,
-            "mask": mask_tensor,
+            consts.batch_items.lr: img_lr,
+            consts.batch_items.hr: img_hr,
+            consts.batch_items.elevation: img_elev,
+            consts.batch_items.mask: mask_tensor,
         }
 
     def _get_val_test_sample(
@@ -176,33 +193,48 @@ class ClimateDataset(Dataset):
         ) = self._common_to_tensor(img_lr, img_hr, img_elev, mask)
 
         return {
-            "lr": img_lr,
-            "hr": img_hr,
-            "elevation": img_elev,
-            "elevation_lr": img_elev_lr,
-            "nearest": img_sr_nearest,
-            "cubic": img_sr_cubic,
-            "original_data": original_image,
-            "mask": mask_tensor,
-            "mask_np": mask,
-            "min": min,
-            "max": max,
+            consts.batch_items.lr: img_lr,
+            consts.batch_items.hr: img_hr,
+            consts.batch_items.elevation: img_elev,
+            consts.batch_items.elevation_lr: img_elev_lr,
+            consts.batch_items.nearest: img_sr_nearest,
+            consts.batch_items.cubic: img_sr_cubic,
+            consts.batch_items.original_data: original_image,
+            consts.batch_items.mask: mask_tensor,
+            consts.batch_items.mask_np: mask,
+            consts.batch_items.min: min,
+            consts.batch_items.max: max,
         }
 
     def __getitem__(self, index) -> Dict[str, Union[Tensor, list]]:
         row = self.df.iloc[index]
-        min = row["min"] if not self.use_global_min_max else row["global_min"]
-        max = row["max"] if not self.use_global_min_max else row["global_max"]
+        min = (
+            row[consts.stats.min]
+            if not self.use_global_min_max
+            else row[consts.stats.global_min]
+        )
+        max = (
+            row[consts.stats.max]
+            if not self.use_global_min_max
+            else row[consts.stats.global_max]
+        )
 
         # original, hr
-        with rio.open(row["tile_file_path"]) as ds:
+        with rio.open(row[consts.datasets_and_preprocessing.tile_file_path]) as ds:
             original_image = ds.read(1)
             img_hr = original_image.copy()
 
         # elevation
         elev_fp = self.elevation_df[
-            (self.elevation_df["x"] == row["x"]) & (self.elevation_df["y"] == row["y"])
-        ]["file_path"]
+            (
+                self.elevation_df[consts.datasets_and_preprocessing.x]
+                == row[consts.datasets_and_preprocessing.x]
+            )
+            & (
+                self.elevation_df[consts.datasets_and_preprocessing.y]
+                == row[consts.datasets_and_preprocessing.y]
+            )
+        ][consts.datasets_and_preprocessing.file_path]
         elev_fp = elev_fp.values[0]
         with rio.open(elev_fp) as ds:
             img_elev = ds.read(1)
@@ -211,7 +243,8 @@ class ClimateDataset(Dataset):
         if self.normalize:
             img_hr = self.scaler.normalize(img_hr, min, max)
             img_elev = self.elevation_scaler.normalize(
-                img_elev, missing_indicator=-32768
+                img_elev,
+                missing_indicator=consts.world_clim.elevation_missing_indicator,
             )
         if self.standardize:
             img_hr = self.scaler.normalize(arr=img_hr)
@@ -229,7 +262,7 @@ class ClimateDataset(Dataset):
 
         img_elev = Image.fromarray(img_elev)
 
-        if self.stage == "train":
+        if self.stage == consts.stages.train:
             return self._get_training_sample(img_lr, img_hr, img_elev, mask)
 
         return self._get_val_test_sample(

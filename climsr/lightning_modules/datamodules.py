@@ -4,16 +4,16 @@ import os
 from argparse import ArgumentParser
 from typing import List, Optional, Tuple, Dict, Union
 
+import inflection
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
+import climsr.consts as consts
 from climsr.data import normalization
-from climsr.configs.cruts_config import CRUTSConfig
 from climsr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
 from climsr.data.climate_dataset import ClimateDataset
-from climsr.configs.world_clim_config import WorldClimConfig
 
 logging.basicConfig(level=logging.INFO)
 os.environ["NUMEXPR_MAX_THREADS"] = "16"
@@ -69,7 +69,7 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             df=train_df,
             elevation_df=elevation_df,
             hr_size=self.hr_size,
-            stage="train",
+            stage=consts.stages.train,
             generator_type=self.generator_type,
             variable=self.world_clim_variable,
             scaling_factor=self.scale_factor,
@@ -85,7 +85,7 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             df=val_df,
             elevation_df=elevation_df,
             hr_size=self.hr_size,
-            stage="val",
+            stage=consts.stages.val,
             generator_type=self.generator_type,
             variable=self.world_clim_variable,
             scaling_factor=self.scale_factor,
@@ -102,7 +102,7 @@ class SuperResolutionDataModule(pl.LightningDataModule):
                 df=test_df,
                 elevation_df=elevation_df,
                 hr_size=self.hr_size,
-                stage="test",
+                stage=consts.stages.test,
                 generator_type=self.generator_type,
                 variable=self.world_clim_variable,
                 scaling_factor=self.scale_factor,
@@ -136,7 +136,7 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         )
 
     def test_dataloader(self) -> List[DataLoader]:
-        if self.world_clim_variable == "temp":
+        if self.world_clim_variable == consts.world_clim.temp:
             return [
                 DataLoader(
                     test_dataset,
@@ -177,41 +177,70 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         Union[Dict[str, float], None],
     ]:
         elevation_df = self.load_dataframe(
-            WorldClimConfig.elevation, f"{WorldClimConfig.elevation}.csv"
+            consts.world_clim.elevation, f"{consts.world_clim.elevation}.csv"
         )
 
         stats_df = pd.read_csv(os.path.join(self.data_path, "statistics_min_max.csv"))
 
-        if self.world_clim_variable == "temp":
+        if self.world_clim_variable == consts.world_clim.temp:
             train_dfs = []
             val_dfs = []
             test_dfs = []
             variables = [
-                WorldClimConfig.tmin,
-                WorldClimConfig.tmax,
-                WorldClimConfig.temp,
+                consts.world_clim.tmin,
+                consts.world_clim.tmax,
+                consts.world_clim.temp,
             ]
             for var in variables:
-                train_dfs.append(self.load_dataframe(var, "train.csv"))
-                val_dfs.append(self.load_dataframe(var, "val.csv"))
-                test_dfs.append(self.load_dataframe(var, "test.csv"))
+                train_dfs.append(
+                    self.load_dataframe(
+                        var, consts.datasets_and_preprocessing.train_csv
+                    )
+                )
+                val_dfs.append(
+                    self.load_dataframe(var, consts.datasets_and_preprocessing.val_csv)
+                )
+                test_dfs.append(
+                    self.load_dataframe(var, consts.datasets_and_preprocessing.test_csv)
+                )
 
             train_df = pd.concat(train_dfs)
             val_df = pd.concat(val_dfs)
         else:
-            train_df = self.load_dataframe(self.world_clim_variable, "train.csv")
-            val_df = self.load_dataframe(self.world_clim_variable, "val.csv")
-            test_dfs = [self.load_dataframe(self.world_clim_variable, "test.csv")]
+            train_df = self.load_dataframe(
+                self.world_clim_variable, consts.datasets_and_preprocessing.train_csv
+            )
+            val_df = self.load_dataframe(
+                self.world_clim_variable, consts.datasets_and_preprocessing.val_csv
+            )
+            test_dfs = [
+                self.load_dataframe(
+                    self.world_clim_variable, consts.datasets_and_preprocessing.test_csv
+                )
+            ]
 
         train_df = pd.merge(
             train_df,
             stats_df,
             how="inner",
-            on=["filename", "variable", "year", "month"],
+            on=[
+                consts.datasets_and_preprocessing.filename,
+                consts.datasets_and_preprocessing.variable,
+                consts.datasets_and_preprocessing.year,
+                consts.datasets_and_preprocessing.year,
+            ],
         )
 
         val_df = pd.merge(
-            val_df, stats_df, how="inner", on=["filename", "variable", "year", "month"]
+            val_df,
+            stats_df,
+            how="inner",
+            on=[
+                consts.datasets_and_preprocessing.filename,
+                consts.datasets_and_preprocessing.variable,
+                consts.datasets_and_preprocessing.year,
+                consts.datasets_and_preprocessing.year,
+            ],
         )
 
         output_test_dfs = []
@@ -220,11 +249,16 @@ class SuperResolutionDataModule(pl.LightningDataModule):
                 test_df,
                 stats_df,
                 how="inner",
-                on=["filename", "variable", "year", "month"],
+                on=[
+                    consts.datasets_and_preprocessing.filename,
+                    consts.datasets_and_preprocessing.variable,
+                    consts.datasets_and_preprocessing.year,
+                    consts.datasets_and_preprocessing.year,
+                ],
             )
             output_test_dfs.append(test_df)
 
-        return train_df, val_df, output_test_dfs, elevation_df, CRUTSConfig.statistics
+        return train_df, val_df, output_test_dfs, elevation_df, consts.cruts.statistics
 
     @staticmethod
     def add_data_specific_args(parent_parser: ArgumentParser) -> ArgumentParser:
@@ -245,7 +279,7 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         parser.add_argument(
             "--world_clim_variable",
             type=str,
-            default="temp",
+            default=consts.world_clim.temp,
         )
         parser.add_argument(
             "--world_clim_multiplier",
@@ -294,7 +328,7 @@ if __name__ == "__main__":
         data_path=os.path.join("../..", args.data_path),
         world_clim_variable=args.world_clim_variable,
         world_clim_multiplier=args.world_clim_multiplier,
-        generator_type="rcan",
+        generator_type=consts.models.rcan,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         hr_size=args.hr_size,
@@ -305,26 +339,26 @@ if __name__ == "__main__":
         pin_memory=args.pin_memory,
     )
 
-    # plot_single_batch(dm.train_dataloader(), keys=["lr", "hr", "elevation", "nearest"])
-    # plot_single_batch(dm.val_dataloader(), keys=["lr", "hr", "elevation", "nearest"])
-    # plot_single_batch(dm.test_dataloader(), keys=["lr", "hr", "elevation", "nearest"])
+    # plot_single_batch(dm.train_dataloader(), keys=[consts.batch_items.lr, consts.batch_items.hr, consts.batch_items.elevation, consts.batch_items.nearest])  # noqa E501
+    # plot_single_batch(dm.val_dataloader(), keys=[consts.batch_items.lr, consts.batch_items.hr, consts.batch_items.elevation, consts.batch_items.nearest])  # noqa E501
+    # plot_single_batch(dm.test_dataloader(), keys=[consts.batch_items.lr, consts.batch_items.hr, consts.batch_items.elevation, consts.batch_items.nearest])  # noqa E501
 
     dl = dm.val_dataloader()
 
-    stats = CRUTSConfig.statistics[
+    stats = consts.cruts.statistics[
         world_clim_to_cruts_mapping[args.world_clim_variable]
     ]
-    stats_elev = CRUTSConfig.statistics[CRUTSConfig.elev]
+    stats_elev = consts.cruts.statistics[consts.cruts.elev]
 
     for _, batch in enumerate(dl):
-        lr = batch["lr"]
-        hr = batch["hr"]
-        original = batch["original_data"]
-        mask = batch["mask"]
-        sr_nearest = batch["nearest"]
-        elev = batch["elevation"]
-        max_vals = batch["max"].cpu().numpy()
-        min_vals = batch["min"].cpu().numpy()
+        lr = batch[consts.batch_items.lr]
+        hr = batch[consts.batch_items.hr]
+        original = batch[consts.batch_items.original_data]
+        mask = batch[consts.batch_items.mask]
+        sr_nearest = batch[consts.batch_items.nearest]
+        elev = batch[consts.batch_items.elevation]
+        max_vals = batch[consts.batch_items.max].cpu().numpy()
+        min_vals = batch[consts.batch_items.min].cpu().numpy()
         sr = hr
 
         mae = []
@@ -343,7 +377,12 @@ if __name__ == "__main__":
         cmap = matplotlib.cm.jet.copy()
         cmap.set_bad("black", 1.0)
 
-        cols = ["HR", "Nearest", "Elevation", "SR"]
+        cols = [
+            inflection.titleize(consts.batch_items.hr),
+            inflection.titleize(consts.batch_items.nearest),
+            inflection.titleize(consts.batch_items.elevation),
+            consts.plotting.sr,
+        ]
         for ax, col in zip(axes[0], cols):
             ax.set_title(col)
 
@@ -363,20 +402,20 @@ if __name__ == "__main__":
             axes[i][0].imshow(
                 hr_arr[i],
                 cmap=cmap,
-                vmin=stats["normalized_min"]
+                vmin=stats[consts.stats.normalized_min]
                 if standardize
                 else args.normalization_range[0],
-                vmax=stats["normalized_max"]
+                vmax=stats[consts.stats.normalized_max]
                 if standardize
                 else args.normalization_range[1],
             )
             axes[i][1].imshow(
                 nearest_arr[i],
                 cmap=cmap,
-                vmin=stats["normalized_min"]
+                vmin=stats[consts.stats.normalized_min]
                 if standardize
                 else args.normalization_range[0],
-                vmax=stats["normalized_max"]
+                vmax=stats[consts.stats.normalized_max]
                 if standardize
                 else args.normalization_range[1],
             )
@@ -387,10 +426,10 @@ if __name__ == "__main__":
             axes[i][3].imshow(
                 sr_arr[i],
                 cmap=cmap,
-                vmin=stats["normalized_min"]
+                vmin=stats[consts.stats.normalized_min]
                 if standardize
                 else args.normalization_range[0],
-                vmax=stats["normalized_max"]
+                vmax=stats[consts.stats.normalized_max]
                 if standardize
                 else args.normalization_range[1],
             )

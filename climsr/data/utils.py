@@ -2,7 +2,7 @@
 import torchvision
 from matplotlib import pyplot as plt
 
-from climsr.configs.cruts_config import CRUTSConfig
+import climsr.consts as consts
 
 
 def matplotlib_imshow(batch, title=None):
@@ -34,17 +34,17 @@ def plot_single_batch(loader, keys):
 
 
 def get_variable_from_ds_fp(fp):
-    if f".{CRUTSConfig.pre}." in fp:
-        return CRUTSConfig.pre
+    if f".{consts.cruts.pre}." in fp:
+        return consts.cruts.pre
 
-    if f".{CRUTSConfig.tmn}." in fp:
-        return CRUTSConfig.tmn
+    if f".{consts.cruts.tmn}." in fp:
+        return consts.cruts.tmn
 
-    if f".{CRUTSConfig.tmp}." in fp:
-        return CRUTSConfig.tmp
+    if f".{consts.cruts.tmp}." in fp:
+        return consts.cruts.tmp
 
-    if f".{CRUTSConfig.tmx}." in fp:
-        return CRUTSConfig.tmx
+    if f".{consts.cruts.tmx}." in fp:
+        return consts.cruts.tmx
 
 
 def plot_array(arr):

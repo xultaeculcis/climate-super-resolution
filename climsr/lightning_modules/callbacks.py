@@ -17,7 +17,7 @@ from torch import Tensor
 from torchvision.transforms import ToTensor
 from torchvision.utils import make_grid
 
-from climsr.configs.cruts_config import CRUTSConfig
+import climsr.consts as consts
 from climsr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
 
 MAX_ITEMS = 88
@@ -39,7 +39,7 @@ class LogImagesCallback(Callback):
         self.use_elevation = use_elevation
         self.standardize = standardize
         self.world_clim_variable = world_clim_variable
-        self.stats = CRUTSConfig.statistics[
+        self.stats = consts.cruts.statistics[
             world_clim_to_cruts_mapping[self.world_clim_variable]
         ]
         self.normalization_range = normalization_range
@@ -61,13 +61,13 @@ class LogImagesCallback(Callback):
 
         with torch.no_grad():
             lr, hr, nearest, cubic, elev, mask, mask_tensor = (
-                batch["lr"].to(pl_module.device),
-                batch["hr"].to(pl_module.device),
-                batch["nearest"].to(pl_module.device),
-                batch["cubic"],
-                batch["elevation"].to(pl_module.device),
-                batch["mask_np"],
-                batch["mask"].to(pl_module.device),
+                batch[consts.batch_items.lr].to(pl_module.device),
+                batch[consts.batch_items.hr].to(pl_module.device),
+                batch[consts.batch_items.nearest].to(pl_module.device),
+                batch[consts.batch_items.cubic],
+                batch[consts.batch_items.elevation].to(pl_module.device),
+                batch[consts.batch_items.mask_np],
+                batch[consts.batch_items.mask].to(pl_module.device),
             )
 
             sr = pl_module(lr, elev, mask_tensor)
@@ -79,7 +79,7 @@ class LogImagesCallback(Callback):
                 os.makedirs(img_dir, exist_ok=True)
                 names = [
                     "hr_images",
-                    "elevation",
+                    consts.batch_items.elevation,
                     "nearest_interpolation",
                     "cubic_interpolation",
                 ]
@@ -114,15 +114,19 @@ class LogImagesCallback(Callback):
                 f"{name}-{self.experiment_name}-epoch={pl_module.current_epoch}-step={pl_module.global_step}.png",
             )
 
-            if name == "elevation":
+            if name == consts.batch_items.elevation:
                 value_range = (
-                    CRUTSConfig.statistics[CRUTSConfig.elev]["normalized_min"],
-                    CRUTSConfig.statistics[CRUTSConfig.elev]["normalized_max"],
+                    consts.cruts.statistics[consts.cruts.elev][
+                        consts.stats.normalized_min
+                    ],
+                    consts.cruts.statistics[consts.cruts.elev][
+                        consts.stats.normalized_max
+                    ],
                 )
             else:
                 value_range = (
-                    self.stats["normalized_min"],
-                    self.stats["normalized_max"],
+                    self.stats[consts.stats.normalized_min],
+                    self.stats[consts.stats.normalized_max],
                 )
 
             self._save_tensor_batch_as_image(
@@ -130,7 +134,9 @@ class LogImagesCallback(Callback):
                 images_tensor=tensor,
                 mask_tensor=mask,
                 normalize=self.standardize,
-                value_range=value_range if name != "elevation" else None,
+                value_range=value_range
+                if name != consts.batch_items.elevation
+                else None,
             )
             self._log_images_from_file(pl_module, image_fp, name)
 
@@ -234,9 +240,15 @@ class LogImagesCallback(Callback):
         cmap = deepcopy(matplotlib.cm.jet)
         cmap.set_bad("black", 1.0)
 
-        cols = ["HR", "Elevation", "Nearest", "Cubic", "SR"]
+        cols = [
+            consts.plotting.hr,
+            consts.plotting.elevation,
+            consts.plotting.nearest_interpolation,
+            consts.plotting.cubic_interpolation,
+            consts.plotting.sr,
+        ]
         if not self.use_elevation:
-            cols.remove("Elevation")
+            cols.remove(consts.batch_items.elevation)
 
         for ax, col in zip(axes[0], cols):
             ax.set_title(col)
@@ -278,10 +290,10 @@ class LogImagesCallback(Callback):
             axes[i][0].imshow(
                 hr_arr[i],
                 cmap=cmap,
-                vmin=self.stats["normalized_min"]
+                vmin=self.stats[consts.stats.normalized_min]
                 if self.standardize
                 else self.normalization_range[0],
-                vmax=self.stats["normalized_max"]
+                vmax=self.stats[consts.stats.normalized_max]
                 if self.standardize
                 else self.normalization_range[1],
             )
@@ -296,10 +308,10 @@ class LogImagesCallback(Callback):
                 axes[i][offset + idx].imshow(
                     arr[i],
                     cmap=cmap,
-                    vmin=self.stats["normalized_min"]
+                    vmin=self.stats[consts.stats.normalized_min]
                     if self.standardize
                     else self.normalization_range[0],
-                    vmax=self.stats["normalized_max"]
+                    vmax=self.stats[consts.stats.normalized_max]
                     if self.standardize
                     else self.normalization_range[1],
                 )

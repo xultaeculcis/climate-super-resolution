@@ -1,13 +1,17 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
 
+import climsr.consts as consts
 from climsr.data.geo_tiff_inference_dataset import GeoTiffInferenceDataset
 
 europe_extent_expected_shape_hr = [412, 452]
 europe_extent_expected_shape_lr = [103, 113]
 var = "tmp"
 df = pd.read_csv("./datasets/statistics_min_max.csv")
-df = df[(df["dataset"] == "cru-ts") & (df["variable"] == var)]
+df = df[
+    (df[consts.datasets_and_preprocessing.dataset] == "cru-ts")
+    & (df[consts.datasets_and_preprocessing.variable] == var)
+]
 tiff_dir = f"/media/xultaeculcis/2TB/datasets/cruts/pre-processed/europe-extent/{var}"
 tiff_df = df
 elevation_file = "/media/xultaeculcis/2TB/datasets/cruts/pre-processed/europe-extent/elevation/wc2.1_2.5m_elev.tif"
@@ -44,35 +48,57 @@ def _get_dataset(gen):
 
 def test_should_return_proper_data_when_used_with_srcnn():
     # arrange
-    sut = _get_dataset("srcnn")
+    sut = _get_dataset(consts.models.srcnn)
 
     # act
     out = sut[1]
 
     # assert
-    assert out["lr"].shape == (3, *europe_extent_expected_shape_hr)
-    assert out["elevation"].shape == (1, *europe_extent_expected_shape_hr)
-    assert out["elevation_lr"].shape == (1, *europe_extent_expected_shape_lr)
-    assert out["nearest"].shape == (1, *europe_extent_expected_shape_hr)
-    assert out["mask"].shape == (1, *europe_extent_expected_shape_hr)
-    assert out["mask_np"].shape == tuple(europe_extent_expected_shape_hr)
-    assert out["min"] is not None
-    assert out["max"] is not None
+    assert out[consts.batch_items.lr].shape == (3, *europe_extent_expected_shape_hr)
+    assert out[consts.batch_items.elevation].shape == (
+        1,
+        *europe_extent_expected_shape_hr,
+    )
+    assert out[consts.batch_items.elevation_lr].shape == (
+        1,
+        *europe_extent_expected_shape_lr,
+    )
+    assert out[consts.batch_items.nearest].shape == (
+        1,
+        *europe_extent_expected_shape_hr,
+    )
+    assert out[consts.batch_items.mask].shape == (1, *europe_extent_expected_shape_hr)
+    assert out[consts.batch_items.mask_np].shape == tuple(
+        europe_extent_expected_shape_hr
+    )
+    assert out[consts.batch_items.min] is not None
+    assert out[consts.batch_items.max] is not None
 
 
 def test_should_return_proper_data_when_used_not_with_srcnn():
     # arrange
-    sut = _get_dataset("rcan")
+    sut = _get_dataset(consts.models.rcan)
 
     # act
     out = sut[1]
 
     # assert
-    assert out["lr"].shape == (3, *europe_extent_expected_shape_lr)
-    assert out["elevation"].shape == (1, *europe_extent_expected_shape_hr)
-    assert out["elevation_lr"].shape == (1, *europe_extent_expected_shape_lr)
-    assert out["nearest"].shape == (1, *europe_extent_expected_shape_hr)
-    assert out["mask"].shape == (1, *europe_extent_expected_shape_hr)
-    assert out["mask_np"].shape == tuple(europe_extent_expected_shape_hr)
-    assert out["min"] is not None
-    assert out["max"] is not None
+    assert out[consts.batch_items.lr].shape == (3, *europe_extent_expected_shape_lr)
+    assert out[consts.batch_items.elevation].shape == (
+        1,
+        *europe_extent_expected_shape_hr,
+    )
+    assert out[consts.batch_items.elevation_lr].shape == (
+        1,
+        *europe_extent_expected_shape_lr,
+    )
+    assert out[consts.batch_items.nearest].shape == (
+        1,
+        *europe_extent_expected_shape_hr,
+    )
+    assert out[consts.batch_items.mask].shape == (1, *europe_extent_expected_shape_hr)
+    assert out[consts.batch_items.mask_np].shape == tuple(
+        europe_extent_expected_shape_hr
+    )
+    assert out[consts.batch_items.min] is not None
+    assert out[consts.batch_items.max] is not None

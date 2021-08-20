@@ -15,12 +15,12 @@ from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
+import climsr.consts as consts
 from data.cruts_inference_dataset import CRUTSInferenceDataset
 from data.geo_tiff_inference_dataset import GeoTiffInferenceDataset
 from pre_processing.preprocessing import extract_extent, hr_bbox, var_to_variable
 from climsr.data.normalization import MinMaxScaler
 from climsr.lightning_modules.utils import prepare_pl_module
-from climsr.configs.cruts_config import CRUTSConfig
 
 
 def parse_args(arg_str: Optional[str] = None) -> argparse.Namespace:
@@ -33,22 +33,22 @@ def parse_args(arg_str: Optional[str] = None) -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(conflict_handler="resolve", add_help=False)
     parser.add_argument(
-        f"--ds_path_{CRUTSConfig.tmn}",
+        f"--ds_path_{consts.cruts.tmn}",
         type=str,
         default="/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.tmn.dat.nc",
     )
     parser.add_argument(
-        f"--ds_path_{CRUTSConfig.tmp}",
+        f"--ds_path_{consts.cruts.tmp}",
         type=str,
         default="/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.tmp.dat.nc",
     )
     parser.add_argument(
-        f"--ds_path_{CRUTSConfig.tmx}",
+        f"--ds_path_{consts.cruts.tmx}",
         type=str,
         default="/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.tmx.dat.nc",
     )
     parser.add_argument(
-        f"--ds_path_{CRUTSConfig.pre}",
+        f"--ds_path_{consts.cruts.pre}",
         type=str,
         default="/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.pre.dat.nc",
     )
@@ -103,7 +103,7 @@ def parse_args(arg_str: Optional[str] = None) -> argparse.Namespace:
         default="./datasets/statistics_min_max.csv",
     )
     parser.add_argument(
-        f"--pretrained_model_{CRUTSConfig.tmn}",
+        f"--pretrained_model_{consts.cruts.tmn}",
         type=str,
         # default="./model_weights/with_elevation/gen-pre-training-srcnn-tmin-4x-epoch=29-step=82709-hp_metric=0.00165.ckpt",  # noqa E501
         # default="./model_weights/no_elevation/gen-pre-training-srcnn-tmin-4x-epoch=29-step=82709-hp_metric=0.00571.ckpt",  # noqa E501
@@ -111,7 +111,7 @@ def parse_args(arg_str: Optional[str] = None) -> argparse.Namespace:
         default="./model_weights/use_elevation=True-batch_size=48/gen-pre-training-rcan-tmin-4x-epoch=29-step=110279-hp_metric=0.00397.ckpt",  # noqa E501
     )
     parser.add_argument(
-        f"--pretrained_model_{CRUTSConfig.tmp}",
+        f"--pretrained_model_{consts.cruts.tmp}",
         type=str,
         # default="./model_weights/with_elevation/gen-pre-training-srcnn-temp-4x-epoch=29-step=165419-hp_metric=0.00083.ckpt",  # noqa E501
         # default="./model_weights/no_elevation/gen-pre-training-srcnn-temp-4x-epoch=24-step=137849-hp_metric=0.00516.ckpt",  # noqa E501
@@ -123,7 +123,7 @@ def parse_args(arg_str: Optional[str] = None) -> argparse.Namespace:
         default="./model_weights/use_elevation=True-batch_size=48/gen-pre-training-100epoch--rcan-temp-4x-epoch=99-step=155599-hp_metric=0.00261.ckpt",  # noqa E501
     )
     parser.add_argument(
-        f"--pretrained_model_{CRUTSConfig.tmx}",
+        f"--pretrained_model_{consts.cruts.tmx}",
         type=str,
         # default="./model_weights/with_elevation/gen-pre-training-srcnn-tmax-4x-epoch=29-step=82709-hp_metric=0.00142.ckpt",  # noqa E501
         # default="./model_weights/no_elevation/gen-pre-training-srcnn-tmax-4x-epoch=18-step=52382-hp_metric=0.00468.ckpt",  # noqa E501
@@ -131,13 +131,17 @@ def parse_args(arg_str: Optional[str] = None) -> argparse.Namespace:
         default="./model_weights/use_elevation=True-batch_size=48/gen-pre-training-rcan-tmax-4x-epoch=29-step=110279-hp_metric=0.00417.ckpt",  # noqa E501
     )
     parser.add_argument(
-        f"--pretrained_model_{CRUTSConfig.pre}",
+        f"--pretrained_model_{consts.cruts.pre}",
         type=str,
         # default="./model_weights/with_elevation/gen-pre-training-srcnn-prec-4x-epoch=29-step=82709-hp_metric=0.00007.ckpt",  # noqa E501
         # default="./model_weights/no_elevation/gen-pre-training-srcnn-prec-4x-epoch=21-step=60653-hp_metric=0.00017.ckpt",  # noqa E501
         default="./model_weights/use_elevation=True-batch_size=256/normalize/gen-pre-training-srcnn-prec-4x-epoch=29-step=20699-hp_metric=0.00005.ckpt",  # noqa E501
     )
-    parser.add_argument("--experiment_name", type=str, default="gan-training")
+    parser.add_argument(
+        "--experiment_name",
+        type=str,
+        default=consts.training.experiment_name_gan_training,
+    )
     parser.add_argument("--use_netcdf_datasets", type=bool, default=False)
     parser.add_argument("--temp_only", type=bool, default=True)
     parser.add_argument("--use_elevation", type=bool, default=True)
@@ -146,8 +150,8 @@ def parse_args(arg_str: Optional[str] = None) -> argparse.Namespace:
     parser.add_argument("--run_inference", type=bool, default=True)
     parser.add_argument("--extract_polygon_extent", type=bool, default=True)
     parser.add_argument("--to_netcdf", type=bool, default=True)
-    parser.add_argument("--cruts_variable", type=str, default=CRUTSConfig.tmp)
-    parser.add_argument("--generator_type", type=str, default="rcan")
+    parser.add_argument("--cruts_variable", type=str, default=consts.cruts.tmp)
+    parser.add_argument("--generator_type", type=str, default=consts.models.rcan)
     parser.add_argument("--scaling_factor", type=int, default=4)
     parser.add_argument("--normalize", type=bool, default=True)
     parser.add_argument(
@@ -194,13 +198,13 @@ def inference_on_full_images(
 
     # run inference
     for i, batch in tqdm(enumerate(dl), total=len(dl)):
-        lr = batch["lr"].cuda()
-        elev = batch["elevation"].cuda()
-        mask = batch["mask"].cuda()
-        mask_np = batch["mask_np"].squeeze(0).squeeze(0).numpy()
-        min = batch["min"].numpy()
-        max = batch["max"].numpy()
-        filename = batch["filename"]
+        lr = batch[consts.batch_items.lr].cuda()
+        elev = batch[consts.batch_items.elevation].cuda()
+        mask = batch[consts.batch_items.mask].cuda()
+        mask_np = batch[consts.batch_items.mask_np].squeeze(0).squeeze(0).numpy()
+        min = batch[consts.stats.min].numpy()
+        max = batch[consts.batch_items.max].numpy()
+        filename = batch[consts.batch_items.filename]
 
         outputs = model(lr, elev, mask)
         outputs = outputs.cpu().numpy()
@@ -242,11 +246,11 @@ def run_inference(arguments: argparse.Namespace, cruts_variables: List[str]) -> 
         out_path = os.path.join(arguments.inference_out_path, var)
         os.makedirs(out_path, exist_ok=True)
 
-        if var in [CRUTSConfig.tmn, CRUTSConfig.tmx] and arguments.temp_only:
+        if var in [consts.cruts.tmn, consts.cruts.tmx] and arguments.temp_only:
             logging.info(
                 f"TEMP_ONLY detected - 'temp' model will be used instead of '{var}' model."
             )
-            model_file = param_dict[f"pretrained_model_{CRUTSConfig.tmp}"]
+            model_file = param_dict[f"pretrained_model_{consts.cruts.tmp}"]
         else:
             model_file = param_dict[f"pretrained_model_{var}"]
 
@@ -259,8 +263,8 @@ def run_inference(arguments: argparse.Namespace, cruts_variables: List[str]) -> 
 
         min_max_lookup = pd.read_csv(arguments.min_max_lookup)
         min_max_lookup = min_max_lookup[
-            (min_max_lookup["dataset"] == "cru-ts")
-            & (min_max_lookup["variable"] == var)
+            (min_max_lookup[consts.datasets_and_preprocessing.dataset] == "cru-ts")
+            & (min_max_lookup[consts.datasets_and_preprocessing.variable] == var)
         ]
 
         # prepare dataset
@@ -382,7 +386,7 @@ if __name__ == "__main__":
         logging.info(f"Param: '{k}': {v}")
 
     variables = (
-        [args.cruts_variable] if args.cruts_variable else CRUTSConfig.variables_cts
+        [args.cruts_variable] if args.cruts_variable else consts.cruts.variables_cts
     )
 
     # Run inference

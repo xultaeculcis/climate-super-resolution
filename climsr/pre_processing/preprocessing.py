@@ -15,13 +15,10 @@ import xarray
 from dask.diagnostics import progress
 from datacube.utils.cog import write_cog
 from distributed import Client
-from rasterio import Affine, windows
-from rasterio.enums import Resampling
-from rasterio.mask import mask
 from tqdm import tqdm
 
-from climsr.configs.cruts_config import CRUTSConfig
-from climsr.configs.world_clim_config import WorldClimConfig
+import climsr.consts as consts
+
 
 pbar = progress.ProgressBar()
 pbar.register()
@@ -68,10 +65,10 @@ hr_polygon = [
 ]
 
 var_to_variable = {
-    CRUTSConfig.pre: "Precipitation",
-    CRUTSConfig.tmn: "Minimum Temperature",
-    CRUTSConfig.tmp: "Average Temperature",
-    CRUTSConfig.tmx: "Maximum Temperature",
+    consts.cruts.pre: "Precipitation",
+    consts.cruts.tmn: "Minimum Temperature",
+    consts.cruts.tmp: "Average Temperature",
+    consts.cruts.tmx: "Maximum Temperature",
 }
 
 lr_bbox = [
@@ -176,8 +173,8 @@ def ensure_sub_dirs_exist_cts(out_dir: str) -> None:
 
     """
     logger.info("Creating sub-dirs for CRU-TS")
-    for dir_name in CRUTSConfig.sub_dirs_cts:
-        for var in CRUTSConfig.variables_cts:
+    for dir_name in consts.cruts.sub_dirs_cts:
+        for var in consts.cruts.variables_cts:
             sub_dir_name = os.path.join(out_dir, dir_name, var)
             logger.info(f"Creating sub-dir: '{sub_dir_name}'")
             os.makedirs(sub_dir_name, exist_ok=True)
@@ -196,9 +193,9 @@ def cruts_as_cog(
         dataframe_output_path (str): Where to save the dataframe with results.
 
     """
-    fp = CRUTSConfig.file_pattern.format(variable)
+    fp = consts.cruts.file_pattern.format(variable)
     file_path = os.path.join(data_dir, fp)
-    out_path = os.path.join(out_dir, CRUTSConfig.full_res_dir, variable)
+    out_path = os.path.join(out_dir, consts.cruts.full_res_dir, variable)
     ds = xarray.open_dataset(file_path)
     file_paths = []
     dataframe_output_path = os.path.join(dataframe_output_path, "cruts_inference")
@@ -224,7 +221,9 @@ def cruts_as_cog(
             overwrite=True,
         )
 
-    pd.DataFrame(file_paths, columns=["file_path"]).to_csv(
+    pd.DataFrame(
+        file_paths, columns=[consts.datasets_and_preprocessing.file_path]
+    ).to_csv(
         os.path.join(dataframe_output_path, f"{variable}.csv"), index=False, header=True
     )
 
@@ -239,17 +238,17 @@ def ensure_sub_dirs_exist_wc(out_dir: str) -> None:
     """
     logger.info("Creating sub-dirs for WorldClim")
 
-    variables = WorldClimConfig.variables_wc + [WorldClimConfig.elevation]
+    variables = consts.world_clim.variables_wc + [consts.world_clim.elevation]
     for var in variables:
-        for multiplier, _ in WorldClimConfig.resolution_multipliers:
+        for multiplier, _ in consts.world_clim.resolution_multipliers:
             sub_dir_name = os.path.join(
-                out_dir, var, WorldClimConfig.resized_dir, multiplier
+                out_dir, var, consts.world_clim.resized_dir, multiplier
             )
             logger.info(f"Creating sub-dir: '{sub_dir_name}'")
             os.makedirs(sub_dir_name, exist_ok=True)
 
             sub_dir_name = os.path.join(
-                out_dir, var, WorldClimConfig.tiles_dir, multiplier
+                out_dir, var, consts.world_clim.tiles_dir, multiplier
             )
             logger.info(f"Creating sub-dir: '{sub_dir_name}'")
             os.makedirs(sub_dir_name, exist_ok=True)
@@ -279,7 +278,7 @@ def resize_raster(
     with rio.open(file_path) as raster:
         # resample data to target shape
         t = raster.transform
-        transform = Affine(
+        transform = rio.Affine(
             t.a / scaling_factor, t.b, t.c, t.d, t.e / scaling_factor, t.f
         )
         height = int(raster.height * scaling_factor)
@@ -290,13 +289,13 @@ def resize_raster(
 
         data = raster.read(
             out_shape=(raster.count, height, width),
-            resampling=Resampling.nearest,
+            resampling=rio.Resampling.nearest,
         )
 
         fname = os.path.join(
             out_dir,
             variable,
-            WorldClimConfig.resized_dir,
+            consts.world_clim.resized_dir,
             resolution_multiplier,
             os.path.basename(file_path),
         )
@@ -332,7 +331,7 @@ def get_tiles(
             )
         )
     )
-    big_window = windows.Window(col_off=0, row_off=0, width=ncols, height=nrows)
+    big_window = rio.windows.Window(col_off=0, row_off=0, width=ncols, height=nrows)
 
     for col_off, row_off in offsets:
         leftover_w = ncols - col_off
@@ -344,10 +343,10 @@ def get_tiles(
         if leftover_h < height:
             row_off = nrows - height
 
-        window = windows.Window(
+        window = rio.windows.Window(
             col_off=col_off, row_off=row_off, width=width, height=height
         ).intersection(big_window)
-        transform = windows.transform(window, ds.transform)
+        transform = rio.windows.transform(window, ds.transform)
 
         yield window, transform
 
@@ -376,7 +375,7 @@ def make_patches(
 
         if normalize:
             data = in_dataset.read().astype(np.float32)
-            data[data == -32768.0] = np.nan
+            data[data == consts.world_clim.elevation_missing_indicator] = np.nan
             min = np.nanmin(data)
             max = np.nanmax(data)
 
@@ -403,7 +402,9 @@ def make_patches(
 
             with rio.open(out_fp, "w", **meta) as out_dataset:
                 if normalize:
-                    subset[subset == -32768.0] = np.nan
+                    subset[
+                        subset == consts.world_clim.elevation_missing_indicator
+                    ] = np.nan
                     subset = (subset + (-min)) / (max - min + 1e-5)
                     subset[np.isnan(subset)] = 0.0
 
@@ -421,7 +422,7 @@ def run_cruts_to_cog(args: argparse.Namespace) -> None:
     if args.run_cruts_to_cog:
         logger.info("Running CRU-TS pre-processing - Geo Tiff generation")
 
-        dask.bag.from_sequence(CRUTSConfig.variables_cts).map(
+        dask.bag.from_sequence(consts.cruts.variables_cts).map(
             cruts_as_cog,
             args.data_dir_cruts,
             args.out_dir_cruts,
@@ -452,14 +453,16 @@ def compute_stats_for_zscore(args: argparse.Namespace) -> None:
         results.append((var_name, mean, std, min, max, normalized_min, normalized_max))
 
     results = []
-    for var in tqdm(CRUTSConfig.variables_cts + [WorldClimConfig.elevation]):
-        if var == WorldClimConfig.elevation:
+    for var in tqdm(consts.cruts.variables_cts + [consts.world_clim.elevation]):
+        if var == consts.world_clim.elevation:
             elevation = rio.open(args.world_clim_elevation_fp).read().astype(np.float32)
-            elevation[elevation == -32768.0] = np.nan
+            elevation[
+                elevation == consts.world_clim.elevation_missing_indicator
+            ] = np.nan
             compute_stats(var, elevation)
         else:
             ds = xarray.open_dataset(
-                os.path.join(args.data_dir_cruts, CRUTSConfig.file_pattern.format(var))
+                os.path.join(args.data_dir_cruts, consts.cruts.file_pattern.format(var))
             )
             compute_stats(var, ds[var].values)
 
@@ -467,13 +470,13 @@ def compute_stats_for_zscore(args: argparse.Namespace) -> None:
     df = pd.DataFrame(
         results,
         columns=[
-            "variable",
-            "mean",
-            "std",
-            "min",
-            "max",
-            "normalized_min",
-            "normalized_max",
+            consts.datasets_and_preprocessing.variable,
+            consts.stats.mean,
+            consts.stats.std,
+            consts.stats.min,
+            consts.stats.max,
+            consts.stats.normalized_min,
+            consts.stats.normalized_max,
         ],
     )
     df.to_csv(output_file, header=True, index=False)
@@ -495,7 +498,9 @@ def compute_stats_for_min_max_normalization(args: argparse.Namespace) -> None:
     def compute_stats(fp):
         with rio.open(fp) as ds:
             arr = ds.read(1)
-            arr[arr == -32768.0] = 0.0  # handle elevation masked values
+            arr[
+                arr == consts.world_clim.elevation_missing_indicator
+            ] = 0.0  # handle elevation masked values
             min = np.nanmin(arr)
             max = np.nanmax(arr)
             return min, max
@@ -515,14 +520,14 @@ def compute_stats_for_min_max_normalization(args: argparse.Namespace) -> None:
             *compute_stats(fp),
         )
 
-    for var in CRUTSConfig.variables_cts:
+    for var in consts.cruts.variables_cts:
         logger.info(f"Computing stats for CRU-TS - '{var}'")
         results.extend(
             dask.bag.from_sequence(
                 sorted(
                     glob(
                         os.path.join(
-                            args.out_dir_cruts, CRUTSConfig.full_res_dir, var, "*.tif"
+                            args.out_dir_cruts, consts.cruts.full_res_dir, var, "*.tif"
                         )
                     )
                 )
@@ -534,12 +539,12 @@ def compute_stats_for_min_max_normalization(args: argparse.Namespace) -> None:
     def _stats_for_wc(fp):
         year_from_filename = (
             int(os.path.basename(fp).split("-")[0].split("_")[-1])
-            if var != WorldClimConfig.elevation
+            if var != consts.world_clim.elevation
             else -1
         )
         month_from_filename = (
             int(os.path.basename(fp).split("-")[1].split(".")[0])
-            if var != WorldClimConfig.elevation
+            if var != consts.world_clim.elevation
             else -1
         )
         return (
@@ -552,7 +557,7 @@ def compute_stats_for_min_max_normalization(args: argparse.Namespace) -> None:
             *compute_stats(fp),
         )
 
-    for var in WorldClimConfig.variables_wc + [WorldClimConfig.elevation]:
+    for var in consts.world_clim.variables_wc + [consts.world_clim.elevation]:
         logger.info(f"Computing stats for World Clim - '{var}'")
         results.extend(
             dask.bag.from_sequence(
@@ -561,8 +566,8 @@ def compute_stats_for_min_max_normalization(args: argparse.Namespace) -> None:
                         os.path.join(
                             args.out_dir_world_clim,
                             var,
-                            WorldClimConfig.resized_dir,
-                            WorldClimConfig.resolution_multipliers[args.res_mult_inx][
+                            consts.world_clim.resized_dir,
+                            consts.world_clim.resolution_multipliers[args.res_mult_inx][
                                 0
                             ],
                             "*.tif",
@@ -576,28 +581,32 @@ def compute_stats_for_min_max_normalization(args: argparse.Namespace) -> None:
 
     output_file = os.path.join(args.dataframe_output_path, "statistics_min_max.csv")
     columns = [
-        "dataset",
-        "file_path",
-        "filename",
-        "variable",
-        "year",
-        "month",
-        "min",
-        "max",
+        consts.datasets_and_preprocessing.dataset,
+        consts.datasets_and_preprocessing.file_path,
+        consts.datasets_and_preprocessing.filename,
+        consts.datasets_and_preprocessing.variable,
+        consts.datasets_and_preprocessing.year,
+        consts.datasets_and_preprocessing.year,
+        consts.stats.min,
+        consts.stats.max,
     ]
 
     df = pd.DataFrame(results, columns=columns)
 
     # compute global min & max
-    df["global_min"] = np.nan
-    df["global_max"] = np.nan
+    df[consts.stats.global_min] = np.nan
+    df[consts.stats.global_max] = np.nan
 
-    grouped_min_series = df.groupby("variable").min()["min"]
-    grouped_max_series = df.groupby("variable").max()["max"]
+    grouped_min_series = df.groupby(consts.datasets_and_preprocessing.variable).min()[
+        consts.stats.min
+    ]
+    grouped_max_series = df.groupby(consts.datasets_and_preprocessing.variable).max()[
+        consts.stats.max
+    ]
     global_min_max_lookup = pd.DataFrame(
         {
-            "global_min": grouped_min_series,
-            "global_max": grouped_max_series,
+            consts.stats.global_min: grouped_min_series,
+            consts.stats.global_max: grouped_max_series,
         }
     ).to_dict(orient="index")
 
@@ -607,27 +616,35 @@ def compute_stats_for_min_max_normalization(args: argparse.Namespace) -> None:
     wc_global_max = 0.0
 
     for key, val in global_min_max_lookup.items():
-        if key in CRUTSConfig.temperature_vars:
-            cruts_global_min = np.minimum(cruts_global_min, val["global_min"])
-            cruts_global_max = np.maximum(cruts_global_max, val["global_max"])
-        if key in WorldClimConfig.temperature_vars:
-            wc_global_min = np.minimum(wc_global_min, val["global_min"])
-            wc_global_max = np.maximum(wc_global_max, val["global_max"])
+        if key in consts.cruts.temperature_vars:
+            cruts_global_min = np.minimum(
+                cruts_global_min, val[consts.stats.global_min]
+            )
+            cruts_global_max = np.maximum(
+                cruts_global_max, val[consts.stats.global_max]
+            )
+        if key in consts.world_clim.temperature_vars:
+            wc_global_min = np.minimum(wc_global_min, val[consts.stats.global_min])
+            wc_global_max = np.maximum(wc_global_max, val[consts.stats.global_max])
 
     for key, val in global_min_max_lookup.items():
-        if key in CRUTSConfig.temperature_vars:
-            val["global_min"] = cruts_global_min
-            val["global_max"] = cruts_global_max
-        if key in WorldClimConfig.temperature_vars:
-            val["global_min"] = wc_global_min
-            val["global_max"] = wc_global_max
+        if key in consts.cruts.temperature_vars:
+            val[consts.stats.global_min] = cruts_global_min
+            val[consts.stats.global_max] = cruts_global_max
+        if key in consts.world_clim.temperature_vars:
+            val[consts.stats.global_min] = wc_global_min
+            val[consts.stats.global_max] = wc_global_max
 
-    global_min_max_lookup[WorldClimConfig.elevation]["global_min"] = 0.0
+    global_min_max_lookup[consts.world_clim.elevation][consts.stats.global_min] = 0.0
 
     for idx, row in df.iterrows():
-        var = row["variable"]
-        df.loc[idx, "global_min"] = global_min_max_lookup[var]["global_min"]
-        df.loc[idx, "global_max"] = global_min_max_lookup[var]["global_max"]
+        var = row[consts.datasets_and_preprocessing.variable]
+        df.loc[idx, consts.stats.global_min] = global_min_max_lookup[var][
+            consts.stats.global_min
+        ]
+        df.loc[idx, consts.stats.global_max] = global_min_max_lookup[var][
+            consts.stats.global_max
+        ]
 
     df.to_csv(output_file, header=True, index=False)
 
@@ -656,19 +673,19 @@ def run_world_clim_resize(args: argparse.Namespace) -> None:
 
     """
     if args.run_world_clim_resize:
-        for var in WorldClimConfig.variables_wc:
+        for var in consts.world_clim.variables_wc:
             files = sorted(
                 glob(
                     os.path.join(
                         args.data_dir_world_clim,
                         var,
                         "**",
-                        WorldClimConfig.pattern_wc,
+                        consts.world_clim.pattern_wc,
                     ),
                     recursive=True,
                 )
             )
-            multiplier, scale = WorldClimConfig.resolution_multipliers[
+            multiplier, scale = consts.world_clim.resolution_multipliers[
                 args.res_mult_inx
             ]
             logger.info(
@@ -689,14 +706,14 @@ def run_world_clim_elevation_resize(args: argparse.Namespace) -> None:
 
     """
     if args.run_world_clim_elevation_resize:
-        multiplier, scale = WorldClimConfig.resolution_multipliers[args.res_mult_inx]
+        multiplier, scale = consts.world_clim.resolution_multipliers[args.res_mult_inx]
         logger.info(
             "Running WorldClim pre-processing for variable: "
             f"elevation, scale: {scale:.4f}, multiplier: {multiplier}"
         )
         resize_raster(
             args.world_clim_elevation_fp,
-            WorldClimConfig.elevation,
+            consts.world_clim.elevation,
             scale,
             multiplier,
             args.out_dir_world_clim,
@@ -712,9 +729,9 @@ def run_world_clim_tiling(args: argparse.Namespace) -> None:
 
     """
     if args.run_world_clim_tiling:
-        variables = WorldClimConfig.variables_wc + [WorldClimConfig.elevation]
+        variables = consts.world_clim.variables_wc + [consts.world_clim.elevation]
         for var in variables:
-            multiplier, scale = WorldClimConfig.resolution_multipliers[
+            multiplier, scale = consts.world_clim.resolution_multipliers[
                 args.res_mult_inx
             ]
             files = sorted(
@@ -722,7 +739,7 @@ def run_world_clim_tiling(args: argparse.Namespace) -> None:
                     os.path.join(
                         args.out_dir_world_clim,
                         var,
-                        WorldClimConfig.resized_dir,
+                        consts.world_clim.resized_dir,
                         multiplier,
                         "*.tif",
                     )
@@ -737,7 +754,7 @@ def run_world_clim_tiling(args: argparse.Namespace) -> None:
                 os.path.join(
                     args.out_dir_world_clim,
                     var,
-                    WorldClimConfig.tiles_dir,
+                    consts.world_clim.tiles_dir,
                     multiplier,
                 ),
                 args.patch_size,
@@ -755,13 +772,13 @@ def run_train_val_test_split(args: argparse.Namespace) -> None:
 
     """
     if args.run_train_val_test_split:
-        variables = WorldClimConfig.variables_wc + [WorldClimConfig.elevation]
+        variables = consts.world_clim.variables_wc + [consts.world_clim.elevation]
 
         for var in variables:
-            multiplier, scale = WorldClimConfig.resolution_multipliers[
+            multiplier, scale = consts.world_clim.resolution_multipliers[
                 args.res_mult_inx
             ]
-            if var != WorldClimConfig.elevation:
+            if var != consts.world_clim.elevation:
                 logger.info(
                     f"Generating Train/Validation/Test splits for variable: {var}, "
                     f"multiplier: {multiplier}, scale:{scale:.4f}"
@@ -772,7 +789,7 @@ def run_train_val_test_split(args: argparse.Namespace) -> None:
                     os.path.join(
                         args.out_dir_world_clim,
                         var,
-                        WorldClimConfig.tiles_dir,
+                        consts.world_clim.tiles_dir,
                         multiplier,
                         "*.tif",
                     )
@@ -801,12 +818,12 @@ def run_train_val_test_split(args: argparse.Namespace) -> None:
                 )
                 year_from_filename = (
                     int(filename.split("-")[0].split("_")[-1])
-                    if var != WorldClimConfig.elevation
+                    if var != consts.world_clim.elevation
                     else -1
                 )
                 month_from_filename = (
                     int(filename.split("-")[1].split(".")[0])
-                    if var != WorldClimConfig.elevation
+                    if var != consts.world_clim.elevation
                     else -1
                 )
 
@@ -872,26 +889,37 @@ def run_train_val_test_split(args: argparse.Namespace) -> None:
                         )
                     )
 
-                elif WorldClimConfig.elevation in file_path:
+                elif consts.world_clim.elevation in file_path:
                     elevation_images.append((file_path, var, multiplier, x, y))
 
             for stage, images in zip(
-                ["train", "val", "test", WorldClimConfig.elevation],
+                [
+                    consts.stages.train,
+                    consts.stages.val,
+                    consts.stages.test,
+                    consts.world_clim.elevation,
+                ],
                 [train_images, val_images, test_images, elevation_images],
             ):
                 if images:
                     columns = (
-                        ["file_path", "variable", "multiplier", "x", "y"]
-                        if stage == WorldClimConfig.elevation
+                        [
+                            consts.datasets_and_preprocessing.file_path,
+                            consts.datasets_and_preprocessing.variable,
+                            consts.datasets_and_preprocessing.multiplier,
+                            consts.datasets_and_preprocessing.x,
+                            consts.datasets_and_preprocessing.y,
+                        ]
+                        if stage == consts.world_clim.elevation
                         else [
-                            "tile_file_path",
-                            "filename",
-                            "variable",
-                            "multiplier",
-                            "year",
-                            "month",
-                            "x",
-                            "y",
+                            consts.datasets_and_preprocessing.tile_file_path,
+                            consts.datasets_and_preprocessing.filename,
+                            consts.datasets_and_preprocessing.variable,
+                            consts.datasets_and_preprocessing.multiplier,
+                            consts.datasets_and_preprocessing.year,
+                            consts.datasets_and_preprocessing.year,
+                            consts.datasets_and_preprocessing.x,
+                            consts.datasets_and_preprocessing.y,
                         ]
                     )
                     df = pd.DataFrame(
@@ -906,7 +934,7 @@ def run_train_val_test_split(args: argparse.Namespace) -> None:
                         header=True,
                     )
 
-            if var != WorldClimConfig.elevation:
+            if var != consts.world_clim.elevation:
                 logger.info(
                     f"Generated Train ({len(train_images)}) / "
                     f"Validation ({len(val_images)}) / "
@@ -939,7 +967,7 @@ def extract_extent_single(
     filename = os.path.basename(fp)
 
     with rio.open(fp) as ds:
-        crop, transform = mask(ds, bbox, crop=True)
+        crop, transform = rio.mask(ds, bbox, crop=True)
         meta = ds.meta
 
     meta.update(
@@ -998,29 +1026,29 @@ def run_cruts_extent_extraction(args: argparse.Namespace) -> None:
 
     if args.run_extent_extraction:
         # handle extent dirs
-        extent_dir = os.path.join(args.out_dir_cruts, CRUTSConfig.europe_extent)
-        os.makedirs(os.path.join(extent_dir, "mask"), exist_ok=True)
-        os.makedirs(os.path.join(extent_dir, CRUTSConfig.elev), exist_ok=True)
+        extent_dir = os.path.join(args.out_dir_cruts, consts.cruts.europe_extent)
+        os.makedirs(os.path.join(extent_dir, consts.batch_items.mask), exist_ok=True)
+        os.makedirs(os.path.join(extent_dir, consts.cruts.elev), exist_ok=True)
 
         logger.info("Extracting polygon extents for Europe.")
         extract_extent(
-            os.path.join(args.out_dir_cruts, CRUTSConfig.full_res_dir),
+            os.path.join(args.out_dir_cruts, consts.cruts.full_res_dir),
             extent_dir,
-            CRUTSConfig.variables_cts,
+            consts.cruts.variables_cts,
             lr_bbox,
         )
         logger.info("Extracting polygon extents for Europe for land mask file.")
         extract_extent_single(
             args.land_mask_file,
             hr_bbox,
-            "mask",
+            consts.batch_items.mask,
             extent_dir,
         )
         logger.info("Extracting polygon extents for Europe for elevation file.")
         extract_extent_single(
             args.elevation_file,
             hr_bbox,
-            CRUTSConfig.elev,
+            consts.cruts.elev,
             extent_dir,
         )
 
@@ -1057,12 +1085,12 @@ def run_temp_rasters_generation(args: argparse.Namespace) -> None:
     """
     if args.run_temp_rasters_generation:
         logger.info("Running temp raster generation")
-        multiplier, scale = WorldClimConfig.resolution_multipliers[args.res_mult_inx]
+        multiplier, scale = consts.world_clim.resolution_multipliers[args.res_mult_inx]
         os.makedirs(
             os.path.join(
                 args.out_dir_world_clim,
-                WorldClimConfig.temp,
-                WorldClimConfig.resized_dir,
+                consts.world_clim.temp,
+                consts.world_clim.resized_dir,
                 multiplier,
             ),
             exist_ok=True,
@@ -1072,8 +1100,8 @@ def run_temp_rasters_generation(args: argparse.Namespace) -> None:
             glob(
                 os.path.join(
                     args.out_dir_world_clim,
-                    WorldClimConfig.tmin,
-                    WorldClimConfig.resized_dir,
+                    consts.world_clim.tmin,
+                    consts.world_clim.resized_dir,
                     multiplier,
                     "*.tif",
                 )

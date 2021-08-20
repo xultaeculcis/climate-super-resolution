@@ -16,8 +16,8 @@ from torchmetrics.functional import (
 )
 from torch import Tensor
 
+import climsr.consts as consts
 from climsr.data import normalization
-from climsr.configs.cruts_config import CRUTSConfig
 from climsr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
 from climsr.models.rcan import RCAN
 from climsr.data.normalization import MinMaxScaler, StandardScaler
@@ -83,25 +83,25 @@ class SuperResolutionLightningModule(pl.LightningModule):
         # metrics
         self.loss = (
             torch.nn.MSELoss()
-            if self.hparams.generator == "srcnn"
+            if self.hparams.generator == consts.models.srcnn
             else torch.nn.L1Loss()
         )
 
         # standardization
-        self.stats = CRUTSConfig.statistics[
+        self.stats = consts.cruts.statistics[
             world_clim_to_cruts_mapping[self.hparams.world_clim_variable]
         ]
         self.scaler = (
             StandardScaler(
-                self.stats["mean"],
-                self.stats["std"],
+                self.stats[consts.stats.mean],
+                self.stats[consts.stats.std],
             )
             if self.hparams.normalization_method == normalization.zscore
             else MinMaxScaler(feature_range=self.hparams.normalization_range)
         )
 
     def build_model(self) -> nn.Module:
-        if self.hparams.generator == "esrgan":
+        if self.hparams.generator == consts.models.esrgan:
             generator = ESRGANGenerator(
                 in_channels=self.hparams.gen_in_channels,
                 out_channels=self.hparams.gen_out_channels,
@@ -110,24 +110,24 @@ class SuperResolutionLightningModule(pl.LightningModule):
                 gc=self.hparams.gc,
                 scale_factor=self.hparams.scale_factor,
             )
-        elif self.hparams.generator == "drln":
+        elif self.hparams.generator == consts.models.drln:
             generator = DRLN(
                 in_channels=self.hparams.gen_in_channels,
                 out_channels=self.hparams.gen_out_channels,
                 scaling_factor=self.hparams.scale_factor,
             )
-        elif self.hparams.generator == "rfbesrgan":
+        elif self.hparams.generator == consts.models.rfb_esrgan:
             generator = RFBESRGANGenerator(
                 upscale_factor=self.hparams.scale_factor,
                 num_rrdb_blocks=self.hparams.num_rrdb_blocks,
                 num_rrfdb_blocks=self.hparams.num_rrfdb_blocks,
             )
-        elif self.hparams.generator == "srcnn":
+        elif self.hparams.generator == consts.models.srcnn:
             generator = SRCNN(
                 in_channels=self.hparams.gen_in_channels,
                 out_channels=self.hparams.gen_out_channels,
             )
-        elif self.hparams.generator == "rcan":
+        elif self.hparams.generator == consts.models.rcan:
             generator = RCAN(
                 in_channels=self.hparams.gen_in_channels,
                 out_channels=self.hparams.gen_out_channels,
@@ -145,7 +145,7 @@ class SuperResolutionLightningModule(pl.LightningModule):
     def forward(
         self, x: Tensor, elevation: Tensor = None, mask: Tensor = None
     ) -> Tensor:
-        if self.hparams.generator == "srcnn":
+        if self.hparams.generator == consts.models.srcnn:
             return self.net_G(x)
         else:
             return self.net_G(x, elevation, mask)
@@ -161,10 +161,10 @@ class SuperResolutionLightningModule(pl.LightningModule):
 
         """
         lr, hr, elev, mask = (
-            batch["lr"],
-            batch["hr"],
-            batch["elevation"],
-            batch["mask"],
+            batch[consts.batch_items.lr],
+            batch[consts.batch_items.hr],
+            batch[consts.batch_items.elevation],
+            batch[consts.batch_items.mask],
         )
 
         sr = self(lr, elev, mask)
@@ -181,10 +181,10 @@ class SuperResolutionLightningModule(pl.LightningModule):
         Returns (MetricsResult): The MetricsResult.
 
         """
-        original = batch["original_data"]
-        mask = batch["mask_np"].cpu().numpy()
-        max_vals = batch["max"].cpu().numpy()
-        min_vals = batch["min"].cpu().numpy()
+        original = batch[consts.batch_items.original_data]
+        mask = batch[consts.batch_items.mask_np].cpu().numpy()
+        max_vals = batch[consts.batch_items.max].cpu().numpy()
+        min_vals = batch[consts.batch_items.min].cpu().numpy()
 
         hr, sr = self.common_step(batch)
 

@@ -13,8 +13,8 @@ from torch.utils.data import Dataset
 from torchvision import transforms as transforms
 from torchvision.transforms import InterpolationMode
 
+import climsr.consts as consts
 from climsr.data.normalization import StandardScaler, MinMaxScaler
-from climsr.configs.cruts_config import CRUTSConfig
 
 
 class GeoTiffInferenceDataset(Dataset):
@@ -42,7 +42,9 @@ class GeoTiffInferenceDataset(Dataset):
 
         self.tiff_dir = tiff_dir
         self.tiffs = glob(f"{tiff_dir}/*.tif")
-        self.tiff_df = tiff_df.set_index("filename", drop=True)
+        self.tiff_df = tiff_df.set_index(
+            consts.datasets_and_preprocessing.filename, drop=True
+        )
         self.variable = variable
         self.scaling_factor = scaling_factor
         self.generator_type = generator_type
@@ -55,12 +57,12 @@ class GeoTiffInferenceDataset(Dataset):
 
         if self.standardize:
             self.scaler = StandardScaler(
-                self.standardize_stats[self.variable]["mean"],
-                self.standardize_stats[self.variable]["std"],
+                self.standardize_stats[self.variable][consts.stats.mean],
+                self.standardize_stats[self.variable][consts.stats.std],
             )
             self.elevation_scaler = StandardScaler(
-                standardize_stats[CRUTSConfig.elev]["mean"],
-                standardize_stats[CRUTSConfig.elev]["std"],
+                standardize_stats[consts.cruts.elev][consts.stats.mean],
+                standardize_stats[consts.cruts.elev][consts.stats.std],
             )
         else:
             self.scaler = MinMaxScaler(feature_range=normalize_range)
@@ -79,7 +81,8 @@ class GeoTiffInferenceDataset(Dataset):
             self.land_mask_np, elevation_arr, np.nan
         )  # mask Antarctica
         elevation_arr = self.elevation_scaler.normalize(
-            elevation_arr, missing_indicator=-32768
+            elevation_arr,
+            missing_indicator=consts.world_clim.elevation_missing_indicator,
         )
 
         self.resize = transforms.Resize(
@@ -102,15 +105,15 @@ class GeoTiffInferenceDataset(Dataset):
         self.elevation_lr = self.to_tensor(self.resize(Image.fromarray(elevation_arr)))
         self.mask_lr = self.to_tensor(self.resize(Image.fromarray(self.land_mask_np)))
 
-    def _concat_if_needed(self, img_lr, img_sr_nearest) -> Tensor:
+    def _concat_if_needed(self, img_lr: Tensor, img_sr_nearest: Tensor) -> Tensor:
         if self.use_elevation:
-            if self.generator_type == "srcnn":
+            if self.generator_type == consts.models.srcnn:
                 img_lr = torch.cat([img_sr_nearest, self.elevation_data], dim=0)
             else:
                 img_lr = torch.cat([img_lr, self.elevation_lr], dim=0)
 
         if self.use_mask_as_3rd_channel:
-            if self.generator_type == "srcnn":
+            if self.generator_type == consts.models.srcnn:
                 img_lr = torch.cat([img_lr, self.land_mask_tensor], dim=0)
             else:
                 img_lr = torch.cat([img_lr, self.mask_lr], dim=0)
@@ -118,7 +121,7 @@ class GeoTiffInferenceDataset(Dataset):
         return img_lr
 
     def _common_to_tensor(
-        self, img_lr
+        self, img_lr: np.ndarray
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
         img_sr_nearest = self.to_tensor(
             np.array(self.upscale(img_lr), dtype=np.float32)
@@ -137,7 +140,9 @@ class GeoTiffInferenceDataset(Dataset):
             img_sr_nearest,
         )
 
-    def _get_inference_sample(self, img_lr, min, max) -> Dict[str, Union[Tensor, list]]:
+    def _get_inference_sample(
+        self, img_lr: np.ndarray, min: float, max: float
+    ) -> Dict[str, Union[Tensor, list]]:
         (
             img_lr,
             img_elev,
@@ -148,22 +153,30 @@ class GeoTiffInferenceDataset(Dataset):
         ) = self._common_to_tensor(img_lr)
 
         return {
-            "lr": img_lr,
-            "elevation": img_elev,
-            "elevation_lr": img_elev_lr,
-            "nearest": img_sr_nearest,
-            "mask": mask_tensor,
-            "mask_np": mask,
-            "min": min,
-            "max": max,
+            consts.batch_items.lr: img_lr,
+            consts.batch_items.elevation: img_elev,
+            consts.batch_items.elevation_lr: img_elev_lr,
+            consts.batch_items.nearest: img_sr_nearest,
+            consts.batch_items.mask: mask_tensor,
+            consts.batch_items.mask_np: mask,
+            consts.batch_items.min: min,
+            consts.batch_items.max: max,
         }
 
-    def __getitem__(self, index) -> Dict[str, Union[Tensor, list]]:
+    def __getitem__(self, index: int) -> Dict[str, Union[Tensor, list]]:
         file_path = self.tiffs[index]
         file_name = os.path.basename(file_path)
         row = self.tiff_df.loc[file_name]
-        min = row["min"] if not self.use_global_min_max else row["global_min"]
-        max = row["max"] if not self.use_global_min_max else row["global_max"]
+        min = (
+            row[consts.stats.min]
+            if not self.use_global_min_max
+            else row[consts.stats.global_min]
+        )
+        max = (
+            row[consts.stats.max]
+            if not self.use_global_min_max
+            else row[consts.stats.global_max]
+        )
 
         # original, hr
         with rio.open(file_path) as ds:
@@ -178,7 +191,7 @@ class GeoTiffInferenceDataset(Dataset):
         img_lr = Image.fromarray(img_lr)
 
         item = self._get_inference_sample(img_lr, min, max)
-        item["filename"] = file_name
+        item[consts.batch_items.filename] = file_name
 
         return item
 

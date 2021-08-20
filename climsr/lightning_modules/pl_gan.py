@@ -6,6 +6,7 @@ import torch
 from torch import Tensor
 from torch.optim import Adam
 
+import climsr.consts as consts
 from climsr.losses.perceptual import PerceptualLoss
 from climsr.models.discriminator import Discriminator
 from climsr.lightning_modules.pl_sr_module import SuperResolutionLightningModule
@@ -68,7 +69,7 @@ class GANLightningModule(SuperResolutionLightningModule):
     def training_step(
         self, batch: Any, batch_idx: int, optimizer_idx: int
     ) -> Dict[str, Any]:
-        hr = (batch["hr"],)
+        hr = (batch[consts.batch_items.hr],)
         real_labels, fake_labels = self._real_fake(hr.size(0))
 
         hr, sr = self.common_step(batch)
@@ -122,7 +123,7 @@ class GANLightningModule(SuperResolutionLightningModule):
 
         """
 
-        hr = batch["hr"]
+        hr = batch[consts.batch_items.hr]
         real_labels, fake_labels = self._real_fake(hr.size(0))
 
         metrics = self.common_val_test_step(batch)

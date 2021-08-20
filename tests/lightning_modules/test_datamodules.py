@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
+import climsr.consts as consts
 from climsr.lightning_modules.datamodules import SuperResolutionDataModule
-from climsr.configs.world_clim_config import WorldClimConfig
 
 
 class Args:
     batch_size = 32
     data_path = "./datasets"
-    world_clim_variable = WorldClimConfig.tmin
+    world_clim_variable = consts.world_clim.tmin
     world_clim_multiplier = "4x"
     num_workers = 4
     hr_size = 128
@@ -20,7 +20,7 @@ dm = SuperResolutionDataModule(
     data_path=args.data_path,
     world_clim_variable=args.world_clim_variable,
     world_clim_multiplier=args.world_clim_multiplier,
-    generator_type="esrgan",
+    generator_type=consts.models.esrgan,
     batch_size=args.batch_size,
     num_workers=args.num_workers,
     hr_size=args.hr_size,
@@ -29,11 +29,11 @@ dm = SuperResolutionDataModule(
 )
 
 
-def common_asserts(dl, stage="test"):
+def common_asserts(dl, stage=consts.stages.test):
     for _, batch in enumerate(dl):
-        lr = batch["lr"]
-        hr = batch["hr"]
-        elevation = batch["elevation"]
+        lr = batch[consts.batch_items.lr]
+        hr = batch[consts.batch_items.hr]
+        elevation = batch[consts.batch_items.elevation]
 
         expected_lr_shape = (
             args.batch_size,
@@ -56,8 +56,8 @@ def common_asserts(dl, stage="test"):
             f"but found: {elevation.shape}"
         )
 
-        if stage != "train":
-            sr_nearest = batch["nearest"]
+        if stage != consts.stages.train:
+            sr_nearest = batch[consts.batch_items.nearest]
 
             assert sr_nearest.shape == (args.batch_size, 1, 128, 128), (
                 f"Expected the SR batch to be in shape {expected_hr_shape}, "
@@ -69,7 +69,7 @@ def common_asserts(dl, stage="test"):
 
 def test_train_dl():
     train_dl = dm.train_dataloader()
-    common_asserts(train_dl, "train")
+    common_asserts(train_dl, consts.stages.train)
 
 
 def test_val_dl():

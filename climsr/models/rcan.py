@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from sr.models.srcnn import SRCNN
+from climsr.models.srcnn import SRCNN
 
 
 def default_conv(

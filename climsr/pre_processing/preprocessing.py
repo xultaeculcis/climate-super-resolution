@@ -20,8 +20,8 @@ from rasterio.enums import Resampling
 from rasterio.mask import mask
 from tqdm import tqdm
 
-from sr.configs.cruts_config import CRUTSConfig
-from sr.configs.world_clim_config import WorldClimConfig
+from climsr.configs.cruts_config import CRUTSConfig
+from climsr.configs.world_clim_config import WorldClimConfig
 
 pbar = progress.ProgressBar()
 pbar.register()

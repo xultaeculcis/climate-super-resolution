@@ -1,4 +1,4 @@
-name: sr
+name: climsr
 channels:
   - conda-forge
   - defaults

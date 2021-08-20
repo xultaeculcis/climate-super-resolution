@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-from sr.configs.cruts_config import CRUTSConfig
-from sr.configs.world_clim_config import WorldClimConfig
+from climsr.configs.cruts_config import CRUTSConfig
+from climsr.configs.world_clim_config import WorldClimConfig
 
 cruts_to_world_clim_mapping = {
     CRUTSConfig.tmn: WorldClimConfig.tmin,

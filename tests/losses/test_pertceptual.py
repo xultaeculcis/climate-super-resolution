@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import torch
 
-from sr.losses.perceptual import PerceptualLoss
+from climsr.losses.perceptual import PerceptualLoss
 
 if torch.cuda.is_available():
     device = "cuda"

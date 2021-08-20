@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import torch
 
-from sr.models.srcnn import SRCNN
+from climsr.models.srcnn import SRCNN
 
 
 def test_should_return_tensor_with_correct_shape_after_forward():

@@ -6,9 +6,9 @@ import torch
 from torch import Tensor
 from torch.optim import Adam
 
-from sr.losses.perceptual import PerceptualLoss
-from sr.models.discriminator import Discriminator
-from sr.lightning_modules.pl_sr_module import SuperResolutionLightningModule
+from climsr.losses.perceptual import PerceptualLoss
+from climsr.models.discriminator import Discriminator
+from climsr.lightning_modules.pl_sr_module import SuperResolutionLightningModule
 
 
 class GANLightningModule(SuperResolutionLightningModule):

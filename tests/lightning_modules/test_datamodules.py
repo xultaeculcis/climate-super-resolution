@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-from sr.lightning_modules.datamodules import SuperResolutionDataModule
-from sr.configs.world_clim_config import WorldClimConfig
+from climsr.lightning_modules.datamodules import SuperResolutionDataModule
+from climsr.configs.world_clim_config import WorldClimConfig
 
 
 class Args:

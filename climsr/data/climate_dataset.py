@@ -12,9 +12,9 @@ from torch.utils.data import Dataset
 from torchvision import transforms as transforms
 from torchvision.transforms import functional as TF, InterpolationMode
 
-from sr.data.normalization import StandardScaler, MinMaxScaler
-from sr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
-from sr.configs.cruts_config import CRUTSConfig
+from climsr.data.normalization import StandardScaler, MinMaxScaler
+from climsr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
+from climsr.configs.cruts_config import CRUTSConfig
 
 
 class ClimateDataset(Dataset):

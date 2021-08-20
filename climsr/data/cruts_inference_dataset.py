@@ -9,9 +9,9 @@ from torch.utils.data import Dataset
 from torchvision import transforms as transforms
 from torchvision.transforms import InterpolationMode
 
-from sr.data import utils as utils
-from sr.data.normalization import StandardScaler, MinMaxScaler
-from sr.configs.cruts_config import CRUTSConfig
+from climsr.data import utils as utils
+from climsr.data.normalization import StandardScaler, MinMaxScaler
+from climsr.configs.cruts_config import CRUTSConfig
 
 
 class CRUTSInferenceDataset(Dataset):

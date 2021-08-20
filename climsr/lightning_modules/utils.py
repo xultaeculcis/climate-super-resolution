@@ -12,11 +12,11 @@ from pytorch_lightning.callbacks import (
     ModelCheckpoint,
 )
 
-from sr.data import normalization
-from sr.lightning_modules.callbacks import LogImagesCallback
-from sr.lightning_modules.pl_gan import GANLightningModule
-from sr.lightning_modules.datamodules import SuperResolutionDataModule
-from sr.lightning_modules.pl_generator_pre_training import (
+from climsr.data import normalization
+from climsr.lightning_modules.callbacks import LogImagesCallback
+from climsr.lightning_modules.pl_gan import GANLightningModule
+from climsr.lightning_modules.datamodules import SuperResolutionDataModule
+from climsr.lightning_modules.pl_generator_pre_training import (
     GeneratorPreTrainingLightningModule,
 )
 

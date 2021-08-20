@@ -9,11 +9,11 @@ import pandas as pd
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
-from sr.data import normalization
-from sr.configs.cruts_config import CRUTSConfig
-from sr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
-from sr.data.climate_dataset import ClimateDataset
-from sr.configs.world_clim_config import WorldClimConfig
+from climsr.data import normalization
+from climsr.configs.cruts_config import CRUTSConfig
+from climsr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
+from climsr.data.climate_dataset import ClimateDataset
+from climsr.configs.world_clim_config import WorldClimConfig
 
 logging.basicConfig(level=logging.INFO)
 os.environ["NUMEXPR_MAX_THREADS"] = "16"

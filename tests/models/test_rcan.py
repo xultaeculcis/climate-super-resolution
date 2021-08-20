@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import torch
 
-from sr.models.rcan import RCAN
+from climsr.models.rcan import RCAN
 
 
 def test_should_return_tensor_with_correct_shape_after_forward():

@@ -16,15 +16,15 @@ from torchmetrics.functional import (
 )
 from torch import Tensor
 
-from sr.data import normalization
-from sr.configs.cruts_config import CRUTSConfig
-from sr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
-from sr.models.rcan import RCAN
-from sr.data.normalization import MinMaxScaler, StandardScaler
-from sr.models.drln import DRLN
-from sr.models.esrgan import ESRGANGenerator
-from sr.models.rfb_esrgan import RFBESRGANGenerator
-from sr.models.srcnn import SRCNN
+from climsr.data import normalization
+from climsr.configs.cruts_config import CRUTSConfig
+from climsr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
+from climsr.models.rcan import RCAN
+from climsr.data.normalization import MinMaxScaler, StandardScaler
+from climsr.models.drln import DRLN
+from climsr.models.esrgan import ESRGANGenerator
+from climsr.models.rfb_esrgan import RFBESRGANGenerator
+from climsr.models.srcnn import SRCNN
 
 
 class SuperResolutionLightningModule(pl.LightningModule):

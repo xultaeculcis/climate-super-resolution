@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
-from sr.models.srcnn import SRCNN
+from climsr.models.srcnn import SRCNN
 
 
 def make_layer(block, n_layers):

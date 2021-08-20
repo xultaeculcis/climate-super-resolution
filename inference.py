@@ -18,9 +18,9 @@ from tqdm import tqdm
 from data.cruts_inference_dataset import CRUTSInferenceDataset
 from data.geo_tiff_inference_dataset import GeoTiffInferenceDataset
 from pre_processing.preprocessing import extract_extent, hr_bbox, var_to_variable
-from sr.data.normalization import MinMaxScaler
-from sr.lightning_modules.utils import prepare_pl_module
-from sr.configs.cruts_config import CRUTSConfig
+from climsr.data.normalization import MinMaxScaler
+from climsr.lightning_modules.utils import prepare_pl_module
+from climsr.configs.cruts_config import CRUTSConfig
 
 
 def parse_args(arg_str: Optional[str] = None) -> argparse.Namespace:

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import torch
 
-from sr.models.drln import DRLN
+from climsr.models.drln import DRLN
 
 
 def test_should_return_tensor_with_correct_shape_after_forward():

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import torch
 
-from sr.models.rfb_esrgan import RFBESRGANGenerator
+from climsr.models.rfb_esrgan import RFBESRGANGenerator
 
 
 def test_should_return_tensor_with_correct_shape_after_forward():

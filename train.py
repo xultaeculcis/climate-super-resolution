@@ -8,9 +8,9 @@ from typing import Union
 import numpy as np
 import pytorch_lightning as pl
 
-from sr.lightning_modules.pl_sr_module import SuperResolutionLightningModule
-from sr.lightning_modules.utils import prepare_training
-from sr.lightning_modules.datamodules import SuperResolutionDataModule
+from climsr.lightning_modules.pl_sr_module import SuperResolutionLightningModule
+from climsr.lightning_modules.utils import prepare_training
+from climsr.lightning_modules.datamodules import SuperResolutionDataModule
 
 np.set_printoptions(precision=3)
 logging.basicConfig(level=logging.INFO)

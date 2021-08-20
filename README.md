@@ -6,8 +6,8 @@ This repo contains training and evaluation scripts of Neural Network for Climate
 
 1. Run:
 ```shell
-conda create -n sr python=3.8
-conda activate sr
+conda create -n climsr python=3.8
+conda activate climsr
 conda install pytorch torchvision torchaudio cudatoolkit=11.1 -c pytorch -c nvidia
 conda env update -f environment.yml
 ```

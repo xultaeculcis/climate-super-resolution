@@ -1,0 +1,6 @@
+# @package dataset
+defaults:
+  - default
+_target_: climsr.core.data.SuperResolutionDataModule
+cfg:
+  dataset_name: emotion

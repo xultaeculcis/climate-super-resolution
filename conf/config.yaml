@@ -3,6 +3,7 @@ defaults: # loads default configs
   - scheduler: one_cycle_schedule
   - training: default
   - trainer: default
+  - dataset: default
 
 experiment_name: ${now:%Y-%m-%d}_${now:%H-%M-%S}
 log: False

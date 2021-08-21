@@ -2,7 +2,7 @@
 import logging
 import os
 from argparse import ArgumentParser
-from typing import List, Optional, Tuple, Dict, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import inflection
 import numpy as np
@@ -12,8 +12,8 @@ from torch.utils.data import DataLoader
 
 import climsr.consts as consts
 from climsr.data import normalization
-from climsr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
 from climsr.data.climate_dataset import ClimateDataset
+from climsr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
 
 logging.basicConfig(level=logging.INFO)
 os.environ["NUMEXPR_MAX_THREADS"] = "16"

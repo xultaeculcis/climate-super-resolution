@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from random import random
-from typing import Dict, Optional, Union, Tuple
+from typing import Dict, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -10,10 +10,11 @@ from PIL import Image
 from torch import Tensor
 from torch.utils.data import Dataset
 from torchvision import transforms as transforms
-from torchvision.transforms import functional as TF, InterpolationMode
+from torchvision.transforms import InterpolationMode
+from torchvision.transforms import functional as TF
 
 import climsr.consts as consts
-from climsr.data.normalization import StandardScaler, MinMaxScaler
+from climsr.data.normalization import MinMaxScaler, StandardScaler
 from climsr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
 
 

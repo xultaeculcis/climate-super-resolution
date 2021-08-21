@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 from glob import glob
-from typing import Optional, Tuple, Dict, Union
+from typing import Dict, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -14,7 +14,7 @@ from torchvision import transforms as transforms
 from torchvision.transforms import InterpolationMode
 
 import climsr.consts as consts
-from climsr.data.normalization import StandardScaler, MinMaxScaler
+from climsr.data.normalization import MinMaxScaler, StandardScaler
 
 
 class GeoTiffInferenceDataset(Dataset):

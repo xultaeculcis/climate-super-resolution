@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 from dataclasses import dataclass
-from typing import Union, List, Optional
+from typing import List, Optional, Union
 
 import numpy as np
 import pandas as pd

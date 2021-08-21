@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 import argparse
 import os
+import warnings
 from typing import Tuple
 
 import pytorch_lightning as pl
-
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import (
     EarlyStopping,
@@ -13,13 +13,17 @@ from pytorch_lightning.callbacks import (
 )
 
 import climsr.consts as consts
+from climsr.core.callbacks import LogImagesCallback
+from climsr.core.datamodules import SuperResolutionDataModule
+from climsr.core.pl_gan import GANLightningModule
+from climsr.core.pl_generator_pre_training import GeneratorPreTrainingLightningModule
 from climsr.data import normalization
-from climsr.lightning_modules.callbacks import LogImagesCallback
-from climsr.lightning_modules.pl_gan import GANLightningModule
-from climsr.lightning_modules.datamodules import SuperResolutionDataModule
-from climsr.lightning_modules.pl_generator_pre_training import (
-    GeneratorPreTrainingLightningModule,
-)
+
+
+def set_ignore_warnings():
+    warnings.simplefilter("ignore")
+    # set os environ variable for multiprocesses
+    os.environ["PYTHONWARNINGS"] = "ignore"
 
 
 def prepare_pl_module(args: argparse.Namespace) -> pl.LightningModule:

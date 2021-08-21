@@ -2,29 +2,24 @@
 import argparse
 from dataclasses import dataclass
 from math import ceil
-from typing import Any, Tuple, Union, Optional
+from typing import Any, Optional, Tuple, Union
 
 import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
-from torchmetrics.functional import (
-    mean_absolute_error,
-    mean_squared_error,
-    psnr,
-    ssim,
-)
 from torch import Tensor
+from torchmetrics.functional import mean_absolute_error, mean_squared_error, psnr, ssim
 
 import climsr.consts as consts
 from climsr.data import normalization
-from climsr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
-from climsr.models.rcan import RCAN
 from climsr.data.normalization import MinMaxScaler, StandardScaler
 from climsr.models.drln import DRLN
 from climsr.models.esrgan import ESRGANGenerator
+from climsr.models.rcan import RCAN
 from climsr.models.rfb_esrgan import RFBESRGANGenerator
 from climsr.models.srcnn import SRCNN
+from climsr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
 
 
 class SuperResolutionLightningModule(pl.LightningModule):

@@ -3,13 +3,13 @@ import logging
 import math
 import os
 from copy import deepcopy
-from typing import Optional, Any, List, Tuple
+from typing import Any, List, Optional, Tuple
 
 import matplotlib
 import numpy as np
 import torch
-from PIL import Image
 from matplotlib import pyplot as plt
+from PIL import Image
 from pytorch_lightning import LightningModule, Trainer
 from pytorch_lightning.callbacks import Callback
 from pytorch_lightning.loggers.base import DummyLogger

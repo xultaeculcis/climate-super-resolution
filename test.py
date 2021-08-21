@@ -7,11 +7,11 @@ from typing import Union
 
 import numpy as np
 import pytorch_lightning as pl
-from lightning_modules.utils import prepare_training
 
 import climsr.consts as consts
-from climsr.lightning_modules.datamodules import SuperResolutionDataModule
-from climsr.lightning_modules.pl_gan import GANLightningModule
+from climsr.core.datamodules import SuperResolutionDataModule
+from climsr.core.pl_gan import GANLightningModule
+from climsr.core.utils import prepare_training
 
 np.set_printoptions(precision=3)
 logging.basicConfig(level=logging.INFO)

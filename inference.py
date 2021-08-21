@@ -3,7 +3,7 @@ import argparse
 import logging
 import os
 from glob import glob
-from typing import Tuple, Optional, List
+from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -11,16 +11,16 @@ import pytorch_lightning as pl
 import rasterio as rio
 import torch
 import xarray as xr
+from data.cruts_inference_dataset import CRUTSInferenceDataset
+from data.geo_tiff_inference_dataset import GeoTiffInferenceDataset
 from matplotlib import pyplot as plt
+from pre_processing.preprocessing import extract_extent, hr_bbox, var_to_variable
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
 import climsr.consts as consts
-from data.cruts_inference_dataset import CRUTSInferenceDataset
-from data.geo_tiff_inference_dataset import GeoTiffInferenceDataset
-from pre_processing.preprocessing import extract_extent, hr_bbox, var_to_variable
+from climsr.core.utils import prepare_pl_module
 from climsr.data.normalization import MinMaxScaler
-from climsr.lightning_modules.utils import prepare_pl_module
 
 
 def parse_args(arg_str: Optional[str] = None) -> argparse.Namespace:

@@ -1,0 +1,9 @@
+defaults: # loads default configs
+  - optimizer: adamw
+  - scheduler: one_cycle_schedule
+  - training: default
+  - trainer: default
+
+experiment_name: ${now:%Y-%m-%d}_${now:%H-%M-%S}
+log: False
+ignore_warnings: True # todo: check warnings before release

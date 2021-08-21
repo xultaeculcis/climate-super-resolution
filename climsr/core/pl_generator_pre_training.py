@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import torch
 from torch import Tensor
 
-from climsr.lightning_modules.pl_sr_module import SuperResolutionLightningModule
+from climsr.core.pl_sr_module import SuperResolutionLightningModule
 
 
 class GeneratorPreTrainingLightningModule(SuperResolutionLightningModule):

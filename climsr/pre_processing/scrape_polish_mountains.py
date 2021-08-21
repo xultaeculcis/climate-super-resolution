@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-from bs4 import BeautifulSoup
-import requests
 import pandas as pd
+import requests
+from bs4 import BeautifulSoup
 
 
 def scrape_url1():

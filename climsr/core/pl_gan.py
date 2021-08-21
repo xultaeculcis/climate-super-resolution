@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 import dataclasses
-from typing import Any, Dict, List, Tuple, Union, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import torch
 from torch import Tensor
 from torch.optim import Adam
 
 import climsr.consts as consts
+from climsr.core.pl_sr_module import SuperResolutionLightningModule
 from climsr.losses.perceptual import PerceptualLoss
 from climsr.models.discriminator import Discriminator
-from climsr.lightning_modules.pl_sr_module import SuperResolutionLightningModule
 
 
 class GANLightningModule(SuperResolutionLightningModule):

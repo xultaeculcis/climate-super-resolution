@@ -4,7 +4,7 @@ import logging
 import os
 from glob import glob
 from itertools import product
-from typing import Any, Optional, Tuple, List, Dict
+from typing import Any, Dict, List, Optional, Tuple
 
 import dask.bag
 import datacube.utils.geometry as dcug
@@ -18,7 +18,6 @@ from distributed import Client
 from tqdm import tqdm
 
 import climsr.consts as consts
-
 
 pbar = progress.ProgressBar()
 pbar.register()

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import climsr.consts as consts
-from climsr.lightning_modules.datamodules import SuperResolutionDataModule
+from climsr.core.datamodules import SuperResolutionDataModule
 
 
 class Args:

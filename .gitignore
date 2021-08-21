@@ -205,3 +205,4 @@ lightning_logs/
 dask-worker-space/
 results/
 logs_archive/
+outputs/

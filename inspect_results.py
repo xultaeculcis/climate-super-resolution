@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-import sys
 import logging
+import sys
 
-import xarray as xr
 import pandas as pd
+import xarray as xr
 
 import climsr.consts as consts
-from climsr.result_inspection.consts import lats, lons, alts
+from climsr.result_inspection.consts import alts, lats, lons
 from climsr.result_inspection.models import CompareStatsResults
 
 logging.basicConfig(level=logging.INFO)

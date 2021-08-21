@@ -11,7 +11,7 @@ from torchvision.transforms import InterpolationMode
 
 import climsr.consts as consts
 from climsr.data import utils as utils
-from climsr.data.normalization import StandardScaler, MinMaxScaler
+from climsr.data.normalization import MinMaxScaler, StandardScaler
 
 
 class CRUTSInferenceDataset(Dataset):

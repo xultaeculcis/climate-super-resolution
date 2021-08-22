@@ -1,0 +1,5 @@
+defaults:
+  - default
+
+num_rrdb_blocks: 16
+num_rrfdb_blocks: 8

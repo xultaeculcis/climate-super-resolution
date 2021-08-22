@@ -16,18 +16,19 @@ from climsr.core.config import SuperResolutionDataConfig
 logging.basicConfig(level=logging.INFO)
 os.environ["NUMEXPR_MAX_THREADS"] = "16"
 
+default_cfg = SuperResolutionDataConfig()
+
 
 class SuperResolutionDataModule(pl.LightningDataModule):
-    def __init__(
-        self,
-        cfg: Optional[SuperResolutionDataConfig] = SuperResolutionDataConfig()
-    ):
+    def __init__(self, cfg: Optional[SuperResolutionDataConfig] = default_cfg):
         super(SuperResolutionDataModule, self).__init__()
 
         assert cfg.hr_size % cfg.scale_factor == 0
 
         self.cfg = cfg
+        # self.setup()
 
+    def setup(self, stage: Optional[str] = None) -> None:
         train_df, val_df, test_dfs, elevation_df, standardize_stats = self.load_data()
 
         logging.info(
@@ -150,7 +151,9 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             consts.world_clim.elevation, f"{consts.world_clim.elevation}.csv"
         )
 
-        stats_df = pd.read_csv(os.path.join(self.cfg.data_path, "statistics_min_max.csv"))
+        stats_df = pd.read_csv(
+            os.path.join(self.cfg.data_path, "statistics_min_max.csv")
+        )
 
         if self.cfg.world_clim_variable == consts.world_clim.temp:
             train_dfs = []
@@ -178,14 +181,16 @@ class SuperResolutionDataModule(pl.LightningDataModule):
             val_df = pd.concat(val_dfs)
         else:
             train_df = self.load_dataframe(
-                self.cfg.world_clim_variable, consts.datasets_and_preprocessing.train_csv
+                self.cfg.world_clim_variable,
+                consts.datasets_and_preprocessing.train_csv,
             )
             val_df = self.load_dataframe(
                 self.cfg.world_clim_variable, consts.datasets_and_preprocessing.val_csv
             )
             test_dfs = [
                 self.load_dataframe(
-                    self.cfg.world_clim_variable, consts.datasets_and_preprocessing.test_csv
+                    self.cfg.world_clim_variable,
+                    consts.datasets_and_preprocessing.test_csv,
                 )
             ]
 
@@ -264,7 +269,6 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         parser.add_argument("--num_workers", type=int, default=8)
         parser.add_argument("--hr_size", type=int, default=128)
         parser.add_argument("--scale_factor", type=int, default=4)
-        parser.add_argument("--seed", type=int, default=42)
         parser.add_argument(
             "--normalization_method",
             type=str,

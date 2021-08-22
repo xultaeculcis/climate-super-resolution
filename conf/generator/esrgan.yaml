@@ -1,0 +1,5 @@
+defaults:
+  - default
+nf: 64
+nb: 11
+gc: 16

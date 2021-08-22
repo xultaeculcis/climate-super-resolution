@@ -1,0 +1,7 @@
+defaults:
+  - default
+
+n_resgroups: 10
+n_resblocks: 20
+n_feats: 64
+reduction: 16

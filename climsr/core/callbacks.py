@@ -18,6 +18,7 @@ from torchvision.transforms import ToTensor
 from torchvision.utils import make_grid
 
 import climsr.consts as consts
+from climsr.data import normalization
 from climsr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
 
 MAX_ITEMS = 88
@@ -30,14 +31,14 @@ class LogImagesCallback(Callback):
         experiment_name: str,
         use_elevation: bool,
         world_clim_variable: str,
-        standardize: bool = False,
+        normalization_method: Optional[str] = normalization.minmax,
         normalization_range: Optional[Tuple[float, float]] = (0.0, 1.0),
     ):
         super(LogImagesCallback, self).__init__()
         self.generator = generator
         self.experiment_name = experiment_name
         self.use_elevation = use_elevation
-        self.standardize = standardize
+        self.standardize = normalization_method == normalization.zscore
         self.world_clim_variable = world_clim_variable
         self.stats = consts.cruts.statistics[
             world_clim_to_cruts_mapping[self.world_clim_variable]

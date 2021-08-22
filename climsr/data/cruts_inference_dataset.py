@@ -5,16 +5,16 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from PIL import Image
-from torch.utils.data import Dataset
 from torchvision import transforms as transforms
 from torchvision.transforms import InterpolationMode
 
 import climsr.consts as consts
 from climsr.data import utils as utils
 from climsr.data.normalization import MinMaxScaler, StandardScaler
+from data.climate_dataset_base import ClimateDatasetBase
 
 
-class CRUTSInferenceDataset(Dataset):
+class CRUTSInferenceDataset(ClimateDatasetBase):
     def __init__(
         self,
         ds_path: str,
@@ -27,18 +27,19 @@ class CRUTSInferenceDataset(Dataset):
         standardize_stats: pd.DataFrame = None,
         normalize_range: Optional[Tuple[float, float]] = (0.0, 1.0),
     ):
-        if normalize == standardize:
-            raise Exception(
-                "Bad parameter combination: normalization and standardization! Choose one!"
-            )
+        super().__init__(
+            elevation_file=elevation_file,
+            land_mask_file=land_mask_file,
+            generator_type=generator_type,
+            variable=utils.get_variable_from_ds_fp(ds_path),
+            scaling_factor=scaling_factor,
+            normalize=normalize,
+            standardize=standardize,
+            standardize_stats=standardize_stats,
+            normalize_range=normalize_range,
+        )
 
         self.ds = xr.open_dataset(ds_path)
-        self.variable = utils.get_variable_from_ds_fp(ds_path)
-        self.scaling_factor = scaling_factor
-        self.generator_type = generator_type
-        self.normalize = normalize
-        self.standardize = standardize
-        self.standardize_stats = standardize_stats
 
         if self.standardize:
             self.scaler = StandardScaler(

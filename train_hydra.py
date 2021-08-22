@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
-from typing import Any, Optional
+from typing import Any, Optional, List
 
 import hydra
 from omegaconf import DictConfig, OmegaConf
-from pytorch_lightning import LightningDataModule
+import pytorch_lightning as pl
+from pytorch_lightning import Callback
+from pytorch_lightning.loggers import LightningLoggerBase
 from pytorch_lightning.utilities.distributed import rank_zero_info
 
 from climsr.core.datamodules import SuperResolutionDataModule
@@ -12,53 +14,74 @@ from climsr.core.instantiator import HydraInstantiator, Instantiator
 from climsr.core.model import TaskSuperResolutionModule
 from climsr.core.utils import set_ignore_warnings
 
+default_sr_dm_config = SuperResolutionDataConfig()
+default_task_config = TaskConfig()
+default_trainer_config = TrainerConfig()
+
 
 def run(
     instantiator: Instantiator,
     ignore_warnings: bool = True,
     run_test_after_fit: bool = True,
-    dataset: SuperResolutionDataConfig = SuperResolutionDataConfig(),
-    task: TaskConfig = TaskConfig(),
-    trainer: TrainerConfig = TrainerConfig(),
-    logger: Optional[Any] = None,
+    datamodule_cfg: Optional[SuperResolutionDataConfig] = default_sr_dm_config,
+    task_cfg: Optional[TaskConfig] = default_task_config,
+    trainer_cfg: Optional[TrainerConfig] = default_trainer_config,
+    logger_cfgs: Optional[Any] = None,
+    callback_cfgs: Optional[Any] = None,
 ) -> None:
     if ignore_warnings:
         set_ignore_warnings()
 
-    print(dataset)
-    data_module: SuperResolutionDataModule = instantiator.data_module(dataset)
+    # Init data module
+    data_module: SuperResolutionDataModule = instantiator.data_module(datamodule_cfg)
     if data_module is None:
-        raise ValueError("No dataset found. Hydra hint: did you set `dataset=...`?")
-    if not isinstance(data_module, LightningDataModule):
+        raise ValueError(
+            "No datamodule found. Hydra hint: did you set `datamodule=...`?"
+        )
+    if not isinstance(data_module, pl.LightningDataModule):
         raise ValueError(
             "The instantiator did not return a DataModule instance."
-            " Hydra hint: is `dataset._target_` defined?`"
+            " Hydra hint: is `datamodule._target_` defined?`"
         )
-    # data_module.setup("fit")
 
-    # model: TaskSuperResolutionModule = instantiator.model(task, model_data_kwargs=getattr(data_module, "model_data_kwargs", None))
-    # trainer = instantiator.trainer(
-    #     trainer,
-    #     logger=logger,
-    # )
-    #
-    # trainer.fit(model, datamodule=data_module)
-    # if run_test_after_fit:
-    #     trainer.test(model, datamodule=data_module)
+    # Init lightning module
+    model: TaskSuperResolutionModule = instantiator.model(task_cfg)
+
+    # Init lightning loggers
+    loggers: List[LightningLoggerBase] = []
+    for _, lg_conf in logger_cfgs.items():
+        if "_target_" in lg_conf:
+            loggers.append(hydra.utils.instantiate(lg_conf))
+
+    # Init lightning callbacks
+    callbacks: List[Callback] = []
+    for _, cb_conf in callback_cfgs.items():
+        if "_target_" in cb_conf:
+            callbacks.append(hydra.utils.instantiate(cb_conf))
+
+    # Init lightning trainer
+    trainer: pl.Trainer = hydra.utils.instantiate(
+        trainer_cfg, logger=loggers, callbacks=callbacks, _convert_="partial"
+    )
+
+    trainer.fit(model, datamodule=data_module)
+    if run_test_after_fit:
+        trainer.test(model, datamodule=data_module)
 
 
 def main(cfg: DictConfig) -> None:
     rank_zero_info(OmegaConf.to_yaml(cfg))
     instantiator = HydraInstantiator()
-    logger = instantiator.logger(cfg)
+
     run(
         instantiator,
         ignore_warnings=cfg.get("ignore_warnings"),
         run_test_after_fit=cfg.get("training").get("run_test_after_fit"),
-        dataset=cfg.get("dataset"),
-        task=cfg.get("task"),
-        trainer=cfg.get("trainer"),
-        logger=logger,
+        datamodule_cfg=cfg.get("datamodule"),
+        task_cfg=cfg.get("task"),
+        trainer_cfg=cfg.get("trainer"),
+        logger_cfgs=cfg.get("logger"),
+        callback_cfgs=cfg.get("callbacks"),
     )
 
 

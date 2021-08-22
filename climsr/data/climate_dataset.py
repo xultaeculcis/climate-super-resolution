@@ -8,7 +8,6 @@ import rasterio as rio
 import torch
 from PIL import Image
 from torch import Tensor
-from torch.utils.data import Dataset
 from torchvision import transforms as transforms
 from torchvision.transforms import InterpolationMode
 from torchvision.transforms import functional as TF
@@ -16,15 +15,18 @@ from torchvision.transforms import functional as TF
 import climsr.consts as consts
 from climsr.data.normalization import MinMaxScaler, StandardScaler
 from climsr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
+from data.climate_dataset_base import ClimateDatasetBase
 
 
-class ClimateDataset(Dataset):
+class ClimateDataset(ClimateDatasetBase):
     def __init__(
         self,
         df: pd.DataFrame,
         elevation_df: pd.DataFrame,
         generator_type: str,
         variable: str,
+        elevation_file: str,
+        land_mask_file: str,
         hr_size: Optional[int] = 128,
         stage: Optional[str] = consts.stages.train,
         scaling_factor: Optional[int] = 4,
@@ -36,22 +38,22 @@ class ClimateDataset(Dataset):
         use_mask_as_3rd_channel: Optional[bool] = True,
         use_global_min_max: Optional[bool] = True,
     ):
-        if normalize == standardize:
-            raise Exception(
-                "Bad parameter combination: normalization and standardization! Choose one!"
-            )
+        super().__init__(
+            elevation_file=elevation_file,
+            land_mask_file=land_mask_file,
+            generator_type=generator_type,
+            variable=variable,
+            scaling_factor=scaling_factor,
+            normalize=normalize,
+            standardize=standardize,
+            standardize_stats=standardize_stats,
+            normalize_range=normalize_range,
+        )
 
         self.df = df
         self.elevation_df = elevation_df
         self.hr_size = hr_size
-        self.scaling_factor = scaling_factor
         self.stage = stage
-        self.generator_type = generator_type
-        self.variable = variable
-        self.normalize = normalize
-        self.normalize_range = normalize_range
-        self.standardize = standardize
-        self.standardize_stats = standardize_stats
         self.use_elevation = use_elevation
         self.use_mask_as_3rd_channel = use_mask_as_3rd_channel
         self.use_global_min_max = use_global_min_max

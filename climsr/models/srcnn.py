@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class SRCNN(nn.Module):
-    def __init__(self, in_channels=1, out_channels=1):
+    def __init__(self, in_channels=1, out_channels=1, **kwargs):
         super(SRCNN, self).__init__()
         self.conv1 = nn.Conv2d(
             in_channels=in_channels, out_channels=64, kernel_size=9, padding=4

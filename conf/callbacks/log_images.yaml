@@ -1,0 +1,8 @@
+log_images:
+  _target_: climsr.core.callbacks.LogImagesCallback
+  generator: ${datamodule.cfg.generator_type}
+  experiment_name: ${experiment_name}
+  use_elevation: ${datamodule.cfg.use_elevation}
+  world_clim_variable: ${datamodule.cfg.world_clim_variable}
+  normalization_method: ${datamodule.cfg.normalization_method}
+  normalization_range: ${datamodule.cfg.normalization_range}

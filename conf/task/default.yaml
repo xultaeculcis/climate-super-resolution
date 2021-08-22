@@ -1,10 +1,11 @@
 # @package task
-defaults:
-  - /dataset@_group_: default
+#defaults:
+#  - /dataset@_group_: default
 
 # By default we turn off recursive instantiation, allowing the user to instantiate themselves at the appropriate times.
 _recursive_: false
 
-_target_: climsr.core.model.TaskTransformer
+_target_: climsr.core.model.TaskSuperResolutionModule
+model: ${generator}
 optimizer: ${optimizer}
 scheduler: ${scheduler}

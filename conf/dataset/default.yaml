@@ -1,19 +1,9 @@
-# @package dataset
-_target_: climsr.core.datamodules.SuperResolutionDataModule
-cfg:
-  # torch data-loader specific arguments
-  batch_size: ${training.batch_size}
-  num_workers: ${training.num_workers}
-  pin_memory: True
-  data_path: datasets
-  world_clim_variable: temp
-  world_clim_multiplier: 4x
-  generator_type: rcan
-  scale_factor: 4
-  hr_size: 128
-  seed: 42
-  normalization_method: minmax
-  normalization_range: (-1.0, 1.0)
-  use_elevation: True
-  use_mask_as_3rd_channel: True
-  use_global_min_max: True
+elevation_file: str
+land_mask_file: str
+generator_type: str
+variable: temp
+scaling_factor: 4
+normalize: True
+standardize: False
+standardize_stats: None
+normalize_range: (-1.0, 1.0)

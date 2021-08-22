@@ -9,15 +9,15 @@ import rasterio as rio
 import torch
 from PIL import Image
 from torch import Tensor
-from torch.utils.data import Dataset
 from torchvision import transforms as transforms
 from torchvision.transforms import InterpolationMode
 
 import climsr.consts as consts
 from climsr.data.normalization import MinMaxScaler, StandardScaler
+from data.climate_dataset_base import ClimateDatasetBase
 
 
-class GeoTiffInferenceDataset(Dataset):
+class GeoTiffInferenceDataset(ClimateDatasetBase):
     def __init__(
         self,
         tiff_dir: str,
@@ -35,22 +35,23 @@ class GeoTiffInferenceDataset(Dataset):
         use_mask_as_3rd_channel: Optional[bool] = True,
         use_global_min_max: Optional[bool] = True,
     ):
-        if normalize == standardize:
-            raise Exception(
-                "Bad parameter combination: normalization and standardization! Choose one!"
-            )
+        super().__init__(
+            elevation_file=elevation_file,
+            land_mask_file=land_mask_file,
+            generator_type=generator_type,
+            variable=variable,
+            scaling_factor=scaling_factor,
+            normalize=normalize,
+            standardize=standardize,
+            standardize_stats=standardize_stats,
+            normalize_range=normalize_range,
+        )
 
         self.tiff_dir = tiff_dir
         self.tiffs = glob(f"{tiff_dir}/*.tif")
         self.tiff_df = tiff_df.set_index(
             consts.datasets_and_preprocessing.filename, drop=True
         )
-        self.variable = variable
-        self.scaling_factor = scaling_factor
-        self.generator_type = generator_type
-        self.normalize = normalize
-        self.standardize = standardize
-        self.standardize_stats = standardize_stats
         self.use_elevation = use_elevation
         self.use_mask_as_3rd_channel = use_mask_as_3rd_channel
         self.use_global_min_max = use_global_min_max

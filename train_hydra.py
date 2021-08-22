@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
-from typing import Any, Optional, List
+from typing import Any, List, Optional
 
 import hydra
-from omegaconf import DictConfig, OmegaConf
 import pytorch_lightning as pl
+from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import Callback
 from pytorch_lightning.loggers import LightningLoggerBase
 from pytorch_lightning.utilities.distributed import rank_zero_info
 
+from climsr.core.config import SuperResolutionDataConfig, TaskConfig, TrainerConfig
 from climsr.core.datamodules import SuperResolutionDataModule
-from climsr.core.config import TaskConfig, TrainerConfig, SuperResolutionDataConfig
 from climsr.core.instantiator import HydraInstantiator, Instantiator
 from climsr.core.model import TaskSuperResolutionModule
 from climsr.core.utils import set_ignore_warnings
@@ -35,13 +35,10 @@ def run(
     # Init data module
     data_module: SuperResolutionDataModule = instantiator.data_module(datamodule_cfg)
     if data_module is None:
-        raise ValueError(
-            "No datamodule found. Hydra hint: did you set `datamodule=...`?"
-        )
+        raise ValueError("No datamodule found. Hydra hint: did you set `datamodule=...`?")
     if not isinstance(data_module, pl.LightningDataModule):
         raise ValueError(
-            "The instantiator did not return a DataModule instance."
-            " Hydra hint: is `datamodule._target_` defined?`"
+            "The instantiator did not return a DataModule instance." " Hydra hint: is `datamodule._target_` defined?`"
         )
 
     # Init lightning module
@@ -60,9 +57,7 @@ def run(
             callbacks.append(hydra.utils.instantiate(cb_conf))
 
     # Init lightning trainer
-    trainer: pl.Trainer = hydra.utils.instantiate(
-        trainer_cfg, logger=loggers, callbacks=callbacks, _convert_="partial"
-    )
+    trainer: pl.Trainer = hydra.utils.instantiate(trainer_cfg, logger=loggers, callbacks=callbacks, _convert_="partial")
 
     trainer.fit(model, datamodule=data_module)
     if run_test_after_fit:

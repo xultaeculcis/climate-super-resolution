@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import rasterio as rio
 import torch
+from data.climate_dataset_base import ClimateDatasetBase
 from PIL import Image
 from torch import Tensor
 from torchvision import transforms as transforms
@@ -14,7 +15,6 @@ from torchvision.transforms import InterpolationMode
 
 import climsr.consts as consts
 from climsr.data.normalization import MinMaxScaler, StandardScaler
-from data.climate_dataset_base import ClimateDatasetBase
 
 
 class GeoTiffInferenceDataset(ClimateDatasetBase):
@@ -49,9 +49,7 @@ class GeoTiffInferenceDataset(ClimateDatasetBase):
 
         self.tiff_dir = tiff_dir
         self.tiffs = glob(f"{tiff_dir}/*.tif")
-        self.tiff_df = tiff_df.set_index(
-            consts.datasets_and_preprocessing.filename, drop=True
-        )
+        self.tiff_df = tiff_df.set_index(consts.datasets_and_preprocessing.filename, drop=True)
         self.use_elevation = use_elevation
         self.use_mask_as_3rd_channel = use_mask_as_3rd_channel
         self.use_global_min_max = use_global_min_max
@@ -72,15 +70,11 @@ class GeoTiffInferenceDataset(ClimateDatasetBase):
         self.v_flip = transforms.RandomVerticalFlip(p=1.0)
         self.to_tensor = transforms.ToTensor()
 
-        self.land_mask_np = ~np.isnan(
-            np.array(Image.open(land_mask_file), dtype=np.float32)
-        )
+        self.land_mask_np = ~np.isnan(np.array(Image.open(land_mask_file), dtype=np.float32))
         self.land_mask_tensor = self.to_tensor(self.land_mask_np)
 
         elevation_arr = np.array(Image.open(elevation_file), dtype=np.float32)
-        elevation_arr = np.where(
-            self.land_mask_np, elevation_arr, np.nan
-        )  # mask Antarctica
+        elevation_arr = np.where(self.land_mask_np, elevation_arr, np.nan)  # mask Antarctica
         elevation_arr = self.elevation_scaler.normalize(
             elevation_arr,
             missing_indicator=consts.world_clim.elevation_missing_indicator,
@@ -121,12 +115,8 @@ class GeoTiffInferenceDataset(ClimateDatasetBase):
 
         return img_lr
 
-    def _common_to_tensor(
-        self, img_lr: np.ndarray
-    ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
-        img_sr_nearest = self.to_tensor(
-            np.array(self.upscale(img_lr), dtype=np.float32)
-        )
+    def _common_to_tensor(self, img_lr: np.ndarray) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+        img_sr_nearest = self.to_tensor(np.array(self.upscale(img_lr), dtype=np.float32))
 
         img_lr = self.to_tensor(np.array(img_lr, dtype=np.float32))
 
@@ -141,9 +131,7 @@ class GeoTiffInferenceDataset(ClimateDatasetBase):
             img_sr_nearest,
         )
 
-    def _get_inference_sample(
-        self, img_lr: np.ndarray, min: float, max: float
-    ) -> Dict[str, Union[Tensor, list]]:
+    def _get_inference_sample(self, img_lr: np.ndarray, min: float, max: float) -> Dict[str, Union[Tensor, list]]:
         (
             img_lr,
             img_elev,
@@ -168,16 +156,8 @@ class GeoTiffInferenceDataset(ClimateDatasetBase):
         file_path = self.tiffs[index]
         file_name = os.path.basename(file_path)
         row = self.tiff_df.loc[file_name]
-        min = (
-            row[consts.stats.min]
-            if not self.use_global_min_max
-            else row[consts.stats.global_min]
-        )
-        max = (
-            row[consts.stats.max]
-            if not self.use_global_min_max
-            else row[consts.stats.global_max]
-        )
+        min = row[consts.stats.min] if not self.use_global_min_max else row[consts.stats.global_min]
+        max = row[consts.stats.max] if not self.use_global_min_max else row[consts.stats.global_max]
 
         # original, hr
         with rio.open(file_path) as ds:

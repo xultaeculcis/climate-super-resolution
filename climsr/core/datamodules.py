@@ -9,9 +9,9 @@ import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
 import climsr.consts as consts
+from climsr.core.config import SuperResolutionDataConfig
 from climsr.data import normalization
 from climsr.data.climate_dataset import ClimateDataset
-from climsr.core.config import SuperResolutionDataConfig
 
 logging.basicConfig(level=logging.INFO)
 os.environ["NUMEXPR_MAX_THREADS"] = "16"
@@ -140,20 +140,10 @@ class SuperResolutionDataModule(pl.LightningDataModule):
 
     def load_data(
         self,
-    ) -> Tuple[
-        pd.DataFrame,
-        pd.DataFrame,
-        List[pd.DataFrame],
-        pd.DataFrame,
-        Union[Dict[str, float], None],
-    ]:
-        elevation_df = self.load_dataframe(
-            consts.world_clim.elevation, f"{consts.world_clim.elevation}.csv"
-        )
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, List[pd.DataFrame], pd.DataFrame, Union[Dict[str, float], None]]:
+        elevation_df = self.load_dataframe(consts.world_clim.elevation, f"{consts.world_clim.elevation}.csv")
 
-        stats_df = pd.read_csv(
-            os.path.join(self.cfg.data_path, "statistics_min_max.csv")
-        )
+        stats_df = pd.read_csv(os.path.join(self.cfg.data_path, "statistics_min_max.csv"))
 
         if self.cfg.world_clim_variable == consts.world_clim.temp:
             train_dfs = []
@@ -165,17 +155,9 @@ class SuperResolutionDataModule(pl.LightningDataModule):
                 consts.world_clim.temp,
             ]
             for var in variables:
-                train_dfs.append(
-                    self.load_dataframe(
-                        var, consts.datasets_and_preprocessing.train_csv
-                    )
-                )
-                val_dfs.append(
-                    self.load_dataframe(var, consts.datasets_and_preprocessing.val_csv)
-                )
-                test_dfs.append(
-                    self.load_dataframe(var, consts.datasets_and_preprocessing.test_csv)
-                )
+                train_dfs.append(self.load_dataframe(var, consts.datasets_and_preprocessing.train_csv))
+                val_dfs.append(self.load_dataframe(var, consts.datasets_and_preprocessing.val_csv))
+                test_dfs.append(self.load_dataframe(var, consts.datasets_and_preprocessing.test_csv))
 
             train_df = pd.concat(train_dfs)
             val_df = pd.concat(val_dfs)
@@ -184,9 +166,7 @@ class SuperResolutionDataModule(pl.LightningDataModule):
                 self.cfg.world_clim_variable,
                 consts.datasets_and_preprocessing.train_csv,
             )
-            val_df = self.load_dataframe(
-                self.cfg.world_clim_variable, consts.datasets_and_preprocessing.val_csv
-            )
+            val_df = self.load_dataframe(self.cfg.world_clim_variable, consts.datasets_and_preprocessing.val_csv)
             test_dfs = [
                 self.load_dataframe(
                     self.cfg.world_clim_variable,
@@ -243,9 +223,7 @@ class SuperResolutionDataModule(pl.LightningDataModule):
         :param parent_parser: The parent parser.
         :returns: The parser.
         """
-        parser = ArgumentParser(
-            parents=[parent_parser], add_help=False, conflict_handler="resolve"
-        )
+        parser = ArgumentParser(parents=[parent_parser], add_help=False, conflict_handler="resolve")
         parser.add_argument(
             "--data_path",
             type=str,

@@ -29,9 +29,7 @@ class GANLightningModule(SuperResolutionLightningModule):
         fake_labels = torch.zeros((size, 1), device=self.device)
         return real_labels, fake_labels
 
-    def loss_g(
-        self, hr: Tensor, sr: Tensor, real_labels: Tensor, fake_labels: Tensor
-    ) -> Tuple[float, float, float, float]:
+    def loss_g(self, hr: Tensor, sr: Tensor, real_labels: Tensor, fake_labels: Tensor) -> Tuple[float, float, float, float]:
         score_real = self.net_D(hr)
         score_fake = self.net_D(sr)
         discriminator_rf = score_real - score_fake.mean()
@@ -52,9 +50,7 @@ class GANLightningModule(SuperResolutionLightningModule):
 
         return perceptual_loss, adversarial_loss, pixel_level_loss, loss_g
 
-    def loss_d(
-        self, hr: Tensor, sr: Tensor, real_labels: Tensor, fake_labels: Tensor
-    ) -> float:
+    def loss_d(self, hr: Tensor, sr: Tensor, real_labels: Tensor, fake_labels: Tensor) -> float:
         score_real = self.net_D(hr)
         score_fake = self.net_D(sr.detach())
         discriminator_rf = score_real - score_fake.mean()
@@ -66,9 +62,7 @@ class GANLightningModule(SuperResolutionLightningModule):
 
         return loss_d
 
-    def training_step(
-        self, batch: Any, batch_idx: int, optimizer_idx: int
-    ) -> Dict[str, Any]:
+    def training_step(self, batch: Any, batch_idx: int, optimizer_idx: int) -> Dict[str, Any]:
         hr = (batch[consts.batch_items.hr],)
         real_labels, fake_labels = self._real_fake(hr.size(0))
 
@@ -76,9 +70,7 @@ class GANLightningModule(SuperResolutionLightningModule):
 
         # train generator
         if optimizer_idx == 0:
-            perceptual_loss, adversarial_loss, pixel_level_loss, loss_g = self.loss_g(
-                hr, sr, real_labels, fake_labels
-            )
+            perceptual_loss, adversarial_loss, pixel_level_loss, loss_g = self.loss_g(hr, sr, real_labels, fake_labels)
 
             log_dict = {
                 "train/perceptual_loss": perceptual_loss,
@@ -97,9 +89,7 @@ class GANLightningModule(SuperResolutionLightningModule):
         if optimizer_idx == 1:
             loss_d = self.loss_d(hr, sr, real_labels, fake_labels)
 
-            self.log(
-                "train/loss_D", loss_d, prog_bar=True, on_step=True, on_epoch=False
-            )
+            self.log("train/loss_D", loss_d, prog_bar=True, on_step=True, on_epoch=False)
 
             return {
                 "loss": loss_d,
@@ -108,9 +98,7 @@ class GANLightningModule(SuperResolutionLightningModule):
                 },
             }
 
-    def validation_step(
-        self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None
-    ) -> Dict[str, Union[int, float]]:
+    def validation_step(self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None) -> Dict[str, Union[int, float]]:
         """
         Run validation step.
 
@@ -128,17 +116,9 @@ class GANLightningModule(SuperResolutionLightningModule):
 
         metrics = self.common_val_test_step(batch)
 
-        perceptual_loss, adversarial_loss, pixel_level_loss, loss_g = self.loss_g(
-            hr, metrics.sr, real_labels, fake_labels
-        )
+        perceptual_loss, adversarial_loss, pixel_level_loss, loss_g = self.loss_g(hr, metrics.sr, real_labels, fake_labels)
 
-        log_dict = dict(
-            list(
-                (f"val/{k}", v)
-                for k, v in dataclasses.asdict(metrics).items()
-                if k != "sr"
-            )
-        )
+        log_dict = dict(list((f"val/{k}", v) for k, v in dataclasses.asdict(metrics).items() if k != "sr"))
 
         log_dict.update(
             {
@@ -164,24 +144,18 @@ class GANLightningModule(SuperResolutionLightningModule):
     def configure_optimizers(
         self,
     ) -> Tuple[List[Adam], List[Dict[str, Union[str, Any]]]]:
-        optimizerD = torch.optim.Adam(
-            self.net_D.parameters(), weight_decay=self.hparams.weight_decay
-        )
-        optimizerG = torch.optim.Adam(
-            self.net_G.parameters(), weight_decay=self.hparams.weight_decay
-        )
+        optimizerD = torch.optim.Adam(self.net_D.parameters(), weight_decay=self.hparams.weight_decay)
+        optimizerG = torch.optim.Adam(self.net_G.parameters(), weight_decay=self.hparams.weight_decay)
         schedulerD = torch.optim.lr_scheduler.OneCycleLR(
             optimizerG,
             max_lr=self.hparams.max_lr,
-            total_steps=len(self.trainer.datamodule.train_dataloader())
-            * self.hparams.max_epochs,
+            total_steps=len(self.trainer.datamodule.train_dataloader()) * self.hparams.max_epochs,
             pct_start=self.hparams.pct_start,
         )
         schedulerG = torch.optim.lr_scheduler.OneCycleLR(
             optimizerD,
             max_lr=self.hparams.max_lr,
-            total_steps=len(self.trainer.datamodule.train_dataloader())
-            * self.hparams.max_epochs,
+            total_steps=len(self.trainer.datamodule.train_dataloader()) * self.hparams.max_epochs,
             pct_start=self.hparams.pct_start,
         )
         schedulerD = {"scheduler": schedulerD, "interval": "step"}

@@ -40,9 +40,7 @@ class LogImagesCallback(Callback):
         self.use_elevation = use_elevation
         self.standardize = normalization_method == normalization.zscore
         self.world_clim_variable = world_clim_variable
-        self.stats = consts.cruts.statistics[
-            world_clim_to_cruts_mapping[self.world_clim_variable]
-        ]
+        self.stats = consts.cruts.statistics[world_clim_to_cruts_mapping[self.world_clim_variable]]
         self.normalization_range = normalization_range
 
     def on_validation_end(self, trainer: Trainer, pl_module: LightningModule) -> None:
@@ -53,9 +51,7 @@ class LogImagesCallback(Callback):
         if trainer.val_dataloaders:
             dl = trainer.val_dataloaders[0]
         else:
-            logging.warning(
-                "The validation dataloader not attached to the trainer. No images will be logged or saved."
-            )
+            logging.warning("The validation dataloader not attached to the trainer. No images will be logged or saved.")
             return
 
         batch = next(iter(dl))
@@ -117,12 +113,8 @@ class LogImagesCallback(Callback):
 
             if name == consts.batch_items.elevation:
                 value_range = (
-                    consts.cruts.statistics[consts.cruts.elev][
-                        consts.stats.normalized_min
-                    ],
-                    consts.cruts.statistics[consts.cruts.elev][
-                        consts.stats.normalized_max
-                    ],
+                    consts.cruts.statistics[consts.cruts.elev][consts.stats.normalized_min],
+                    consts.cruts.statistics[consts.cruts.elev][consts.stats.normalized_max],
                 )
             else:
                 value_range = (
@@ -135,9 +127,7 @@ class LogImagesCallback(Callback):
                 images_tensor=tensor,
                 mask_tensor=mask,
                 normalize=self.standardize,
-                value_range=value_range
-                if name != consts.batch_items.elevation
-                else None,
+                value_range=value_range if name != consts.batch_items.elevation else None,
             )
             self._log_images_from_file(pl_module, image_fp, name)
 
@@ -184,12 +174,7 @@ class LogImagesCallback(Callback):
         )  # select only single channel since we deal with 2D data anyway
 
         if mask_tensor is not None:
-            mask_grid = (
-                self._batch_tensor_to_grid(mask_tensor[:nitems], nrow=nrows)
-                .squeeze(0)
-                .to("cpu")
-                .numpy()
-            )
+            mask_grid = self._batch_tensor_to_grid(mask_tensor[:nitems], nrow=nrows).squeeze(0).to("cpu").numpy()
             img_grid[mask_grid] = np.nan
 
         cmap = deepcopy(matplotlib.cm.jet)
@@ -291,12 +276,8 @@ class LogImagesCallback(Callback):
             axes[i][0].imshow(
                 hr_arr[i],
                 cmap=cmap,
-                vmin=self.stats[consts.stats.normalized_min]
-                if self.standardize
-                else self.normalization_range[0],
-                vmax=self.stats[consts.stats.normalized_max]
-                if self.standardize
-                else self.normalization_range[1],
+                vmin=self.stats[consts.stats.normalized_min] if self.standardize else self.normalization_range[0],
+                vmax=self.stats[consts.stats.normalized_max] if self.standardize else self.normalization_range[1],
             )
             axes[i][0].set_xlabel("MAE/RMSE")
 
@@ -309,12 +290,8 @@ class LogImagesCallback(Callback):
                 axes[i][offset + idx].imshow(
                     arr[i],
                     cmap=cmap,
-                    vmin=self.stats[consts.stats.normalized_min]
-                    if self.standardize
-                    else self.normalization_range[0],
-                    vmax=self.stats[consts.stats.normalized_max]
-                    if self.standardize
-                    else self.normalization_range[1],
+                    vmin=self.stats[consts.stats.normalized_min] if self.standardize else self.normalization_range[0],
+                    vmax=self.stats[consts.stats.normalized_max] if self.standardize else self.normalization_range[1],
                 )
                 mae_value = maes[idx][i]
                 rmse_value = rmses[idx][i]
@@ -350,9 +327,7 @@ class LogImagesCallback(Callback):
         )
 
     @staticmethod
-    def _batch_tensor_to_grid(
-        tensor: Tensor, nrow: int = 8, padding: int = 2, pad_value: Any = False
-    ) -> Tensor:
+    def _batch_tensor_to_grid(tensor: Tensor, nrow: int = 8, padding: int = 2, pad_value: Any = False) -> Tensor:
         """
         Make the mini-batch of images into a grid
 
@@ -369,17 +344,15 @@ class LogImagesCallback(Callback):
         xmaps = min(nrow, nmaps)
         ymaps = int(math.ceil(float(nmaps) / xmaps))
         height, width = int(tensor.shape[1] + padding), int(tensor.shape[2] + padding)
-        grid = tensor.new_full(
-            (1, height * ymaps + padding, width * xmaps + padding), pad_value
-        )
+        grid = tensor.new_full((1, height * ymaps + padding, width * xmaps + padding), pad_value)
         k = 0
         for y in range(ymaps):
             for x in range(xmaps):
                 if k >= nmaps:
                     break
-                grid.narrow(1, y * height + padding, height - padding).narrow(
-                    2, x * width + padding, width - padding
-                ).copy_(tensor[k])
+                grid.narrow(1, y * height + padding, height - padding).narrow(2, x * width + padding, width - padding).copy_(
+                    tensor[k]
+                )
                 k = k + 1
 
         return grid

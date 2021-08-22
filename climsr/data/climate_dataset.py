@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import rasterio as rio
 import torch
+from data.climate_dataset_base import ClimateDatasetBase
 from PIL import Image
 from torch import Tensor
 from torchvision import transforms as transforms
@@ -15,7 +16,6 @@ from torchvision.transforms import functional as TF
 import climsr.consts as consts
 from climsr.data.normalization import MinMaxScaler, StandardScaler
 from climsr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
-from data.climate_dataset_base import ClimateDatasetBase
 
 
 class ClimateDataset(ClimateDatasetBase):
@@ -60,23 +60,15 @@ class ClimateDataset(ClimateDatasetBase):
 
         if self.standardize:
             self.scaler = StandardScaler(
-                mean=self.standardize_stats[world_clim_to_cruts_mapping[self.variable]][
-                    consts.stats.mean
-                ],
-                std=self.standardize_stats[world_clim_to_cruts_mapping[self.variable]][
-                    consts.stats.std
-                ],
-                nan_substitution=self.standardize_stats[
-                    world_clim_to_cruts_mapping[self.variable]
-                ][consts.stats.normalized_min],
+                mean=self.standardize_stats[world_clim_to_cruts_mapping[self.variable]][consts.stats.mean],
+                std=self.standardize_stats[world_clim_to_cruts_mapping[self.variable]][consts.stats.std],
+                nan_substitution=self.standardize_stats[world_clim_to_cruts_mapping[self.variable]][consts.stats.normalized_min],
             )
             self.elevation_scaler = StandardScaler(
                 mean=standardize_stats[consts.cruts.elev][consts.stats.mean],
                 std=standardize_stats[consts.cruts.elev][consts.stats.std],
                 missing_indicator=consts.world_clim.elevation_missing_indicator,
-                nan_substitution=self.standardize_stats[consts.cruts.elev][
-                    consts.stats.nan_sub
-                ],
+                nan_substitution=self.standardize_stats[consts.cruts.elev][consts.stats.nan_sub],
             )
         else:
             self.scaler = MinMaxScaler(feature_range=self.normalize_range)
@@ -87,12 +79,8 @@ class ClimateDataset(ClimateDatasetBase):
             (self.hr_size // self.scaling_factor, self.hr_size // self.scaling_factor),
             InterpolationMode.NEAREST,
         )
-        self.upscale_nearest = transforms.Resize(
-            (self.hr_size, self.hr_size), interpolation=InterpolationMode.NEAREST
-        )
-        self.upscale_cubic = transforms.Resize(
-            (self.hr_size, self.hr_size), interpolation=InterpolationMode.BICUBIC
-        )
+        self.upscale_nearest = transforms.Resize((self.hr_size, self.hr_size), interpolation=InterpolationMode.NEAREST)
+        self.upscale_cubic = transforms.Resize((self.hr_size, self.hr_size), interpolation=InterpolationMode.BICUBIC)
 
     def _concat_if_needed(
         self,
@@ -115,9 +103,7 @@ class ClimateDataset(ClimateDatasetBase):
             if self.generator_type == consts.models.srcnn:
                 img_lr = torch.cat([img_lr, mask_tensor], dim=0)
             else:
-                mask_lr = self.to_tensor(
-                    self.resize(Image.fromarray(mask.astype(np.float32)))
-                )
+                mask_lr = self.to_tensor(self.resize(Image.fromarray(mask.astype(np.float32))))
                 img_lr = torch.cat([img_lr, mask_lr], dim=0)
 
         return img_lr
@@ -131,24 +117,18 @@ class ClimateDataset(ClimateDatasetBase):
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor, np.ndarray, Tensor, Tensor]:
         """Performs common `to_tensor` transformation on raster data."""
 
-        img_sr_nearest = self.to_tensor(
-            np.array(self.upscale_nearest(img_lr), dtype=np.float32)
-        )
+        img_sr_nearest = self.to_tensor(np.array(self.upscale_nearest(img_lr), dtype=np.float32))
         img_elev_lr = self.to_tensor(np.array(self.resize(img_elev), dtype=np.float32))
         img_lr = self.to_tensor(np.array(img_lr, dtype=np.float32))
         img_hr = self.to_tensor(np.array(img_hr, dtype=np.float32))
         img_elev = self.to_tensor(np.array(img_elev, dtype=np.float32))
         mask_tensor = self.to_tensor(mask.astype(np.float32))
 
-        img_lr = self._concat_if_needed(
-            img_lr, img_sr_nearest, img_elev, img_elev_lr, mask_tensor, mask
-        )
+        img_lr = self._concat_if_needed(img_lr, img_sr_nearest, img_elev, img_elev_lr, mask_tensor, mask)
 
         return img_lr, img_hr, img_elev, img_elev_lr, mask, mask_tensor, img_sr_nearest
 
-    def _get_training_sample(
-        self, img_lr, img_hr, img_elev, mask
-    ) -> Dict[str, Union[Tensor, list]]:
+    def _get_training_sample(self, img_lr, img_hr, img_elev, mask) -> Dict[str, Union[Tensor, list]]:
         """Gets single training sample with applied transformations."""
 
         if random() > 0.5:
@@ -178,12 +158,8 @@ class ClimateDataset(ClimateDatasetBase):
             consts.batch_items.mask: mask_tensor,
         }
 
-    def _get_val_test_sample(
-        self, img_lr, img_hr, img_elev, mask, original_image, min, max
-    ) -> Dict[str, Union[Tensor, list]]:
-        img_sr_cubic = self.to_tensor(
-            np.array(self.upscale_cubic(img_lr), dtype=np.float32)
-        )
+    def _get_val_test_sample(self, img_lr, img_hr, img_elev, mask, original_image, min, max) -> Dict[str, Union[Tensor, list]]:
+        img_sr_cubic = self.to_tensor(np.array(self.upscale_cubic(img_lr), dtype=np.float32))
 
         (
             img_lr,
@@ -211,16 +187,8 @@ class ClimateDataset(ClimateDatasetBase):
 
     def __getitem__(self, index) -> Dict[str, Union[Tensor, list]]:
         row = self.df.iloc[index]
-        min = (
-            row[consts.stats.min]
-            if not self.use_global_min_max
-            else row[consts.stats.global_min]
-        )
-        max = (
-            row[consts.stats.max]
-            if not self.use_global_min_max
-            else row[consts.stats.global_max]
-        )
+        min = row[consts.stats.min] if not self.use_global_min_max else row[consts.stats.global_min]
+        max = row[consts.stats.max] if not self.use_global_min_max else row[consts.stats.global_max]
 
         # original, hr
         with rio.open(row[consts.datasets_and_preprocessing.tile_file_path]) as ds:
@@ -229,14 +197,8 @@ class ClimateDataset(ClimateDatasetBase):
 
         # elevation
         elev_fp = self.elevation_df[
-            (
-                self.elevation_df[consts.datasets_and_preprocessing.x]
-                == row[consts.datasets_and_preprocessing.x]
-            )
-            & (
-                self.elevation_df[consts.datasets_and_preprocessing.y]
-                == row[consts.datasets_and_preprocessing.y]
-            )
+            (self.elevation_df[consts.datasets_and_preprocessing.x] == row[consts.datasets_and_preprocessing.x])
+            & (self.elevation_df[consts.datasets_and_preprocessing.y] == row[consts.datasets_and_preprocessing.y])
         ][consts.datasets_and_preprocessing.file_path]
         elev_fp = elev_fp.values[0]
         with rio.open(elev_fp) as ds:
@@ -268,9 +230,7 @@ class ClimateDataset(ClimateDatasetBase):
         if self.stage == consts.stages.train:
             return self._get_training_sample(img_lr, img_hr, img_elev, mask)
 
-        return self._get_val_test_sample(
-            img_lr, img_hr, img_elev, mask, original_image, min, max
-        )
+        return self._get_val_test_sample(img_lr, img_hr, img_elev, mask, original_image, min, max)
 
     def __len__(self) -> int:
         return len(self.df)

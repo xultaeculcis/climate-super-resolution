@@ -27,9 +27,7 @@ class PerceptualLoss(nn.Module):
                 [fake_high_resolution, fake_high_resolution, fake_high_resolution],
                 dim=1,
             )
-            high_resolution_3d = torch.cat(
-                [high_resolution, high_resolution, high_resolution], dim=1
-            )
+            high_resolution_3d = torch.cat([high_resolution, high_resolution, high_resolution], dim=1)
 
             perception_loss = self.l1_loss(
                 self.loss_network(high_resolution_3d),

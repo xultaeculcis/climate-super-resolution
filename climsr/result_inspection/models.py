@@ -60,9 +60,7 @@ class CompareStatsResults:
         rmse = np.zeros(len(lats))
 
         for idx, (lat, lon) in enumerate(zip(lats, lons)):
-            cru_data = ds_cru[var].sel(
-                lat=lat, lon=lon, time=time_range, method="nearest"
-            )
+            cru_data = ds_cru[var].sel(lat=lat, lon=lon, time=time_range, method="nearest")
 
             cru_stats.q25[idx] = cru_data.quantile(0.25)
             cru_stats.q50[idx] = cru_data.quantile(0.5)
@@ -72,9 +70,7 @@ class CompareStatsResults:
             cru_stats.means[idx] = cru_data.mean()
             cru_stats.medians[idx] = cru_data.median()
 
-            nn_data = ds_nn[var].sel(
-                lat=lat, lon=lon, time=time_range, method="nearest"
-            )
+            nn_data = ds_nn[var].sel(lat=lat, lon=lon, time=time_range, method="nearest")
 
             nn_stats.q25[idx] = nn_data.quantile(0.25)
             nn_stats.q50[idx] = nn_data.quantile(0.5)
@@ -108,12 +104,8 @@ class CompareStatsResults:
         plt.figure(figsize=(15, 15))
         ax = plt.subplot(1, 1, 1)
         for lat, lon in zip(self.lats, self.lons):
-            cru_data = self.ds_cru[self.var].sel(
-                lat=lat, lon=lon, time=self.time_range, method="nearest"
-            )
-            nn_data = self.ds_nn[self.var].sel(
-                lat=lat, lon=lon, time=self.time_range, method="nearest"
-            )
+            cru_data = self.ds_cru[self.var].sel(lat=lat, lon=lon, time=self.time_range, method="nearest")
+            nn_data = self.ds_nn[self.var].sel(lat=lat, lon=lon, time=self.time_range, method="nearest")
             cru_data.plot(marker="x", color="blue", ax=ax)
             nn_data.plot(marker="o", color="orange", ax=ax)
 
@@ -129,12 +121,8 @@ class CompareStatsResults:
         sources = []
 
         for idx, (lat, lon) in enumerate(zip(self.lats, self.lons)):
-            cru_data = self.ds_cru[self.var].sel(
-                lat=lat, lon=lon, time=self.time_range, method="nearest"
-            )
-            nn_data = self.ds_nn[self.var].sel(
-                lat=lat, lon=lon, time=self.time_range, method="nearest"
-            )
+            cru_data = self.ds_cru[self.var].sel(lat=lat, lon=lon, time=self.time_range, method="nearest")
+            nn_data = self.ds_nn[self.var].sel(lat=lat, lon=lon, time=self.time_range, method="nearest")
 
             values.extend(cru_data.values.tolist())
             values.extend(nn_data.values.tolist())
@@ -142,19 +130,9 @@ class CompareStatsResults:
             sources.extend(["SR" for _ in range(len(nn_data))])
 
             if self.names is None:
-                locations.extend(
-                    [
-                        f"#{idx} - {self.alts[idx]} m"
-                        for _ in range(len(nn_data) + len(cru_data))
-                    ]
-                )
+                locations.extend([f"#{idx} - {self.alts[idx]} m" for _ in range(len(nn_data) + len(cru_data))])
             else:
-                locations.extend(
-                    [
-                        f"{self.names[idx]} - {self.alts[idx]} m"
-                        for _ in range(len(nn_data) + len(cru_data))
-                    ]
-                )
+                locations.extend([f"{self.names[idx]} - {self.alts[idx]} m" for _ in range(len(nn_data) + len(cru_data))])
 
         df = pd.DataFrame(
             data={
@@ -164,12 +142,8 @@ class CompareStatsResults:
             }
         )
         plt.figure(figsize=(np.maximum(0.25 * len(df["Location"].unique()), 20), 10))
-        chart = sns.boxplot(
-            x="Location", y="Temperature (Celsius)", data=df, hue="Data source"
-        )
-        chart.set_xticklabels(
-            chart.get_xticklabels(), rotation=45, horizontalalignment="right"
-        )
+        chart = sns.boxplot(x="Location", y="Temperature (Celsius)", data=df, hue="Data source")
+        chart.set_xticklabels(chart.get_xticklabels(), rotation=45, horizontalalignment="right")
         plt.show()
 
     def print_comparison_summary(self):

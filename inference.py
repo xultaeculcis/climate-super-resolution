@@ -154,9 +154,7 @@ def parse_args(arg_str: Optional[str] = None) -> argparse.Namespace:
     parser.add_argument("--generator_type", type=str, default=consts.models.rcan)
     parser.add_argument("--scaling_factor", type=int, default=4)
     parser.add_argument("--normalize", type=bool, default=True)
-    parser.add_argument(
-        "--normalization_range", type=Tuple[float, float], default=(-1.0, 1.0)
-    )
+    parser.add_argument("--normalization_range", type=Tuple[float, float], default=(-1.0, 1.0))
     parser.add_argument("--precision", type=int, default=16)
     parser.add_argument("--gpus", type=int, default=1)
 
@@ -214,9 +212,7 @@ def inference_on_full_images(
             arr = scaler.denormalize(arr, min[idx], max[idx]).clip(min[idx], max[idx])
             arr[~mask_np] = np.nan
 
-            with rio.open(
-                os.path.join(out_dir, filename[idx]), "w", **profile
-            ) as dataset:
+            with rio.open(os.path.join(out_dir, filename[idx]), "w", **profile) as dataset:
                 dataset.write(arr, 1)
 
         if i == 0:
@@ -247,9 +243,7 @@ def run_inference(arguments: argparse.Namespace, cruts_variables: List[str]) -> 
         os.makedirs(out_path, exist_ok=True)
 
         if var in [consts.cruts.tmn, consts.cruts.tmx] and arguments.temp_only:
-            logging.info(
-                f"TEMP_ONLY detected - 'temp' model will be used instead of '{var}' model."
-            )
+            logging.info(f"TEMP_ONLY detected - 'temp' model will be used instead of '{var}' model.")
             model_file = param_dict[f"pretrained_model_{consts.cruts.tmp}"]
         else:
             model_file = param_dict[f"pretrained_model_{var}"]
@@ -312,9 +306,7 @@ def run_inference(arguments: argparse.Namespace, cruts_variables: List[str]) -> 
         del net
 
 
-def transform_tiff_files_to_net_cdf(
-    tiff_dir: str, nc_out_path: str, cruts_variables: str, generator: str
-) -> None:
+def transform_tiff_files_to_net_cdf(tiff_dir: str, nc_out_path: str, cruts_variables: str, generator: str) -> None:
     """
     Transforms generated Geo-Tiff files into Net-CDF datasets.
 
@@ -385,9 +377,7 @@ if __name__ == "__main__":
     for k, v in param_dict.items():
         logging.info(f"Param: '{k}': {v}")
 
-    variables = (
-        [args.cruts_variable] if args.cruts_variable else consts.cruts.variables_cts
-    )
+    variables = [args.cruts_variable] if args.cruts_variable else consts.cruts.variables_cts
 
     # Run inference
     if args.run_inference:
@@ -397,9 +387,7 @@ if __name__ == "__main__":
     # Run Europe extent extraction
     if args.extract_polygon_extent:
         logging.info("Extracting SR polygon extents for Europe.")
-        extract_extent(
-            args.inference_out_path, args.extent_out_path_sr, variables, hr_bbox
-        )
+        extract_extent(args.inference_out_path, args.extent_out_path_sr, variables, hr_bbox)
 
     # Run tiff file transformation to net-cdf datasets.
     if args.to_netcdf:

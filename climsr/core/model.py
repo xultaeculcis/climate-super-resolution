@@ -3,13 +3,11 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import pytorch_lightning as pl
 import torch
-from pytorch_lightning.utilities import rank_zero_info
-from pytorch_lightning.utilities.exceptions import MisconfigurationException
-
+from core.config import GeneratorConfig
 from lightning_transformers.core.config import OptimizerConfig, SchedulerConfig
 from lightning_transformers.core.instantiator import Instantiator
-
-from core.config import GeneratorConfig
+from pytorch_lightning.utilities import rank_zero_info
+from pytorch_lightning.utilities.exceptions import MisconfigurationException
 
 
 class LitSuperResolutionModule(pl.LightningModule):
@@ -45,10 +43,7 @@ class LitSuperResolutionModule(pl.LightningModule):
     @property
     def num_training_steps(self) -> int:
         """Total training steps inferred from datamodule and devices."""
-        if (
-            isinstance(self.trainer.limit_train_batches, int)
-            and self.trainer.limit_train_batches != 0
-        ):
+        if isinstance(self.trainer.limit_train_batches, int) and self.trainer.limit_train_batches != 0:
             dataset_size = self.trainer.limit_train_batches
         elif isinstance(self.trainer.limit_train_batches, float):
             # limit_train_batches is a percentage of batches
@@ -62,17 +57,13 @@ class LitSuperResolutionModule(pl.LightningModule):
             num_devices = max(num_devices, self.trainer.tpu_cores)
 
         effective_batch_size = self.trainer.accumulate_grad_batches * num_devices
-        max_estimated_steps = (
-            dataset_size // effective_batch_size
-        ) * self.trainer.max_epochs
+        max_estimated_steps = (dataset_size // effective_batch_size) * self.trainer.max_epochs
 
         if self.trainer.max_steps and self.trainer.max_steps < max_estimated_steps:
             return self.trainer.max_steps
         return max_estimated_steps
 
-    def compute_warmup(
-        self, num_training_steps: int, num_warmup_steps: Union[int, float]
-    ) -> Tuple[int, int]:
+    def compute_warmup(self, num_training_steps: int, num_warmup_steps: Union[int, float]) -> Tuple[int, int]:
         if num_training_steps < 0:
             # less than 0 specifies to infer number of training steps
             num_training_steps = self.num_training_steps
@@ -119,19 +110,12 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
         self.optimizer = self.instantiator.optimizer(self.model, self.optimizer_cfg)
         # compute_warmup needs the datamodule to be available when `self.num_training_steps`
         # is called that is why this is done here and not in the __init__
-        (
-            self.scheduler_cfg.num_training_steps,
-            self.scheduler_cfg.num_warmup_steps,
-        ) = self.compute_warmup(
+        (self.scheduler_cfg.num_training_steps, self.scheduler_cfg.num_warmup_steps,) = self.compute_warmup(
             num_training_steps=self.scheduler_cfg.num_training_steps,
             num_warmup_steps=getattr(self.scheduler_cfg, "num_warmup_steps", None),
         )
-        rank_zero_info(
-            f"Inferring number of training steps, set to {self.scheduler_cfg.num_training_steps}"
-        )
-        rank_zero_info(
-            f"Inferring number of warmup steps from ratio, set to {self.scheduler_cfg.num_warmup_steps}"
-        )
+        rank_zero_info(f"Inferring number of training steps, set to {self.scheduler_cfg.num_training_steps}")
+        rank_zero_info(f"Inferring number of warmup steps from ratio, set to {self.scheduler_cfg.num_warmup_steps}")
         self.scheduler = self.instantiator.scheduler(self.scheduler_cfg, self.optimizer)
         return super().configure_optimizers()
 

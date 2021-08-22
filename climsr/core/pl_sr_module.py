@@ -76,16 +76,10 @@ class SuperResolutionLightningModule(pl.LightningModule):
         self.net_G = self.build_model()
 
         # metrics
-        self.loss = (
-            torch.nn.MSELoss()
-            if self.hparams.generator == consts.models.srcnn
-            else torch.nn.L1Loss()
-        )
+        self.loss = torch.nn.MSELoss() if self.hparams.generator == consts.models.srcnn else torch.nn.L1Loss()
 
         # standardization
-        self.stats = consts.cruts.statistics[
-            world_clim_to_cruts_mapping[self.hparams.world_clim_variable]
-        ]
+        self.stats = consts.cruts.statistics[world_clim_to_cruts_mapping[self.hparams.world_clim_variable]]
         self.scaler = (
             StandardScaler(
                 self.stats[consts.stats.mean],
@@ -132,14 +126,10 @@ class SuperResolutionLightningModule(pl.LightningModule):
                 reduction=self.hparams.reduction,
             )
         else:
-            raise ValueError(
-                f"Specified generator '{self.hparams.generator}' is not supported"
-            )
+            raise ValueError(f"Specified generator '{self.hparams.generator}' is not supported")
         return generator
 
-    def forward(
-        self, x: Tensor, elevation: Tensor = None, mask: Tensor = None
-    ) -> Tensor:
+    def forward(self, x: Tensor, elevation: Tensor = None, mask: Tensor = None) -> Tensor:
         if self.hparams.generator == consts.models.srcnn:
             return self.net_G(x)
         else:
@@ -214,13 +204,7 @@ class SuperResolutionLightningModule(pl.LightningModule):
             denormalized_mae.append(np.absolute(diff).mean())
             denormalized_mse.append((diff ** 2).mean())
             denormalized_rmse.append(np.sqrt(denormalized_mse[-1]))
-            denormalized_r2.append(
-                1
-                - (
-                    np.sum(diff ** 2)
-                    / (np.sum((i_original - np.mean(i_original)) ** 2) + 1e-5)
-                )
-            )
+            denormalized_r2.append(1 - (np.sum(diff ** 2) / (np.sum((i_original - np.mean(i_original)) ** 2) + 1e-5)))
 
         denormalized_mae = np.mean(denormalized_mae)
         denormalized_mse = np.mean(denormalized_mse)
@@ -270,9 +254,7 @@ class SuperResolutionLightningModule(pl.LightningModule):
 
     def on_train_start(self):
         """Run additional steps when training starts."""
-        self.logger.log_hyperparams(
-            self.hparams, {"hp_metric": self.hparams.initial_hp_metric_val}
-        )
+        self.logger.log_hyperparams(self.hparams, {"hp_metric": self.hparams.initial_hp_metric_val})
 
     @property
     def num_training_steps(self) -> int:
@@ -282,11 +264,7 @@ class SuperResolutionLightningModule(pl.LightningModule):
 
         limit_batches = self.trainer.limit_train_batches
         batches = len(self.train_dataloader())
-        batches = (
-            min(batches, limit_batches)
-            if isinstance(limit_batches, int)
-            else int(limit_batches * batches)
-        )
+        batches = min(batches, limit_batches) if isinstance(limit_batches, int) else int(limit_batches * batches)
 
         num_devices = max(1, self.trainer.num_gpus, self.trainer.num_processes)
         if self.trainer.tpu_cores:
@@ -301,9 +279,7 @@ class SuperResolutionLightningModule(pl.LightningModule):
     def add_model_specific_args(
         parent: argparse.ArgumentParser,
     ) -> argparse.ArgumentParser:
-        parser = argparse.ArgumentParser(
-            parents=[parent], add_help=False, conflict_handler="resolve"
-        )
+        parser = argparse.ArgumentParser(parents=[parent], add_help=False, conflict_handler="resolve")
         parser.add_argument(
             "--max_lr",
             default=1e-5,

@@ -40,9 +40,7 @@ def remove(fp):
 if __name__ == "__main__":
     arguments = parse_args()
 
-    client = Client(
-        n_workers=arguments.n_workers, threads_per_worker=arguments.threads_per_worker
-    )
+    client = Client(n_workers=arguments.n_workers, threads_per_worker=arguments.threads_per_worker)
 
     files = glob(os.path.join(arguments.dir, "**/*"), recursive=True)
     logging.info(f"Deleting {len(files)} files from {arguments.dir}")

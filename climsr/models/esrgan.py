@@ -69,9 +69,7 @@ class ESRGANGenerator(nn.Module):
         self.scale_factor = scale_factor
 
         self.conv_first = nn.Conv2d(in_channels, nf, 3, 1, 1, bias=True)
-        self.RRDB_trunk = nn.Sequential(
-            *[ResidualInResidualDenseBlock(nf=nf, gc=gc) for _ in range(nb)]
-        )
+        self.RRDB_trunk = nn.Sequential(*[ResidualInResidualDenseBlock(nf=nf, gc=gc) for _ in range(nb)])
         self.trunk_conv = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
 
         # upsampling
@@ -92,14 +90,10 @@ class ESRGANGenerator(nn.Module):
         trunk = self.trunk_conv(self.RRDB_trunk(fea))
         fea = fea + trunk
 
-        fea = self.lrelu(
-            self.upconv1(F.interpolate(fea, scale_factor=2, mode="nearest"))
-        )
+        fea = self.lrelu(self.upconv1(F.interpolate(fea, scale_factor=2, mode="nearest")))
 
         if self.scale_factor == 4:
-            fea = self.lrelu(
-                self.upconv2(F.interpolate(fea, scale_factor=2, mode="nearest"))
-            )
+            fea = self.lrelu(self.upconv2(F.interpolate(fea, scale_factor=2, mode="nearest")))
 
         out = self.conv_last(self.lrelu(self.HRconv(fea)))
         out = self.srcnn(torch.cat([out, elev], 1))

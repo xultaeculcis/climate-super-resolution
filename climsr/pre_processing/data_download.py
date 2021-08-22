@@ -5,21 +5,21 @@ from pprint import pprint
 from typing import Optional
 
 import requests
-from datasets import tqdm
 
 import climsr.consts as consts
+from datasets import tqdm
 
 logging.basicConfig(level=logging.INFO)
 
 
-cru_ts_download_url = "https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.05/cruts.2103051243.v4.05/tmn/cru_ts4.05.1901.2020.tmn.dat.nc.gz"  # noqa
+cru_ts_download_url = (
+    "https://crudata.uea.ac.uk/cru/data/hrg/cru_ts_4.05/cruts.2103051243.v4.05/tmn/cru_ts4.05.1901.2020.tmn.dat.nc.gz"  # noqa
+)
 world_clim_download_urls = []
 for var in consts.world_clim.variables_wc:
     for i in range(1960, 2018, 10):
         upper = i + 9 if i != 2010 else 2018
-        world_clim_download_urls.append(
-            f"https://biogeo.ucdavis.edu/data/worldclim/v2.1/hist/wc2.1_2.5m_{var}_{i}-{upper}.zip"
-        )
+        world_clim_download_urls.append(f"https://biogeo.ucdavis.edu/data/worldclim/v2.1/hist/wc2.1_2.5m_{var}_{i}-{upper}.zip")
 
 
 def download_file(url: str, download_dir: Optional[str] = "../../datasets") -> str:

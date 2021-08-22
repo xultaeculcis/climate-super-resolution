@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import Optional, Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 from torch.utils.data import Dataset
 from torch.utils.data.dataset import T_co
@@ -19,9 +19,7 @@ class ClimateDatasetBase(Dataset):
         normalize_range: Optional[Tuple[float, float]] = (-1.0, 1.0),
     ):
         if normalize == standardize:
-            raise Exception(
-                "Bad parameter combination: normalization and standardization! Choose one!"
-            )
+            raise Exception("Bad parameter combination: normalization and standardization! Choose one!")
 
         self.elevation_file = elevation_file
         self.land_mask_file = land_mask_file

@@ -25,9 +25,7 @@ class GBasicBlock(nn.Module):
         super(GBasicBlock, self).__init__()
 
         self.body = nn.Sequential(
-            nn.Conv2d(
-                in_channels, out_channels, ksize, stride, pad, dilation, groups=4
-            ),
+            nn.Conv2d(in_channels, out_channels, ksize, stride, pad, dilation, groups=4),
             nn.ReLU(inplace=True),
         )
 
@@ -40,9 +38,7 @@ class BasicBlockSig(nn.Module):
     def __init__(self, in_channels, out_channels, ksize=3, stride=1, pad=1):
         super(BasicBlockSig, self).__init__()
 
-        self.body = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, ksize, stride, pad), nn.Sigmoid()
-        )
+        self.body = nn.Sequential(nn.Conv2d(in_channels, out_channels, ksize, stride, pad), nn.Sigmoid())
 
     def forward(self, x):
         out = self.body(x)
@@ -188,9 +184,7 @@ class CALayer(nn.Module):
 
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
 
-        self.c1 = BasicBlock(
-            channel, (channel // reduction) * 3, ksize=1, stride=1, pad=0, dilation=1
-        )
+        self.c1 = BasicBlock(channel, (channel // reduction) * 3, ksize=1, stride=1, pad=0, dilation=1)
         self.c4 = BasicBlockSig((channel // reduction) * 3, channel, 3, 1, 1)
 
     def forward(self, x):
@@ -228,9 +222,7 @@ class Block(nn.Module):
 
 
 class DRLN(nn.Module):
-    def __init__(
-        self, in_channels: int = 1, out_channels: int = 1, scaling_factor: int = 4
-    ):
+    def __init__(self, in_channels: int = 1, out_channels: int = 1, scaling_factor: int = 4):
         super(DRLN, self).__init__()
 
         self.scale = scaling_factor

@@ -26,13 +26,9 @@ def scrape_url1():
             if mountain_peak_alt == "m":
                 mountain_peak_alt = mountain_peak_split[-4]
 
-            mountain_peak_name = " ".join(mountain_peak_split[:-3]).replace(
-                mountain_peak_alt, ""
-            )
+            mountain_peak_name = " ".join(mountain_peak_split[:-3]).replace(mountain_peak_alt, "")
 
-            records.append(
-                (current_mr, mountain_peak_name, lat, lon, mountain_peak_alt)
-            )
+            records.append((current_mr, mountain_peak_name, lat, lon, mountain_peak_alt))
 
     df = pd.DataFrame(
         records,

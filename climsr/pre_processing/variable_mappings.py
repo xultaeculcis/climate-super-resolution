@@ -8,6 +8,4 @@ cruts_to_world_clim_mapping = {
     consts.cruts.pre: consts.world_clim.prec,
 }
 
-world_clim_to_cruts_mapping = dict(
-    [(v, k) for k, v in cruts_to_world_clim_mapping.items()]
-)
+world_clim_to_cruts_mapping = dict([(v, k) for k, v in cruts_to_world_clim_mapping.items()])

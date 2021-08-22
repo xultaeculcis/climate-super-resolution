@@ -15,21 +15,15 @@ logging.info("Python %s on %s" % (sys.version, sys.platform))
 ds_temp_nn = xr.open_dataset(
     "/media/xultaeculcis/2TB/datasets/cruts/inference-europe-extent-nc/rcan.cru_ts4.04.nn.inference.1901.2019.tmp.dat.nc"  # noqa E501
 )
-ds_temp_cru = xr.open_dataset(
-    "/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.tmp.dat.nc"
-)
+ds_temp_cru = xr.open_dataset("/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.tmp.dat.nc")
 peaks = pd.read_csv("./datasets/mountain_peaks.csv")
 
 if __name__ == "__main__":
     # data from Tomasz
     logging.info("Tomasz's data")
-    may_only = pd.date_range(
-        ds_temp_cru["time"][5].values, ds_temp_cru["time"][-1].values, freq="AS-MAY"
-    )
+    may_only = pd.date_range(ds_temp_cru["time"][5].values, ds_temp_cru["time"][-1].values, freq="AS-MAY")
 
-    results = CompareStatsResults.compute(
-        consts.cruts.tmp, may_only, lats, lons, alts, ds_temp_cru, ds_temp_nn
-    )
+    results = CompareStatsResults.compute(consts.cruts.tmp, may_only, lats, lons, alts, ds_temp_cru, ds_temp_nn)
     results.print_comparison_summary()
     results.line_plot()
     results.box_plot()

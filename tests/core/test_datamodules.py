@@ -44,24 +44,20 @@ def common_asserts(dl, stage=consts.stages.test):
         expected_hr_shape = (args.batch_size, 1, args.hr_size, args.hr_size)
 
         assert lr.shape == expected_lr_shape, (
-            f"Expected the LR batch to be in shape {expected_lr_shape}, "
-            f"but found: {lr.shape}"
+            f"Expected the LR batch to be in shape {expected_lr_shape}, " f"but found: {lr.shape}"
         )
         assert hr.shape == (args.batch_size, 1, 128, 128), (
-            f"Expected the HR batch to be in shape {expected_hr_shape}, "
-            f"but found: {hr.shape}"
+            f"Expected the HR batch to be in shape {expected_hr_shape}, " f"but found: {hr.shape}"
         )
         assert elevation.shape == (args.batch_size, 1, 128, 128), (
-            f"Expected the Elev batch to be in shape {expected_hr_shape}, "
-            f"but found: {elevation.shape}"
+            f"Expected the Elev batch to be in shape {expected_hr_shape}, " f"but found: {elevation.shape}"
         )
 
         if stage != consts.stages.train:
             sr_nearest = batch[consts.batch_items.nearest]
 
             assert sr_nearest.shape == (args.batch_size, 1, 128, 128), (
-                f"Expected the SR batch to be in shape {expected_hr_shape}, "
-                f"but found: {sr_nearest.shape}"
+                f"Expected the SR batch to be in shape {expected_hr_shape}, " f"but found: {sr_nearest.shape}"
             )
 
         break

@@ -10,12 +10,8 @@ from torch import Tensor
 from climsr.models.srcnn import SRCNN
 
 
-def default_conv(
-    in_channels: int, out_channels: int, kernel_size: int, bias: bool = True
-) -> nn.Module:
-    return nn.Conv2d(
-        in_channels, out_channels, kernel_size, padding=kernel_size // 2, bias=bias
-    )
+def default_conv(in_channels: int, out_channels: int, kernel_size: int, bias: bool = True) -> nn.Module:
+    return nn.Conv2d(in_channels, out_channels, kernel_size, padding=kernel_size // 2, bias=bias)
 
 
 class Upsampler(nn.Sequential):
@@ -167,10 +163,7 @@ class RCAN(nn.Module):
 
         # define body module
         modules_body = [
-            ResidualGroup(
-                conv, n_feats, self.kernel_size, reduction, n_resblocks=n_resblocks
-            )
-            for _ in range(n_resgroups)
+            ResidualGroup(conv, n_feats, self.kernel_size, reduction, n_resblocks=n_resblocks) for _ in range(n_resgroups)
         ]
 
         modules_body.append(conv(n_feats, n_feats, self.kernel_size))
@@ -213,9 +206,7 @@ class RCAN(nn.Module):
                         raise RuntimeError(
                             "While copying the parameter named {}, "
                             "whose dimensions in the model are {} and "
-                            "whose dimensions in the checkpoint are {}.".format(
-                                name, own_state[name].size(), param.size()
-                            )
+                            "whose dimensions in the checkpoint are {}.".format(name, own_state[name].size(), param.size())
                         )
             elif strict:
                 if name.find("tail") == -1:

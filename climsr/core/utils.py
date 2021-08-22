@@ -6,11 +6,7 @@ from typing import Tuple
 
 import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
-from pytorch_lightning.callbacks import (
-    EarlyStopping,
-    LearningRateMonitor,
-    ModelCheckpoint,
-)
+from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
 
 import climsr.consts as consts
 from climsr.core.callbacks import LogImagesCallback
@@ -35,9 +31,7 @@ def prepare_pl_module(args: argparse.Namespace) -> pl.LightningModule:
     """
     if args.pretrained_model:
         net = (
-            GANLightningModule.load_from_checkpoint(
-                checkpoint_path=args.pretrained_model, strict=False
-            )
+            GANLightningModule.load_from_checkpoint(checkpoint_path=args.pretrained_model, strict=False)
             if args.experiment_name == consts.training.experiment_name_gan_training
             else GeneratorPreTrainingLightningModule.load_from_checkpoint(
                 checkpoint_path=args.pretrained_model,
@@ -61,9 +55,7 @@ def prepare_pl_trainer(args: argparse.Namespace) -> pl.Trainer:
     :return: The Pytorch Lightning Trainer.
     """
     experiment_name = f"{args.experiment_name}-{args.generator}-{args.world_clim_variable}-{args.world_clim_multiplier}"
-    tb_logger = pl_loggers.TensorBoardLogger(
-        args.log_dir, name=experiment_name, default_hp_metric=False
-    )
+    tb_logger = pl_loggers.TensorBoardLogger(args.log_dir, name=experiment_name, default_hp_metric=False)
     monitor_metric = args.checkpoint_monitor_metric
     mode = "min"
     early_stop_callback = EarlyStopping(

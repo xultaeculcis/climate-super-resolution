@@ -49,13 +49,7 @@ class GeneratorPreTrainingLightningModule(SuperResolutionLightningModule):
         """
         metrics = self.common_val_test_step(batch)
 
-        log_dict = dict(
-            list(
-                (f"val/{k}", v)
-                for k, v in dataclasses.asdict(metrics).items()
-                if k != "sr"
-            )
-        )
+        log_dict = dict(list((f"val/{k}", v) for k, v in dataclasses.asdict(metrics).items() if k != "sr"))
 
         self.log_dict(log_dict, on_step=False, on_epoch=True)
 
@@ -63,15 +57,11 @@ class GeneratorPreTrainingLightningModule(SuperResolutionLightningModule):
 
     def validation_epoch_end(self, outputs: List[Any]) -> None:
         """Compute and log hp_metric at the epoch level."""
-        pixel_level_loss_mean = torch.stack(
-            [output["val/pixel_level_loss"] for output in outputs]
-        ).mean()
+        pixel_level_loss_mean = torch.stack([output["val/pixel_level_loss"] for output in outputs]).mean()
 
         self.log("hp_metric", pixel_level_loss_mean)
 
-    def test_step(
-        self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None
-    ) -> Union[float, int, Tensor]:
+    def test_step(self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None) -> Union[float, int, Tensor]:
         """
         Run test step.
 
@@ -86,9 +76,7 @@ class GeneratorPreTrainingLightningModule(SuperResolutionLightningModule):
 
         metrics = self.common_val_test_step(batch)
 
-        log_dict = dict(
-            list((f"test/{k}", v) for k, v in dataclasses.asdict(metrics).items())
-        )
+        log_dict = dict(list((f"test/{k}", v) for k, v in dataclasses.asdict(metrics).items()))
 
         self.log_dict(log_dict, on_step=False, on_epoch=True)
 

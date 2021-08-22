@@ -62,11 +62,12 @@ class ESRGANGenerator(nn.Module):
         nf: int = 64,
         nb: int = 23,
         gc: int = 32,
-        scale_factor: int = 4,
+        scaling_factor: int = 4,
+        **kwargs,
     ):
         super(ESRGANGenerator, self).__init__()
 
-        self.scale_factor = scale_factor
+        self.scale_factor = scaling_factor
 
         self.conv_first = nn.Conv2d(in_channels, nf, 3, 1, 1, bias=True)
         self.RRDB_trunk = nn.Sequential(*[ResidualInResidualDenseBlock(nf=nf, gc=gc) for _ in range(nb)])

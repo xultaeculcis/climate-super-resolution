@@ -1,3 +1,4 @@
 _target_: climsr.models.srcnn.SRCNN
+
 defaults:
   - default

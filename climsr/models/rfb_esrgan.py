@@ -13,6 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 import math
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -22,7 +23,7 @@ from torch import Tensor
 class RFBESRGANDiscriminator(nn.Module):
     r"""The main architecture of the discriminator. Similar to VGG structure."""
 
-    def __init__(self, in_channels=3):
+    def __init__(self, in_channels=1):
         super(RFBESRGANDiscriminator, self).__init__()
         self.features = nn.Sequential(
             nn.Conv2d(in_channels, 64, kernel_size=3, stride=1, padding=1, bias=False),  # input is 3 x 216 x 216
@@ -69,19 +70,27 @@ class RFBESRGANDiscriminator(nn.Module):
 
 
 class RFBESRGANGenerator(nn.Module):
-    def __init__(self, upscale_factor, num_rrdb_blocks=16, num_rrfdb_blocks=8):
+    def __init__(
+        self,
+        in_channels: Optional[int] = 3,
+        out_channels: Optional[int] = 1,
+        scaling_factor: Optional[int] = 4,
+        num_rrdb_blocks: Optional[int] = 16,
+        num_rrfdb_blocks: Optional[int] = 8,
+        **kwargs,
+    ):
         r"""This is an esrgan model defined by the author himself.
 
         Args:
-            upscale_factor (int): Image magnification factor. (Default: 4).
+            scaling_factor (int): Image magnification factor. (Default: 4).
             num_rrdb_blocks (int): How many RRDB structures make up Trunk-A? (Default: 2).
             num_rrfdb_blocks (int): How many RRDB structures make up Trunk-RFB? (Default: 2).
         """
         super(RFBESRGANGenerator, self).__init__()
-        num_upsample_block = int(math.log(upscale_factor, 4))
+        num_upsample_block = int(math.log(scaling_factor, 4))
 
         # First layer
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False)
 
         # 16 ResidualInResidualDenseBlock layer
         residual_residual_dense_blocks = []
@@ -118,7 +127,9 @@ class RFBESRGANGenerator(nn.Module):
         )
 
         # Final output layer
-        self.conv4 = nn.Sequential(nn.Conv2d(64, 3, kernel_size=3, stride=1, padding=1, bias=False), nn.Tanh())
+        self.conv4 = nn.Sequential(
+            nn.Conv2d(64, out_channels=out_channels, kernel_size=3, stride=1, padding=1, bias=False), nn.Tanh()
+        )
 
     def forward(self, input: Tensor) -> Tensor:
         out1 = self.conv1(input)

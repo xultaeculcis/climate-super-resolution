@@ -1,0 +1,4 @@
+_target_: climsr.models.drln.DRLN
+
+defaults:
+  - default

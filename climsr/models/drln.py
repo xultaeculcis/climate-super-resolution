@@ -222,7 +222,7 @@ class Block(nn.Module):
 
 
 class DRLN(nn.Module):
-    def __init__(self, in_channels: int = 1, out_channels: int = 1, scaling_factor: int = 4):
+    def __init__(self, in_channels: int = 1, out_channels: int = 1, scaling_factor: int = 4, **kwargs):
         super(DRLN, self).__init__()
 
         self.scale = scaling_factor

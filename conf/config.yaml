@@ -1,17 +1,18 @@
-defaults: # loads default configs
-  - datamodule: super_resolution_data_module
-  - generator: srcnn
-  - optimizer: adamw
-  - scheduler: one_cycle_schedule
-  - task: default
+defaults:
   - callbacks:
       - early_stopping
       - model_checkpoint
       - log_images
+  - datamodule: super_resolution_data_module
+  - discriminator: ???
+  - experiment: drln_final
   - logger: tensorboard
-  - training: default
+  - model: ???
+  - optimizer: adamw
+  - scheduler: one_cycle_schedule
+  - task: default
   - trainer: default
+  - training: default
 
-experiment_name: ${now:%Y%m%d%H%M%S}
 log: False
-ignore_warnings: True # todo: check warnings before release
+ignore_warnings: True

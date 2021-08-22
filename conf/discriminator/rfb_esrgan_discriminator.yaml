@@ -1,0 +1,3 @@
+_target_: climsr.models.rfb_esrgan.RFBESRGANDiscriminator
+
+in_channels: 1

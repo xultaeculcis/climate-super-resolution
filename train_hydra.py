@@ -4,7 +4,7 @@ from typing import Any, List, Optional
 import hydra
 import pytorch_lightning as pl
 from omegaconf import DictConfig, OmegaConf
-from pytorch_lightning import Callback
+from pytorch_lightning import Callback, seed_everything
 from pytorch_lightning.loggers import LightningLoggerBase
 from pytorch_lightning.utilities.distributed import rank_zero_info
 
@@ -59,12 +59,17 @@ def run(
     # Init lightning trainer
     trainer: pl.Trainer = hydra.utils.instantiate(trainer_cfg, logger=loggers, callbacks=callbacks, _convert_="partial")
 
+    # Train & Test
     trainer.fit(model, datamodule=data_module)
     if run_test_after_fit:
         trainer.test(model, datamodule=data_module)
 
 
 def main(cfg: DictConfig) -> None:
+    # Reproducibility
+    if "seed" in cfg.training:
+        seed_everything(cfg.training.seed, workers=True)
+
     rank_zero_info(OmegaConf.to_yaml(cfg))
     instantiator = HydraInstantiator()
 

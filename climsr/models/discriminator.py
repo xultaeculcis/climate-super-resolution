@@ -3,7 +3,7 @@ from torch import nn as nn
 
 
 class Discriminator(nn.Module):
-    def __init__(self, in_channels=3, out_channels=64, num_conv_block=4):
+    def __init__(self, in_channels=1, out_channels=64, num_conv_block=4):
         super(Discriminator, self).__init__()
 
         block = []

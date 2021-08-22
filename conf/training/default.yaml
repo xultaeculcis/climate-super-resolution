@@ -1,7 +1,8 @@
-run_test_after_fit: True
 lr: 1e-4
 output_dir: '.'
-
-# read in dataset
+generator_type: ???
+experiment_name: ???
+seed: 42
+run_test_after_fit: True
 batch_size: 192
 num_workers: 8

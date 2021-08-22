@@ -148,6 +148,7 @@ class RCAN(nn.Module):
         in_channels: int = 3,
         out_channels: int = 1,
         conv: nn.Module = default_conv,
+        **kwargs
     ):
         super(RCAN, self).__init__()
 

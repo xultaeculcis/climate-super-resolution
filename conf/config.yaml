@@ -5,14 +5,15 @@ defaults:
       - log_images
   - datamodule: super_resolution_data_module
   - discriminator: ???
-  - experiment: drln_final
   - logger: tensorboard
   - model: ???
   - optimizer: adamw
   - scheduler: one_cycle_schedule
-  - task: default
+  - task: gan_training
   - trainer: default
   - training: default
+
+  - experiment: esrgan_training
 
 log: False
 ignore_warnings: True

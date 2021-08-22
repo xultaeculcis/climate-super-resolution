@@ -1,0 +1,11 @@
+_recursive_: false
+_target_: climsr.core.pl_gan.GANLightningModule
+
+model: ${model}
+discriminator: ${discriminator}
+optimizers:
+  - optimizer_gen: ${optimizer}
+  - optimizer_disc: ${optimizer}
+schedulers:
+  - scheduler_gen: ${scheduler}
+  - scheduler_disc: ${scheduler}

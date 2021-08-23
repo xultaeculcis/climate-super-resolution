@@ -1,0 +1,3 @@
+adagrad:
+  _target_: torch.optim.Adagrad
+  lr: ${training.lr}

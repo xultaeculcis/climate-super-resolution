@@ -1,9 +1,0 @@
-elevation_file: str
-land_mask_file: str
-generator_type: str
-variable: temp
-scaling_factor: 4
-normalize: True
-standardize: False
-standardize_stats: None
-normalize_range: (-1.0, 1.0)

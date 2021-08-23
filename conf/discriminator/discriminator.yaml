@@ -1,5 +1,7 @@
 _target_: climsr.models.discriminator.Discriminator
 
-in_channels: 1
+defaults:
+  - default
+
 out_channels: 1
 num_conv_block: 4

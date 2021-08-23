@@ -11,8 +11,8 @@ import pytorch_lightning as pl
 import rasterio as rio
 import torch
 import xarray as xr
-from data.cruts_inference_dataset import CRUTSInferenceDataset
-from data.geo_tiff_inference_dataset import GeoTiffInferenceDataset
+from data.sr.cruts_inference_dataset import CRUTSInferenceDataset
+from data.sr.geo_tiff_inference_dataset import GeoTiffInferenceDataset
 from matplotlib import pyplot as plt
 from pre_processing.preprocessing import extract_extent, hr_bbox, var_to_variable
 from torch.utils.data import DataLoader, Dataset

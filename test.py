@@ -7,10 +7,10 @@ from typing import Union
 
 import numpy as np
 import pytorch_lightning as pl
+from data.super_resolution_data_module import SuperResolutionDataModule
+from task import GANLightningModule
 
 import climsr.consts as consts
-from climsr.core.datamodules import SuperResolutionDataModule
-from climsr.core.pl_gan import GANLightningModule
 from climsr.core.utils import prepare_training
 
 np.set_printoptions(precision=3)

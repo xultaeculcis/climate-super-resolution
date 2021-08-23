@@ -1,32 +1,12 @@
 # -*- coding: utf-8 -*-
+from core.config import SuperResolutionDataConfig
+from data.super_resolution_data_module import SuperResolutionDataModule
+
 import climsr.consts as consts
-from climsr.core.datamodules import SuperResolutionDataModule
 
+args = SuperResolutionDataConfig()
 
-class Args:
-    batch_size = 32
-    data_path = "./datasets"
-    world_clim_variable = consts.world_clim.tmin
-    world_clim_multiplier = "4x"
-    num_workers = 4
-    hr_size = 128
-    scale_factor = 4
-    seed = 42
-
-
-args = Args()
-
-dm = SuperResolutionDataModule(
-    data_path=args.data_path,
-    world_clim_variable=args.world_clim_variable,
-    world_clim_multiplier=args.world_clim_multiplier,
-    generator_type=consts.models.esrgan,
-    batch_size=args.batch_size,
-    num_workers=args.num_workers,
-    hr_size=args.hr_size,
-    scale_factor=args.scale_factor,
-    seed=args.seed,
-)
+dm = SuperResolutionDataModule(args)
 
 
 def common_asserts(dl, stage=consts.stages.test):

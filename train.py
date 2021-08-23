@@ -7,10 +7,10 @@ from typing import Union
 
 import numpy as np
 import pytorch_lightning as pl
+from data.super_resolution_data_module import SuperResolutionDataModule
+from task import SuperResolutionLightningModule
 
 import climsr.consts as consts
-from climsr.core.datamodules import SuperResolutionDataModule
-from climsr.core.pl_sr_module import SuperResolutionLightningModule
 from climsr.core.utils import prepare_training
 
 np.set_printoptions(precision=3)

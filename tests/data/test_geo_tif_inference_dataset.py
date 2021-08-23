@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
+from data.sr.geo_tiff_inference_dataset import GeoTiffInferenceDataset
 
 import climsr.consts as consts
-from climsr.data.geo_tiff_inference_dataset import GeoTiffInferenceDataset
 
 europe_extent_expected_shape_hr = [412, 452]
 europe_extent_expected_shape_lr = [103, 113]

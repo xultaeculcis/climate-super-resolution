@@ -1,0 +1,6 @@
+defaults:
+  - default
+
+_target_: climsr.task.pl_generator_pre_training.GeneratorPreTrainingLightningModule
+
+discriminator: null

@@ -5,10 +5,8 @@ from typing import Optional
 import hydra
 import pytorch_lightning as pl
 import torch
-from core.datamodules import SuperResolutionDataModule
+from data.super_resolution_data_module import SuperResolutionDataModule
 from omegaconf import DictConfig
-
-from climsr.core.model import TaskSuperResolutionModule
 
 
 class Instantiator:
@@ -39,7 +37,7 @@ class HydraInstantiator(Instantiator):
         self,
         cfg: DictConfig,
         model_data_kwargs: Optional[DictConfig] = None,
-    ) -> "TaskSuperResolutionModule":
+    ) -> pl.LightningModule:
         if model_data_kwargs is None:
             model_data_kwargs = {}
         return self.instantiate(cfg, instantiator=self, **model_data_kwargs)

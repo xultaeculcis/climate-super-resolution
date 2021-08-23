@@ -1,9 +1,16 @@
 # @package _global_
 defaults:
+  - override /task: gan_training
   - override /datamodule: super_resolution_data_module
+  - override /training: default
   - override /model: esrgan
   - override /discriminator: discriminator
-  - override /training: default
+  - override /optimizers:
+    - adam
+    - adamw
+  - override /schedulers:
+    - one_cycle_schedule
+    - one_cycle_schedule
   - override /trainer: default
 
 training:

@@ -1,0 +1,3 @@
+adamax:
+  _target_: torch.optim.Adamax
+  lr: ${training.lr}

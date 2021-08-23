@@ -10,10 +10,10 @@ from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, Mode
 
 import climsr.consts as consts
 from climsr.core.callbacks import LogImagesCallback
-from climsr.core.datamodules import SuperResolutionDataModule
-from climsr.core.pl_gan import GANLightningModule
-from climsr.core.pl_generator_pre_training import GeneratorPreTrainingLightningModule
 from climsr.data import normalization
+from climsr.data.super_resolution_data_module import SuperResolutionDataModule
+from climsr.task.pl_gan import GANLightningModule
+from climsr.task.pl_generator_pre_training import GeneratorPreTrainingLightningModule
 
 
 def set_ignore_warnings():

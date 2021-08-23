@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 from omegaconf import MISSING
 
@@ -87,7 +87,13 @@ class GeneratorConfig:
 
 
 @dataclass
+class DiscriminatorConfig:
+    in_channels: Optional[int] = 1
+
+
+@dataclass
 class TaskConfig:
-    generator: GeneratorConfig = GeneratorConfig()
-    optimizer: OptimizerConfig = OptimizerConfig()
-    scheduler: SchedulerConfig = SchedulerConfig()
+    generator: GeneratorConfig = None
+    optimizers: List[OptimizerConfig] = None
+    schedulers: List[SchedulerConfig] = None
+    discriminator: DiscriminatorConfig = None

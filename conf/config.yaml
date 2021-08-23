@@ -1,4 +1,5 @@
 defaults:
+  - task: gan_training
   - callbacks:
       - early_stopping
       - model_checkpoint
@@ -7,13 +8,12 @@ defaults:
   - discriminator: ???
   - logger: tensorboard
   - model: ???
-  - optimizer: adamw
-  - scheduler: one_cycle_schedule
-  - task: gan_training
+  - optimizers: ???
+  - schedulers: ???
   - trainer: default
   - training: default
 
-  - experiment: esrgan_training
+  - experiment: esrgan_pre_training
 
 log: False
 ignore_warnings: True

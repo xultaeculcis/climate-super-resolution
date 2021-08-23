@@ -1,9 +1,16 @@
 # @package _global_
 defaults:
+  - override /task: gen_pre_training
   - override /datamodule: super_resolution_data_module
-  - override /model: rfb_esrgan
-  - override /discriminator: rfb_esrgan_discriminator
   - override /training: default
+  - override /model: rfb_esrgan
+  - override /discriminator: null
+  - override /optimizers:
+    - adam
+    - adam
+  - override /schedulers:
+    - one_cycle_schedule
+    - one_cycle_schedule
   - override /trainer: default
 
 training:

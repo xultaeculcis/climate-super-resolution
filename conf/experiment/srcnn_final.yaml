@@ -1,9 +1,14 @@
 # @package _global_
 defaults:
+  - override /task: generator_pre_training
   - override /datamodule: super_resolution_data_module
+  - override /training: default
   - override /model: srcnn
   - override /discriminator: null
-  - override /training: default
+  - override /optimizers:
+    - adam
+  - override /schedulers:
+    - one_cycle_schedule
   - override /trainer: default
 
 training:

@@ -3,15 +3,15 @@ from typing import Any, List, Optional
 
 import hydra
 import pytorch_lightning as pl
+from data.super_resolution_data_module import SuperResolutionDataModule
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import Callback, seed_everything
 from pytorch_lightning.loggers import LightningLoggerBase
 from pytorch_lightning.utilities.distributed import rank_zero_info
 
 from climsr.core.config import SuperResolutionDataConfig, TaskConfig, TrainerConfig
-from climsr.core.datamodules import SuperResolutionDataModule
 from climsr.core.instantiator import HydraInstantiator, Instantiator
-from climsr.core.model import TaskSuperResolutionModule
+from climsr.core.task import TaskSuperResolutionModule
 from climsr.core.utils import set_ignore_warnings
 
 default_sr_dm_config = SuperResolutionDataConfig()
@@ -42,7 +42,7 @@ def run(
         )
 
     # Init lightning module
-    model: TaskSuperResolutionModule = instantiator.model(task_cfg)
+    model: TaskSuperResolutionModule = instantiator.model(task_cfg, model_data_kwargs=data_module.model_data_kwargs)
 
     # Init lightning loggers
     loggers: List[LightningLoggerBase] = []

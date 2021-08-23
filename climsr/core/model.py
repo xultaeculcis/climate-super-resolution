@@ -120,7 +120,6 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
         return super().configure_optimizers()
 
     def on_save_checkpoint(self, checkpoint: Dict[str, Any]):
-        # Save tokenizer from datamodule for predictions
         if self.instantiator:
             checkpoint["instantiator"] = self.instantiator
 

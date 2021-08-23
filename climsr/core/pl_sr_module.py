@@ -31,46 +31,7 @@ class SuperResolutionLightningModule(pl.LightningModule):
         super(SuperResolutionLightningModule, self).__init__()
 
         # store parameters
-        self.save_hyperparameters(
-            # model specific
-            "generator",
-            "gen_in_channels",
-            "gen_out_channels",
-            "disc_in_channels",
-            "nf",
-            "nb",
-            "gc",
-            "scale_factor",
-            "num_rrdb_blocks",
-            "num_rrfdb_blocks",
-            "n_resgroups",
-            "n_resblocks",
-            "n_feats",
-            "reduction",
-            # training specific
-            "precision",
-            "initial_hp_metric_val",
-            "max_lr",
-            "batch_size",
-            "max_epochs",
-            "accumulate_grad_batches",
-            # optimizer & scheduler specific
-            "pct_start",
-            "div_factor",
-            "final_div_factor",
-            "weight_decay",
-            # loss specific
-            "pixel_level_loss_factor",
-            "perceptual_loss_factor",
-            "adversarial_loss_factor",
-            # data specific
-            "use_mask_as_3rd_channel",
-            "use_global_min_max",
-            "use_elevation",
-            "normalization_method",
-            "normalization_range",
-            "world_clim_variable",
-        )
+        self.save_hyperparameters()
 
         # networks
         self.net_G = self.build_model()

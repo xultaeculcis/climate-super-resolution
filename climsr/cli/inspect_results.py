@@ -2,7 +2,9 @@
 import hydra
 from omegaconf import DictConfig
 
-from climsr.cli.train import main
+
+def main(cfg: DictConfig) -> None:
+    pass
 
 
 @hydra.main(config_path="./conf", config_name="config")

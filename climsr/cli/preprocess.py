@@ -6,7 +6,7 @@ from dask.diagnostics import progress
 from distributed import Client
 from omegaconf import DictConfig, OmegaConf
 
-# import climsr.pre_processing.preprocessing as preprocessing
+# import climsr.preprocessing.preprocessing as preprocessing
 from climsr.core.config import PreProcessingConfig
 
 pbar = progress.ProgressBar()

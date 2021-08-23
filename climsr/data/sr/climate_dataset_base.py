@@ -8,9 +8,9 @@ from torch.utils.data.dataset import T_co
 class ClimateDatasetBase(Dataset):
     def __init__(
         self,
-        elevation_file: str,
         land_mask_file: str,
         generator_type: str,
+        elevation_file: Optional[str] = None,
         variable: Optional[str] = None,
         scaling_factor: Optional[int] = 4,
         normalize: Optional[bool] = True,

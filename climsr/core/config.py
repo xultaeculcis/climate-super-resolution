@@ -97,3 +97,51 @@ class TaskConfig:
     optimizers: List[OptimizerConfig] = None
     schedulers: List[SchedulerConfig] = None
     discriminator: DiscriminatorConfig = None
+
+
+@dataclass
+class InferenceConfig:
+    # Paths to CRU-TS NetCDF files
+    ds_path_tmn: Optional[str] = MISSING
+    ds_path_tmp: Optional[str] = MISSING
+    ds_path_tmx: Optional[str] = MISSING
+    ds_path_pre: Optional[str] = MISSING
+
+    # Paths to tiff data dirs
+    data_dir: Optional[str] = MISSING
+    original_full_res_cruts_data_path: Optional[str] = MISSING
+    inference_out_path: Optional[str] = MISSING
+
+    # Europe extent dirs
+    tiff_dir: Optional[str] = MISSING
+    extent_out_path_lr: Optional[str] = MISSING
+    extent_out_path_sr: Optional[str] = MISSING
+    extent_out_path_sr_nc: Optional[str] = MISSING
+
+    # Pretrained models
+    pretrained_model_tmn: Optional[str] = MISSING
+    pretrained_model_tmp: Optional[str] = MISSING
+    pretrained_model_tmx: Optional[str] = MISSING
+    pretrained_model_pre: Optional[str] = MISSING
+
+    # Misc
+    use_netcdf_datasets: Optional[bool] = False  # This defines the dataset type
+    temp_only: Optional[bool] = True  # Use model trained on combined temp data? Or models trained on individual files.
+    generator_type: Optional[str] = MISSING  # To be used as prefix for generated SR files
+
+    # Dataset stuff
+    elevation_file: Optional[str] = MISSING
+    land_mask_file: Optional[str] = MISSING
+    use_elevation: Optional[bool] = True
+    use_mask_as_3rd_channel: Optional[bool] = True
+    use_global_min_max: Optional[bool] = True
+    cruts_variable: Optional[str] = "tmp"  # Select null if you want to run in a loop for all variables
+    scaling_factor: Optional[int] = 4
+    normalize: Optional[bool] = True
+    normalization_range: Optional[Tuple[int, int]] = (-1.0, 1.0)
+    min_max_lookup: Optional[str] = MISSING
+
+    # Run steps
+    run_inference: Optional[bool] = True
+    extract_polygon_extent: Optional[bool] = True
+    to_netcdf: Optional[bool] = True

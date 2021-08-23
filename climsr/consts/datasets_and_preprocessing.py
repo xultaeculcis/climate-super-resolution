@@ -64,3 +64,12 @@ hr_bbox = [
         "type": "Polygon",
     }
 ]
+
+cruts_to_world_clim_mapping = {
+    "tmn": "tmin",
+    "tmp": "temp",
+    "tmx": "tmax",
+    "pre": "prec",
+}
+
+world_clim_to_cruts_mapping = dict([(v, k) for k, v in cruts_to_world_clim_mapping.items()])

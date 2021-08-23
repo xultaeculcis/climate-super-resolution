@@ -15,7 +15,6 @@ from torchvision.transforms import functional as TF
 
 import climsr.consts as consts
 from climsr.data.normalization import MinMaxScaler, StandardScaler
-from climsr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
 
 
 class ClimateDataset(ClimateDatasetBase):
@@ -25,7 +24,6 @@ class ClimateDataset(ClimateDatasetBase):
         elevation_df: pd.DataFrame,
         generator_type: str,
         variable: str,
-        elevation_file: str,
         land_mask_file: str,
         hr_size: Optional[int] = 128,
         stage: Optional[str] = consts.stages.train,
@@ -33,13 +31,13 @@ class ClimateDataset(ClimateDatasetBase):
         normalize: Optional[bool] = True,
         standardize: Optional[bool] = False,
         standardize_stats: pd.DataFrame = None,
-        normalize_range: Optional[Tuple[float, float]] = (0.0, 1.0),
+        normalize_range: Optional[Tuple[float, float]] = (-1.0, 1.0),
         use_elevation: Optional[bool] = True,
         use_mask_as_3rd_channel: Optional[bool] = True,
         use_global_min_max: Optional[bool] = True,
     ):
         super().__init__(
-            elevation_file=elevation_file,
+            elevation_file=None,
             land_mask_file=land_mask_file,
             generator_type=generator_type,
             variable=variable,
@@ -60,9 +58,15 @@ class ClimateDataset(ClimateDatasetBase):
 
         if self.standardize:
             self.scaler = StandardScaler(
-                mean=self.standardize_stats[world_clim_to_cruts_mapping[self.variable]][consts.stats.mean],
-                std=self.standardize_stats[world_clim_to_cruts_mapping[self.variable]][consts.stats.std],
-                nan_substitution=self.standardize_stats[world_clim_to_cruts_mapping[self.variable]][consts.stats.normalized_min],
+                mean=self.standardize_stats[consts.datasets_and_preprocessing.world_clim_to_cruts_mapping[self.variable]][
+                    consts.stats.mean
+                ],
+                std=self.standardize_stats[consts.datasets_and_preprocessing.world_clim_to_cruts_mapping[self.variable]][
+                    consts.stats.std
+                ],
+                nan_substitution=self.standardize_stats[
+                    consts.datasets_and_preprocessing.world_clim_to_cruts_mapping[self.variable]
+                ][consts.stats.normalized_min],
             )
             self.elevation_scaler = StandardScaler(
                 mean=standardize_stats[consts.cruts.elev][consts.stats.mean],

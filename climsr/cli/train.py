@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import logging
 from typing import Any, List, Optional
 
 import hydra
@@ -23,6 +24,7 @@ def run(
     instantiator: Instantiator,
     ignore_warnings: bool = True,
     run_test_after_fit: bool = True,
+    lr_find_only: bool = False,
     datamodule_cfg: Optional[SuperResolutionDataConfig] = default_sr_dm_config,
     task_cfg: Optional[TaskConfig] = default_task_config,
     trainer_cfg: Optional[TrainerConfig] = default_trainer_config,
@@ -59,6 +61,19 @@ def run(
     # Init lightning trainer
     trainer: pl.Trainer = hydra.utils.instantiate(trainer_cfg, logger=loggers, callbacks=callbacks, _convert_="partial")
 
+    if lr_find_only:
+        # Run learning rate finder
+        lr_finder = trainer.tuner.lr_find(model=model, datamodule=data_module, max_lr=8e-4)
+
+        # Plot lr find results
+        fig = lr_finder.plot(suggest=True)
+        fig.show()
+
+        # Pick point based on plot, or get suggestion, and exit
+        new_lr = lr_finder.suggestion()
+        logging.info(f"LR Finder suggestion: {new_lr}")
+        return
+
     # Train & Test
     trainer.fit(model, datamodule=data_module)
     if run_test_after_fit:
@@ -77,6 +92,7 @@ def main(cfg: DictConfig) -> None:
         instantiator,
         ignore_warnings=cfg.get("ignore_warnings"),
         run_test_after_fit=cfg.get("training").get("run_test_after_fit"),
+        lr_find_only=cfg.get("training").get("lr_find_only"),
         datamodule_cfg=cfg.get("datamodule"),
         task_cfg=cfg.get("task"),
         trainer_cfg=cfg.get("trainer"),

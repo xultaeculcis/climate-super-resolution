@@ -15,7 +15,6 @@ from climsr.core.config import DiscriminatorConfig, GeneratorConfig, OptimizerCo
 from climsr.core.instantiator import Instantiator
 from climsr.data import normalization
 from climsr.data.normalization import MinMaxScaler, StandardScaler
-from climsr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
 
 
 class LitSuperResolutionModule(pl.LightningModule):
@@ -118,7 +117,9 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
         self.loss = torch.nn.MSELoss() if self.hparams.generator == consts.models.srcnn else torch.nn.L1Loss()
 
         # standardization
-        self.stats = consts.cruts.statistics[world_clim_to_cruts_mapping[self.hparams.world_clim_variable]]
+        self.stats = consts.cruts.statistics[
+            consts.datasets_and_preprocessing.world_clim_to_cruts_mapping[self.hparams.world_clim_variable]
+        ]
         self.scaler = (
             StandardScaler(
                 self.stats[consts.stats.mean],

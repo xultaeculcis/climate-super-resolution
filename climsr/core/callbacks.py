@@ -19,7 +19,7 @@ from torchvision.utils import make_grid
 
 import climsr.consts as consts
 from climsr.data import normalization
-from climsr.pre_processing.variable_mappings import world_clim_to_cruts_mapping
+from climsr.preprocessing.variable_mappings import world_clim_to_cruts_mapping
 
 MAX_ITEMS = 88
 

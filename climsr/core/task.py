@@ -26,13 +26,13 @@ class LitSuperResolutionModule(pl.LightningModule):
 
     def __init__(
         self,
-        model: torch.nn.Module,
+        generator: torch.nn.Module,
         discriminator: Optional[torch.nn.Module] = None,
         optimizers: Optional[List[torch.optim.Optimizer]] = None,
         schedulers: Optional[List[torch.optim.lr_scheduler._LRScheduler]] = None,
     ):
         super().__init__()
-        self.generator = model
+        self.generator = generator
         self.discriminator = discriminator
         # some optimizers/schedulers need parameters only known dynamically
         # allow users to override the getter to instantiate them lazily
@@ -106,10 +106,10 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
         instantiator: Optional[Instantiator] = None,
         **kwargs,
     ):
-        super().__init__(instantiator.instantiate(generator), instantiator.instantiate(discriminator))
         self.instantiator = instantiator
         self.optimizer_cfgs = optimizers
         self.scheduler_cfgs = schedulers
+        super().__init__(generator=instantiator.instantiate(generator), discriminator=instantiator.instantiate(discriminator))
 
         # store parameters
         self.save_hyperparameters()

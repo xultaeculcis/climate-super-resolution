@@ -3,7 +3,7 @@ defaults:
   - override /task: generator_pre_training
   - override /datamodule: super_resolution_data_module
   - override /training: default
-  - override /model: srcnn
+  - override /generator: srcnn
   - override /discriminator: null
   - override /optimizers:
     - adam

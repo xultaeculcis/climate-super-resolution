@@ -1,8 +1,0 @@
-_taraget_: climsr.models.esrgan.ESRGANGenerator
-
-defaults:
-  - default
-
-nf: 64
-nb: 11
-gc: 16

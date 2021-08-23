@@ -40,6 +40,13 @@ class HydraInstantiator(Instantiator):
     ) -> pl.LightningModule:
         if model_data_kwargs is None:
             model_data_kwargs = {}
+
+        optimizers = [v for _, v in cfg.get("optimizers").items()]
+        schedulers = [v for _, v in cfg.get("schedulers").items()]
+
+        cfg["optimizers"] = optimizers
+        cfg["schedulers"] = schedulers
+
         return self.instantiate(cfg, instantiator=self, **model_data_kwargs)
 
     def optimizer(self, model: torch.nn.Module, cfg: DictConfig) -> torch.optim.Optimizer:

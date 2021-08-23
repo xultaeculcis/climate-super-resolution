@@ -1,3 +1,4 @@
 defaults:
   - default
+
 _target_: climsr.task.pl_gan.GANLightningModule

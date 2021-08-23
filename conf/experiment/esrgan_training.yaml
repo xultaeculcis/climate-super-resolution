@@ -3,7 +3,7 @@ defaults:
   - override /task: gan_training
   - override /datamodule: super_resolution_data_module
   - override /training: default
-  - override /model: esrgan
+  - override /generator: esrgan
   - override /discriminator: discriminator
   - override /optimizers:
     - adam

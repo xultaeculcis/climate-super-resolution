@@ -13,8 +13,8 @@ class GeneratorPreTrainingLightningModule(TaskSuperResolutionModule):
     LightningModule for pre-training the Generator Network.
     """
 
-    def __init__(self, **kwargs):
-        super(GeneratorPreTrainingLightningModule, self).__init__(**kwargs)
+    def __init__(self, *args, **kwargs):
+        super(GeneratorPreTrainingLightningModule, self).__init__(*args, **kwargs)
 
     def training_step(self, batch: Any, batch_idx: int) -> Any:
         """

@@ -7,13 +7,13 @@ defaults:
   - datamodule: super_resolution_data_module
   - discriminator: ???
   - logger: tensorboard
-  - model: ???
+  - generator: ???
   - optimizers: ???
   - schedulers: ???
   - trainer: default
   - training: default
 
-  - experiment: esrgan_pre_training
+  - experiment: rcan_final
 
 log: False
 ignore_warnings: True

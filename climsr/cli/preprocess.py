@@ -15,6 +15,7 @@ logging.basicConfig(level=logging.INFO)
 
 
 def main(cfg: PreProcessingConfig) -> None:
+    logging.info("\n" + OmegaConf.to_yaml(cfg))
     client = Client(n_workers=cfg.n_workers, threads_per_worker=cfg.threads_per_worker)
     try:
         # preprocessing.ensure_sub_dirs_exist_cts(cfg.out_dir_cruts)

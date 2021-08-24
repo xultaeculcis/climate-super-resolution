@@ -5,6 +5,7 @@ elevation = "elevation"
 tmin = "tmin"
 tmax = "tmax"
 temp = "temp"
+tavg = "tavg"
 prec = "prec"
 variables_wc = [
     tmin,
@@ -42,3 +43,44 @@ statistics = {
         "std": 1154.4285888671875,
     },
 }
+
+gcm_BCC_CSM2_MR = "BCC-CSM2-MR"
+gcm_CNRM_CM6_1 = "CNRM-CM6-1"
+gcm_CNRM_ESM2_1 = "CNRM-ESM2-1"
+gcm_CanESM5 = "CanESM5"
+gcm_GFDL_ESM4 = "GFDL-ESM4"
+gcm_IPSL_CM6A_LR = "IPSL-CM6A-LR"
+gcm_MIROC_ES2L = "MIROC-ES2L"
+gcm_MIROC6 = "MIROC6"
+gcm_MRI_ESM2_0 = "MRI-ESM2-0"
+GCMs = [
+    gcm_BCC_CSM2_MR,
+    gcm_CNRM_CM6_1,
+    gcm_CNRM_ESM2_1,
+    gcm_CanESM5,
+    gcm_GFDL_ESM4,
+    gcm_IPSL_CM6A_LR,
+    gcm_MIROC_ES2L,
+    gcm_MIROC6,
+    gcm_MRI_ESM2_0,
+]
+
+scenario_ssp126 = "ssp126"
+scenario_ssp245 = "ssp245"
+scenario_ssp370 = "ssp370"
+scenario_ssp585 = "ssp585"
+scenarios = [
+    scenario_ssp126,
+    scenario_ssp245,
+    scenario_ssp370,
+    scenario_ssp585,
+]
+
+resolution_2_5m = "2.5m"
+resolution_5m = "5m"
+resolution_10m = "10m"
+data_resolutions = [
+    resolution_2_5m,
+    resolution_5m,
+    resolution_10m,
+]

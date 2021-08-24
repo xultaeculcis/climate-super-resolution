@@ -9,6 +9,12 @@ from climsr.data import normalization
 
 
 @dataclass
+class DataDownloadConfig:
+    download_path: Optional[str] = "./datasets"
+    parallel_downloads: Optional[int] = 8
+
+
+@dataclass
 class PreProcessingConfig:
     data_dir_cruts: Optional[str] = MISSING
     data_dir_world_clim: Optional[str] = MISSING

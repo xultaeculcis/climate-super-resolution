@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
+import logging
+
 import hydra
 from omegaconf import DictConfig
 
 from climsr.cli.train import main
+
+logging.basicConfig(level=logging.INFO)
 
 
 @hydra.main(config_path="./conf", config_name="config")

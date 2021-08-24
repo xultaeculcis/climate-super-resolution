@@ -56,6 +56,8 @@ def cruts_as_cog(variable: str, data_dir: str, out_dir: str, dataframe_output_pa
     os.makedirs(dataframe_output_path, exist_ok=True)
 
     for i in range(ds.dims["time"]):
+        # todo https://pratiman-91.github.io/2020/08/01/NetCDF-to-GeoTIFF-using-Python.html
+
         # get frame at time index i
         arr = ds[variable].isel(time=i)
 

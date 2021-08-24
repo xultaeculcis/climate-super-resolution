@@ -1,0 +1,3 @@
+ds_temp_cru_path: "/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.tmp.dat.nc"
+ds_temp_nn_path: ???
+peaks_csv: "./datasets/mountain_peaks.csv"

@@ -1,0 +1,4 @@
+defaults:
+  - default
+
+ds_temp_nn_path: "/media/xultaeculcis/2TB/datasets/cruts/inference-europe-extent-nc/rcan.cru_ts4.04.nn.inference.1901.2019.tmp.dat.nc"

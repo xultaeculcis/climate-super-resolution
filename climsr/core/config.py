@@ -145,3 +145,10 @@ class InferenceConfig:
     run_inference: Optional[bool] = True
     extract_polygon_extent: Optional[bool] = True
     to_netcdf: Optional[bool] = True
+
+
+@dataclass
+class ResultInspectionConfig:
+    ds_temp_nn_path: Optional[str] = MISSING
+    ds_temp_cru_path: Optional[str] = MISSING
+    peaks_csv: Optional[str] = MISSING

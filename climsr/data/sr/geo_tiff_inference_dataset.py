@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 import rasterio as rio
 import torch
-from data.sr.climate_dataset_base import ClimateDatasetBase
 from PIL import Image
 from torch import Tensor
 from torchvision import transforms as transforms
@@ -15,6 +14,7 @@ from torchvision.transforms import InterpolationMode
 
 import climsr.consts as consts
 from climsr.data.normalization import MinMaxScaler, StandardScaler
+from climsr.data.sr.climate_dataset_base import ClimateDatasetBase
 
 
 class GeoTiffInferenceDataset(ClimateDatasetBase):

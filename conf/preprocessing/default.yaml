@@ -1,12 +1,12 @@
-data_dir_cruts: "/media/xultaeculcis/2TB/datasets/cruts/original/"
-data_dir_world_clim: "/media/xultaeculcis/2TB/datasets/wc/weather/"
-out_dir_cruts: "/media/xultaeculcis/2TB/datasets/cruts/pre-processed"
-out_dir_world_clim: "/media/xultaeculcis/2TB/datasets/wc/pre-processed"
+data_dir_cruts: "datasets/download/cruts/original/"
+data_dir_world_clim: "datasets/download/world-clim/"
+out_dir_cruts: "datasets/pre-processed/cruts"
+out_dir_world_clim: "datasets/pre-processed/world-clim"
 
-world_clim_elevation_fp: "/media/xultaeculcis/2TB/datasets/wc/elevation/wc2.1_2.5m_elev.tif"
-dataframe_output_path: "../../datasets/"
-elevation_file: "/media/xultaeculcis/2TB/datasets/wc/pre-processed/elevation/resized/4x/wc2.1_2.5m_elev.tif"
-land_mask_file: "/media/xultaeculcis/2TB/datasets/wc/pre-processed/prec/resized/4x/wc2.1_2.5m_prec_1961-01.tif"
+world_clim_elevation_fp: "datasets/download/world-clim/elevation/world_clim2.1_2.5m_elev.tif"
+dataframe_output_path: "datasets/download/"
+elevation_file: "datasets/pre-processed/world-clim/elev/resized/4x/world_clim2.1_2.5m_elev.tif"
+land_mask_file: "datasets/pre-processed/world-clim/tmin/resized/4x/world_clim2.1_2.5m_tmin_1961-01.tif"
 
 run_cruts_to_cog: True
 run_temp_rasters_generation: True

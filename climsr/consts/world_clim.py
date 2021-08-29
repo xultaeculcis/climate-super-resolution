@@ -7,6 +7,7 @@ tmax = "tmax"
 temp = "temp"
 tavg = "tavg"
 prec = "prec"
+elev = "elev"
 variables_wc = [
     tmin,
     tmax,

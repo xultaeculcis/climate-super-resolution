@@ -26,8 +26,8 @@ class PreProcessingConfig:
     elevation_file: Optional[str] = MISSING
     land_mask_file: Optional[str] = MISSING
 
-    run_cruts_to_cog: Optional[bool] = True
-    run_temp_rasters_generation: Optional[bool] = True
+    run_cruts_to_tiff: Optional[bool] = True
+    run_tavg_rasters_generation: Optional[bool] = True
     run_statistics_computation: Optional[bool] = True
     run_world_clim_resize: Optional[bool] = True
     run_world_clim_tiling: Optional[bool] = True
@@ -53,7 +53,6 @@ class PreProcessingConfig:
 class SuperResolutionDataConfig:
     data_path: Optional[str] = MISSING
     world_clim_variable: Optional[str] = consts.world_clim.temp
-    world_clim_multiplier: Optional[str] = consts.world_clim.resolution_multipliers[2][0]
     generator_type: Optional[str] = consts.models.rcan
     batch_size: Optional[int] = 192
     num_workers: Optional[int] = 8

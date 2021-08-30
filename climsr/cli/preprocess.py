@@ -4,9 +4,10 @@ import logging
 import hydra
 from dask.diagnostics import progress
 from distributed import Client
+from hydra.utils import to_absolute_path
 from omegaconf import DictConfig, OmegaConf
 
-# import climsr.preprocessing.preprocessing as preprocessing
+import climsr.preprocessing.preprocessing as preprocessing
 from climsr.core.config import PreProcessingConfig
 
 pbar = progress.ProgressBar()
@@ -18,16 +19,17 @@ def main(cfg: PreProcessingConfig) -> None:
     logging.info("\n" + OmegaConf.to_yaml(cfg))
     client = Client(n_workers=cfg.n_workers, threads_per_worker=cfg.threads_per_worker)
     try:
-        # preprocessing.ensure_sub_dirs_exist_cts(cfg.out_dir_cruts)
-        # preprocessing.ensure_sub_dirs_exist_wc(cfg.out_dir_world_clim)
-        # preprocessing.run_cruts_to_cog(cfg)
-        # preprocessing.run_statistics_computation(cfg)
-        # preprocessing.run_world_clim_resize(cfg)
-        # preprocessing.run_temp_rasters_generation(cfg)
-        # preprocessing.run_world_clim_elevation_resize(cfg)
-        # preprocessing.run_world_clim_tiling(cfg)
-        # preprocessing.run_train_val_test_split(cfg)
-        # preprocessing.run_cruts_extent_extraction(cfg)
+        preprocessing.ensure_sub_dirs_exist_cts(to_absolute_path(cfg.out_dir_cruts))
+        preprocessing.ensure_sub_dirs_exist_wc(to_absolute_path(cfg.out_dir_world_clim))
+        preprocessing.run_cruts_to_tiff(cfg)
+        preprocessing.run_tiff_extraction_from_multiband_rasters(cfg)
+        preprocessing.run_world_clim_resize(cfg)
+        preprocessing.run_tavg_rasters_generation(cfg)
+        preprocessing.run_world_clim_elevation_resize(cfg)
+        preprocessing.run_world_clim_tiling(cfg)
+        preprocessing.run_statistics_computation(cfg)
+        preprocessing.run_train_val_test_split(cfg)
+        preprocessing.run_cruts_extent_extraction(cfg)
         logging.info("DONE")
     finally:
         client.close()

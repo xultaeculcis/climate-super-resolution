@@ -1,30 +1,32 @@
-data_dir_cruts: "datasets/download/cruts/original/"
-data_dir_world_clim: "datasets/download/world-clim/"
+data_dir_cruts: ${data_download.download_path}/cruts/extracted
+data_dir_world_clim: ${data_download.download_path}/world-clim/extracted
 out_dir_cruts: "datasets/pre-processed/cruts"
 out_dir_world_clim: "datasets/pre-processed/world-clim"
 
-world_clim_elevation_fp: "datasets/download/world-clim/elevation/world_clim2.1_2.5m_elev.tif"
-dataframe_output_path: "datasets/download/"
+world_clim_elevation_fp: ${data_download.download_path}/world-clim/extracted/wc2.1/2.5m/elev/wc2.1_2.5m_elev.tif
+dataframe_output_path: "datasets/pre-processed/"
 elevation_file: "datasets/pre-processed/world-clim/elev/resized/4x/world_clim2.1_2.5m_elev.tif"
 land_mask_file: "datasets/pre-processed/world-clim/tmin/resized/4x/world_clim2.1_2.5m_tmin_1961-01.tif"
 
-run_cruts_to_cog: True
-run_temp_rasters_generation: True
-run_statistics_computation: True
+run_cruts_to_tiff: False
+
 run_world_clim_resize: True
-run_world_clim_tiling: True
-run_world_clim_elevation_resize: True
-run_train_val_test_split: True
-run_extent_extraction: True
-run_z_score_stats_computation: True
-run_min_max_stats_computation: True
+run_tavg_rasters_generation: False
+run_world_clim_elevation_resize: False
+run_world_clim_tiling: False
+
+run_statistics_computation: False
+run_z_score_stats_computation: False
+run_min_max_stats_computation: False
+
+run_train_val_test_split: False
+run_extent_extraction: False
 
 patch_size: [128, 128]
 patch_stride: 64
 normalize_patches: False
 n_workers: 8
 threads_per_worker: 1
-res_mult_inx: 2
 
 train_years: [1961, 2004]
 val_years: [2005, 2017]

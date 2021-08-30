@@ -73,3 +73,7 @@ cruts_to_world_clim_mapping = {
 }
 
 world_clim_to_cruts_mapping = dict([(v, k) for k, v in cruts_to_world_clim_mapping.items()])
+cruts_download_dir = "cruts"
+world_clim_download_dir = "world-clim"
+archives = "archives"
+extracted = "extracted"

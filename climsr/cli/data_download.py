@@ -5,7 +5,6 @@ from typing import List, Optional
 import hydra
 from hydra.utils import to_absolute_path
 from omegaconf import DictConfig, OmegaConf
-from preprocessing.data_download import handle_file_download
 
 from climsr.core.config import DataDownloadConfig
 from climsr.preprocessing.data_download import (
@@ -13,6 +12,7 @@ from climsr.preprocessing.data_download import (
     get_world_clim_future_climate_data_download_urls,
     get_world_clim_historical_climate_data_download_urls,
     get_world_clim_historical_weather_data_download_urls,
+    handle_file_download,
 )
 
 logging.basicConfig(level=logging.INFO)

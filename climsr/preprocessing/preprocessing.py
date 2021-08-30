@@ -6,14 +6,15 @@ from itertools import product
 from typing import Any, Dict, List, Optional, Tuple
 
 import dask.bag
-import datacube.utils.geometry as dcug
 import numpy as np
 import pandas as pd
 import rasterio as rio
 import rasterio.mask
 import rasterio.windows
+import rioxarray  # noqa F401
 import xarray
-from datacube.utils.cog import write_cog
+from hydra.utils import to_absolute_path
+from rasterio import DatasetReader
 from tqdm import tqdm
 
 import climsr.consts as consts
@@ -29,16 +30,34 @@ def ensure_sub_dirs_exist_cts(out_dir: str) -> None:
 
     """
     logging.info("Creating sub-dirs for CRU-TS")
-    for dir_name in consts.cruts.sub_dirs_cts:
-        for var in consts.cruts.variables_cts:
-            sub_dir_name = os.path.join(out_dir, dir_name, var)
-            logging.info(f"Creating sub-dir: '{sub_dir_name}'")
-            os.makedirs(sub_dir_name, exist_ok=True)
+    for var in consts.cruts.temperature_vars:
+        sub_dir_name = os.path.join(out_dir, consts.cruts.full_res_dir, var)
+        logging.info(f"Creating sub-dir: '{sub_dir_name}'")
+        os.makedirs(sub_dir_name, exist_ok=True)
 
 
-def cruts_as_cog(variable: str, data_dir: str, out_dir: str, dataframe_output_path: str) -> None:
+def ensure_sub_dirs_exist_wc(out_dir: str) -> None:
     """
-    Creates a Cloud Optimized Geo-Tiff file for each time step in the CRU-TS dataset.
+    Ensures, that output dir structure exists for World Clim data.
+
+    Args:
+        out_dir (str): Output dir.
+
+    """
+    logging.info("Creating sub-dirs for WorldClim")
+
+    sub_dir_name = os.path.join(out_dir, consts.world_clim.resized_dir)
+    logging.info(f"Creating sub-dir: '{sub_dir_name}'")
+    os.makedirs(sub_dir_name, exist_ok=True)
+
+    sub_dir_name = os.path.join(out_dir, consts.world_clim.tiles_dir)
+    logging.info(f"Creating sub-dir: '{sub_dir_name}'")
+    os.makedirs(sub_dir_name, exist_ok=True)
+
+
+def cruts_as_tiff(variable: str, data_dir: str, out_dir: str, dataframe_output_path: str) -> None:
+    """
+    Creates a Geo-Tiff file for each time step in the CRU-TS dataset.
 
     Args:
         variable (str): The variable name.
@@ -52,17 +71,16 @@ def cruts_as_cog(variable: str, data_dir: str, out_dir: str, dataframe_output_pa
     out_path = os.path.join(out_dir, consts.cruts.full_res_dir, variable)
     ds = xarray.open_dataset(file_path)
     file_paths = []
-    dataframe_output_path = os.path.join(dataframe_output_path, "cruts_inference")
+    dataframe_output_path = os.path.join(dataframe_output_path, "cruts")
     os.makedirs(dataframe_output_path, exist_ok=True)
 
     for i in range(ds.dims["time"]):
-        # todo https://pratiman-91.github.io/2020/08/01/NetCDF-to-GeoTIFF-using-Python.html
-
         # get frame at time index i
         arr = ds[variable].isel(time=i)
 
         # make it geo
-        arr = dcug.assign_crs(arr, "EPSG:4326")
+        arr = arr.rio.set_spatial_dims("lon", "lat")
+        arr = arr.rio.set_crs("EPSG:4326")
 
         # extract date
         date_str = np.datetime_as_string(arr.time, unit="D")
@@ -71,84 +89,50 @@ def cruts_as_cog(variable: str, data_dir: str, out_dir: str, dataframe_output_pa
         file_paths.append(fname)
 
         # Write as Cloud Optimized GeoTIFF
-        write_cog(
-            geo_im=arr,
-            fname=fname,
-            overwrite=True,
-        )
+        arr.rio.to_raster(fname)
 
     pd.DataFrame(file_paths, columns=[consts.datasets_and_preprocessing.file_path]).to_csv(
         os.path.join(dataframe_output_path, f"{variable}.csv"), index=False, header=True
     )
 
 
-def ensure_sub_dirs_exist_wc(out_dir: str) -> None:
-    """
-    Ensures, that output dir structure exists for World Clim data.
-
-    Args:
-        out_dir (str): Output dir.
-
-    """
-    logging.info("Creating sub-dirs for WorldClim")
-
-    variables = consts.world_clim.variables_wc + [consts.world_clim.elevation]
-    for var in variables:
-        for multiplier, _ in consts.world_clim.resolution_multipliers:
-            sub_dir_name = os.path.join(out_dir, var, consts.world_clim.resized_dir, multiplier)
-            logging.info(f"Creating sub-dir: '{sub_dir_name}'")
-            os.makedirs(sub_dir_name, exist_ok=True)
-
-            sub_dir_name = os.path.join(out_dir, var, consts.world_clim.tiles_dir, multiplier)
-            logging.info(f"Creating sub-dir: '{sub_dir_name}'")
-            os.makedirs(sub_dir_name, exist_ok=True)
-
-
-def resize_raster(
+def resize_raster_to_target_hr_resolution(
     file_path: str,
-    variable: str,
-    scaling_factor: float,
-    resolution_multiplier: str,
     out_dir: str,
+    remove_path: Optional[str] = "",
 ) -> None:
     """
-    Resizes specified World Clim Geo-Tiff file with specified scaling factor.
+    Resizes specified World Clim Geo-Tiff file to target HR resolution.
 
     Args:
         file_path (str): The path to the WorldClim .tif file.
-        variable (str): The mame of the variable.
-        scaling_factor (float): The scaling factor.
-        resolution_multiplier (str): Resolution multiplier in correspondence with CRU-TS.
-            eg. if resized resolution is the same as cru-ts then it should be "1x",
-            if its twice as big, then it should be "2x" etc.
         out_dir (str): Where to save the resized Geo-Tiff files.
+        remove_path (Optional[str]): Part of the `file_path` to remove.
+            Use this to control how much original folder structure to keep.
+            Empty string by default - which means that full folder structure will be kept.
 
     """
-
+    raster: DatasetReader
     with rio.open(file_path) as raster:
         # resample data to target shape
         t = raster.transform
-        transform = rio.Affine(t.a / scaling_factor, t.b, t.c, t.d, t.e / scaling_factor, t.f)
-        height = int(raster.height * scaling_factor)
-        width = int(raster.width * scaling_factor)
+        transform = rio.Affine(0.125, t.b, t.c, t.d, -0.125, t.f)
+        target_width, target_height = consts.world_clim.target_hr_resolution
 
         profile = raster.profile
-        profile.update(transform=transform, driver="COG", height=height, width=width)
+        profile.update(transform=transform, height=target_height, width=target_width)
 
         data = raster.read(
-            out_shape=(raster.count, height, width),
+            out_shape=(raster.count, target_height, target_width),
             resampling=rio.enums.Resampling.nearest,
         )
 
-        fname = os.path.join(
-            out_dir,
-            variable,
-            consts.world_clim.resized_dir,
-            resolution_multiplier,
-            os.path.basename(file_path),
-        )
+        path_after_removal = file_path.replace(remove_path, "").strip("/")
+        final_file_path = os.path.join(out_dir, consts.world_clim.resized_dir, path_after_removal)
 
-        with rio.open(fname, "w", **profile) as dataset:
+        os.makedirs(os.path.dirname(final_file_path), exist_ok=True)
+
+        with rio.open(final_file_path, "w", **profile) as dataset:
             dataset.write(data)
 
 
@@ -244,29 +228,10 @@ def make_patches(
             with rio.open(out_fp, "w", **meta) as out_dataset:
                 if normalize:
                     subset[subset == consts.world_clim.elevation_missing_indicator] = np.nan
-                    subset = (subset + (-min)) / (max - min + 1e-5)
+                    subset = (subset + (-min)) / (max - min + 1e-8)
                     subset[np.isnan(subset)] = 0.0
 
                 out_dataset.write(subset)
-
-
-def run_cruts_to_cog(cfg: PreProcessingConfig) -> None:
-    """
-    Runs CRU-TS transformation from Net CDF to Cloud Optimized Geo-Tiffs.
-
-    Args:
-        cfg (PreProcessingConfig): The arguments.
-
-    """
-    if cfg.run_cruts_to_cog:
-        logging.info("Running CRU-TS pre-processing - Geo Tiff generation")
-
-        dask.bag.from_sequence(consts.cruts.variables_cts).map(
-            cruts_as_cog,
-            cfg.data_dir_cruts,
-            cfg.out_dir_cruts,
-            cfg.dataframe_output_path,
-        ).compute()
 
 
 def compute_stats_for_zscore(cfg: PreProcessingConfig) -> None:
@@ -287,21 +252,21 @@ def compute_stats_for_zscore(cfg: PreProcessingConfig) -> None:
         std = np.nanstd(arr)
         min = np.nanmin(arr)
         max = np.nanmax(arr)
-        normalized_min = (min - mean) / (std + 1e-5)
-        normalized_max = (max - mean) / (std + 1e-5)
+        normalized_min = (min - mean) / (std + 1e-8)
+        normalized_max = (max - mean) / (std + 1e-8)
         results.append((var_name, mean, std, min, max, normalized_min, normalized_max))
 
     results = []
-    for var in tqdm(consts.cruts.variables_cts + [consts.world_clim.elevation]):
-        if var == consts.world_clim.elevation:
-            elevation = rio.open(cfg.world_clim_elevation_fp).read().astype(np.float32)
+    for var in tqdm(consts.cruts.temperature_vars + [consts.world_clim.elev]):
+        if var == consts.world_clim.elev:
+            elevation = rio.open(to_absolute_path(cfg.world_clim_elevation_fp)).read().astype(np.float32)
             elevation[elevation == consts.world_clim.elevation_missing_indicator] = np.nan
             compute_stats(var, elevation)
         else:
-            ds = xarray.open_dataset(os.path.join(cfg.data_dir_cruts, consts.cruts.file_pattern.format(var)))
+            ds = xarray.open_dataset(os.path.join(to_absolute_path(cfg.data_dir_cruts), consts.cruts.file_pattern.format(var)))
             compute_stats(var, ds[var].values)
 
-    output_file = os.path.join(cfg.dataframe_output_path, "statistics_zscore.csv")
+    output_file = os.path.join(to_absolute_path(cfg.dataframe_output_path), "statistics_zscore.csv")
     df = pd.DataFrame(
         results,
         columns=[
@@ -356,14 +321,16 @@ def compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
     for var in consts.cruts.variables_cts:
         logging.info(f"Computing stats for CRU-TS - '{var}'")
         results.extend(
-            dask.bag.from_sequence(sorted(glob(os.path.join(cfg.out_dir_cruts, consts.cruts.full_res_dir, var, "*.tif"))))
+            dask.bag.from_sequence(
+                sorted(glob(to_absolute_path(os.path.join(cfg.out_dir_cruts, consts.cruts.full_res_dir, var, "*.tif"))))
+            )
             .map(_stats_for_cruts)
             .compute()
         )
 
     def _stats_for_wc(fp):
-        year_from_filename = int(os.path.basename(fp).split("-")[0].split("_")[-1]) if var != consts.world_clim.elevation else -1
-        month_from_filename = int(os.path.basename(fp).split("-")[1].split(".")[0]) if var != consts.world_clim.elevation else -1
+        year_from_filename = int(os.path.basename(fp).split("-")[0].split("_")[-1]) if var != consts.world_clim.elev else -1
+        month_from_filename = int(os.path.basename(fp).split("-")[1].split(".")[0]) if var != consts.world_clim.elev else -1
         return (
             "world-clim",
             fp,
@@ -374,17 +341,16 @@ def compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
             *compute_stats(fp),
         )
 
-    for var in consts.world_clim.variables_wc + [consts.world_clim.elevation]:
+    for var in consts.world_clim.variables_wc + [consts.world_clim.elev]:
         logging.info(f"Computing stats for World Clim - '{var}'")
         results.extend(
             dask.bag.from_sequence(
                 sorted(
                     glob(
                         os.path.join(
-                            cfg.out_dir_world_clim,
+                            to_absolute_path(cfg.out_dir_world_clim),
                             var,
                             consts.world_clim.resized_dir,
-                            consts.world_clim.resolution_multipliers[cfg.res_mult_inx][0],
                             "*.tif",
                         )
                     )
@@ -394,7 +360,7 @@ def compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
             .compute()
         )
 
-    output_file = os.path.join(cfg.dataframe_output_path, "statistics_min_max.csv")
+    output_file = os.path.join(to_absolute_path(cfg.dataframe_output_path), "statistics_min_max.csv")
     columns = [
         consts.datasets_and_preprocessing.dataset,
         consts.datasets_and_preprocessing.file_path,
@@ -442,7 +408,7 @@ def compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
             val[consts.stats.global_min] = wc_global_min
             val[consts.stats.global_max] = wc_global_max
 
-    global_min_max_lookup[consts.world_clim.elevation][consts.stats.global_min] = 0.0
+    global_min_max_lookup[consts.world_clim.elev][consts.stats.global_min] = 0.0
 
     for idx, row in df.iterrows():
         var = row[consts.datasets_and_preprocessing.variable]
@@ -450,6 +416,25 @@ def compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
         df.loc[idx, consts.stats.global_max] = global_min_max_lookup[var][consts.stats.global_max]
 
     df.to_csv(output_file, header=True, index=False)
+
+
+def run_cruts_to_tiff(cfg: PreProcessingConfig) -> None:
+    """
+    Runs CRU-TS transformation from Net CDF to Cloud Optimized Geo-Tiffs.
+
+    Args:
+        cfg (PreProcessingConfig): The arguments.
+
+    """
+    if cfg.run_cruts_to_tiff:
+        logging.info("Running CRU-TS pre-processing - Geo Tiff generation")
+
+        dask.bag.from_sequence(consts.cruts.temperature_vars).map(
+            cruts_as_tiff,
+            to_absolute_path(cfg.data_dir_cruts),
+            to_absolute_path(cfg.out_dir_cruts),
+            to_absolute_path(cfg.dataframe_output_path),
+        ).compute()
 
 
 def run_statistics_computation(cfg: PreProcessingConfig) -> None:
@@ -476,26 +461,25 @@ def run_world_clim_resize(cfg: PreProcessingConfig) -> None:
 
     """
     if cfg.run_world_clim_resize:
-        for var in consts.world_clim.variables_wc:
-            files = sorted(
-                glob(
-                    os.path.join(
-                        cfg.data_dir_world_clim,
-                        var,
-                        "**",
-                        consts.world_clim.pattern_wc,
-                    ),
-                    recursive=True,
-                )
+        files = sorted(
+            glob(
+                os.path.join(
+                    to_absolute_path(cfg.data_dir_world_clim),
+                    "**",
+                    consts.world_clim.pattern_wc,
+                ),
+                recursive=True,
             )
-            multiplier, scale = consts.world_clim.resolution_multipliers[cfg.res_mult_inx]
-            logging.info(
-                "Running WorldClim pre-processing for variable: "
-                f"{var}, scale: {scale:.4f}, multiplier: {multiplier}. Total files to process: {len(files)}"
-            )
-            dask.bag.from_sequence(files, npartitions=1000).map(
-                resize_raster, var, scale, multiplier, cfg.out_dir_world_clim
-            ).compute()
+        )
+        logging.info(
+            f"Running WorldClim resize to target HR size of {consts.world_clim.target_hr_resolution}. "
+            f"Total files to process: {len(files)}"
+        )
+        dask.bag.from_sequence(files, npartitions=1000).map(
+            resize_raster_to_target_hr_resolution,
+            to_absolute_path(cfg.out_dir_world_clim),
+            to_absolute_path(cfg.data_dir_world_clim),
+        ).compute()
 
 
 def run_world_clim_elevation_resize(cfg: PreProcessingConfig) -> None:
@@ -507,14 +491,11 @@ def run_world_clim_elevation_resize(cfg: PreProcessingConfig) -> None:
 
     """
     if cfg.run_world_clim_elevation_resize:
-        multiplier, scale = consts.world_clim.resolution_multipliers[cfg.res_mult_inx]
-        logging.info("Running WorldClim pre-processing for variable: " f"elevation, scale: {scale:.4f}, multiplier: {multiplier}")
-        resize_raster(
-            cfg.world_clim_elevation_fp,
-            consts.world_clim.elevation,
-            scale,
-            multiplier,
-            cfg.out_dir_world_clim,
+        logging.info("Running WorldClim pre-processing for variable: elevation")
+        resize_raster_to_target_hr_resolution(
+            file_path=to_absolute_path(cfg.world_clim_elevation_fp),
+            out_dir=to_absolute_path(cfg.out_dir_world_clim),
+            remove_path=to_absolute_path(cfg.data_dir_world_clim),
         )
 
 
@@ -527,31 +508,25 @@ def run_world_clim_tiling(cfg: PreProcessingConfig) -> None:
 
     """
     if cfg.run_world_clim_tiling:
-        variables = consts.world_clim.variables_wc + [consts.world_clim.elevation]
+        variables = consts.world_clim.variables_wc + [consts.world_clim.elev]
         for var in variables:
-            multiplier, scale = consts.world_clim.resolution_multipliers[cfg.res_mult_inx]
             files = sorted(
                 glob(
                     os.path.join(
-                        cfg.out_dir_world_clim,
+                        to_absolute_path(cfg.out_dir_world_clim),
                         var,
                         consts.world_clim.resized_dir,
-                        multiplier,
                         "*.tif",
                     )
                 )
             )
-            logging.info(
-                f"WorldClim - Running tile generation. Total files: {len(files)}, "
-                f"variable: {var}, scale: {scale:.4f}, multiplier: {multiplier}"
-            )
+            logging.info(f"WorldClim - Running tile generation. Total files: {len(files)}, variable: {var}")
             dask.bag.from_sequence(files).map(
                 make_patches,
                 os.path.join(
-                    cfg.out_dir_world_clim,
+                    to_absolute_path(cfg.out_dir_world_clim),
                     var,
                     consts.world_clim.tiles_dir,
-                    multiplier,
                 ),
                 cfg.patch_size,
                 cfg.patch_stride,
@@ -568,23 +543,18 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
 
     """
     if cfg.run_train_val_test_split:
-        variables = consts.world_clim.variables_wc + [consts.world_clim.elevation]
+        variables = consts.world_clim.variables_wc + [consts.world_clim.elev]
 
         for var in variables:
-            multiplier, scale = consts.world_clim.resolution_multipliers[cfg.res_mult_inx]
-            if var != consts.world_clim.elevation:
-                logging.info(
-                    f"Generating Train/Validation/Test splits for variable: {var}, "
-                    f"multiplier: {multiplier}, scale:{scale:.4f}"
-                )
+            if var != consts.world_clim.elev:
+                logging.info(f"Generating Train/Validation/Test splits for variable: {var}")
 
             files = sorted(
                 glob(
                     os.path.join(
-                        cfg.out_dir_world_clim,
+                        to_absolute_path(cfg.out_dir_world_clim),
                         var,
                         consts.world_clim.tiles_dir,
-                        multiplier,
                         "*.tif",
                     )
                 )
@@ -599,15 +569,15 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
             val_years_lower_bound, val_years_upper_bound = cfg.val_years
             test_years_lower_bound, test_years_upper_bound = cfg.test_years
 
-            os.makedirs(os.path.join(cfg.dataframe_output_path, var, multiplier), exist_ok=True)
+            os.makedirs(os.path.join(to_absolute_path(cfg.dataframe_output_path), var), exist_ok=True)
 
             for file_path in files:
                 filename = os.path.basename(file_path)
                 x = int(file_path.split(".")[-3])
                 y = int(file_path.split(".")[-2])
                 original_filename = os.path.basename(file_path).replace(f".{x}.{y}.", ".")
-                year_from_filename = int(filename.split("-")[0].split("_")[-1]) if var != consts.world_clim.elevation else -1
-                month_from_filename = int(filename.split("-")[1].split(".")[0]) if var != consts.world_clim.elevation else -1
+                year_from_filename = int(filename.split("-")[0].split("_")[-1]) if var != consts.world_clim.elev else -1
+                month_from_filename = int(filename.split("-")[1].split(".")[0]) if var != consts.world_clim.elev else -1
 
                 if train_years_lower_bound <= year_from_filename <= train_years_upper_bound:
                     train_images.append(
@@ -615,7 +585,6 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
                             file_path,
                             original_filename,
                             var,
-                            multiplier,
                             year_from_filename,
                             month_from_filename,
                             x,
@@ -633,7 +602,6 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
                             file_path,
                             original_filename,
                             var,
-                            multiplier,
                             year_from_filename,
                             month_from_filename,
                             x,
@@ -651,7 +619,6 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
                             file_path,
                             original_filename,
                             var,
-                            multiplier,
                             year_from_filename,
                             month_from_filename,
                             x,
@@ -659,15 +626,15 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
                         )
                     )
 
-                elif consts.world_clim.elevation in file_path:
-                    elevation_images.append((file_path, var, multiplier, x, y))
+                elif consts.world_clim.elev in file_path:
+                    elevation_images.append((file_path, var, x, y))
 
             for stage, images in zip(
                 [
                     consts.stages.train,
                     consts.stages.val,
                     consts.stages.test,
-                    consts.world_clim.elevation,
+                    consts.world_clim.elev,
                 ],
                 [train_images, val_images, test_images, elevation_images],
             ):
@@ -676,16 +643,14 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
                         [
                             consts.datasets_and_preprocessing.file_path,
                             consts.datasets_and_preprocessing.variable,
-                            consts.datasets_and_preprocessing.multiplier,
                             consts.datasets_and_preprocessing.x,
                             consts.datasets_and_preprocessing.y,
                         ]
-                        if stage == consts.world_clim.elevation
+                        if stage == consts.world_clim.elev
                         else [
                             consts.datasets_and_preprocessing.tile_file_path,
                             consts.datasets_and_preprocessing.filename,
                             consts.datasets_and_preprocessing.variable,
-                            consts.datasets_and_preprocessing.multiplier,
                             consts.datasets_and_preprocessing.year,
                             consts.datasets_and_preprocessing.year,
                             consts.datasets_and_preprocessing.x,
@@ -697,22 +662,20 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
                         columns=columns,
                     )
                     df.to_csv(
-                        os.path.join(cfg.dataframe_output_path, var, multiplier, f"{stage}.csv"),
+                        os.path.join(to_absolute_path(cfg.dataframe_output_path), var, f"{stage}.csv"),
                         index=False,
                         header=True,
                     )
 
-            if var != consts.world_clim.elevation:
+            if var != consts.world_clim.elev:
                 logging.info(
                     f"Generated Train ({len(train_images)}) / "
                     f"Validation ({len(val_images)}) / "
                     f"Test ({len(test_images)}) splits "
-                    f"for variable: {var}, multiplier: {multiplier}, scale:{scale:.4f}"
+                    f"for variable: {var}"
                 )
             else:
-                logging.info(
-                    f"({len(elevation_images)}) images " f"for variable: {var}, multiplier: {multiplier}, scale:{scale:.4f}"
-                )
+                logging.info(f"({len(elevation_images)}) images for variable: {var}")
 
 
 def extract_extent_single(
@@ -791,41 +754,45 @@ def run_cruts_extent_extraction(cfg: PreProcessingConfig) -> None:
 
     if cfg.run_extent_extraction:
         # handle extent dirs
-        extent_dir = os.path.join(cfg.out_dir_cruts, consts.cruts.europe_extent)
+        extent_dir = to_absolute_path(os.path.join(cfg.out_dir_cruts, consts.cruts.europe_extent))
         os.makedirs(os.path.join(extent_dir, consts.batch_items.mask), exist_ok=True)
         os.makedirs(os.path.join(extent_dir, consts.cruts.elev), exist_ok=True)
 
         logging.info("Extracting polygon extents for Europe.")
         extract_extent(
-            os.path.join(cfg.out_dir_cruts, consts.cruts.full_res_dir),
+            to_absolute_path(os.path.join(cfg.out_dir_cruts, consts.cruts.full_res_dir)),
             extent_dir,
             consts.cruts.variables_cts,
             consts.datasets_and_preprocessing.lr_bbox,
         )
         logging.info("Extracting polygon extents for Europe for land mask file.")
         extract_extent_single(
-            cfg.land_mask_file,
+            to_absolute_path(cfg.land_mask_file),
             consts.datasets_and_preprocessing.hr_bbox,
             consts.batch_items.mask,
             extent_dir,
         )
         logging.info("Extracting polygon extents for Europe for elevation file.")
         extract_extent_single(
-            cfg.elevation_file,
+            to_absolute_path(cfg.elevation_file),
             consts.datasets_and_preprocessing.hr_bbox,
             consts.cruts.elev,
             extent_dir,
         )
 
 
-def generate_temp_raster(tmin_raster_fname: str) -> None:
+def generate_tavg_raster(tmin_raster_fname: str) -> None:
     """
-    Generates temp raster from tmin and tmax rasters.
+    Generates tavg raster from tmin and tmax rasters.
     Args:
         tmin_raster_fname (str): The filename of the tmin raster.
     """
-    output_file_name = tmin_raster_fname.replace("/tmin/", "/temp/").replace("_tmin_", "_temp_")
-    tmax_raster_fname = tmin_raster_fname.replace("/tmin/", "/tmax/").replace("_tmin_", "_tmax_")
+    output_file_name = tmin_raster_fname.replace(f"/{consts.world_clim.tmin}/", f"/{consts.world_clim.tavg}/").replace(
+        f"_{consts.world_clim.tmin}_", f"_{consts.world_clim.tavg}_"
+    )
+    tmax_raster_fname = tmin_raster_fname.replace(f"/{consts.world_clim.tmin}/", f"/{consts.world_clim.tmax}/").replace(
+        f"_{consts.world_clim.tmin}_", f"_{consts.world_clim.tmax}_"
+    )
 
     with rio.open(tmin_raster_fname) as tmin_raster:
         with rio.open(tmax_raster_fname) as tmax_raster:
@@ -836,21 +803,19 @@ def generate_temp_raster(tmin_raster_fname: str) -> None:
                 temp_raster.write(temp_values)
 
 
-def run_temp_rasters_generation(cfg: PreProcessingConfig) -> None:
+def run_tavg_rasters_generation(cfg: PreProcessingConfig) -> None:
     """
-    Runs temp raster generation from tmin and tmax rasters.
+    Runs tavg raster generation from tmin and tmax rasters.
     Args:
         cfg (PreProcessingConfig): The arguments.
     """
-    if cfg.run_temp_rasters_generation:
-        logging.info("Running temp raster generation")
-        multiplier, scale = consts.world_clim.resolution_multipliers[cfg.res_mult_inx]
+    if cfg.run_tavg_rasters_generation:
+        logging.info("Running tavg raster generation")
         os.makedirs(
             os.path.join(
-                cfg.out_dir_world_clim,
-                consts.world_clim.temp,
+                to_absolute_path(cfg.out_dir_world_clim),
+                consts.world_clim.tavg,
                 consts.world_clim.resized_dir,
-                multiplier,
             ),
             exist_ok=True,
         )
@@ -858,15 +823,19 @@ def run_temp_rasters_generation(cfg: PreProcessingConfig) -> None:
         tmin_files = sorted(
             glob(
                 os.path.join(
-                    cfg.out_dir_world_clim,
+                    to_absolute_path(cfg.out_dir_world_clim),
                     consts.world_clim.tmin,
                     consts.world_clim.resized_dir,
-                    multiplier,
                     "*.tif",
                 )
             )
         )
 
-        dask.bag.from_sequence(tmin_files).map(generate_temp_raster).compute()
+        dask.bag.from_sequence(tmin_files).map(generate_tavg_raster).compute()
 
-        logging.info("Done with temp raster generation")
+        logging.info("Done with tavg raster generation")
+
+
+def run_tiff_extraction_from_multiband_rasters(cfg: PreProcessingConfig) -> None:
+    # todo
+    return None

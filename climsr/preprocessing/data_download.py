@@ -2,8 +2,10 @@
 import gzip
 import logging
 import os
+import shutil
 import traceback
 import zipfile
+from glob import glob
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
@@ -121,8 +123,12 @@ def handle_file_download(
     world_clim_download_urls: List[str],
     download_path: Optional[str] = "../../datasets/download",
 ) -> None:
-    cruts_download_path = os.path.join(download_path, "cruts")
-    world_clim_download_path = os.path.join(download_path, "world-clim")
+    cruts_download_path = os.path.join(
+        download_path, consts.datasets_and_preprocessing.cruts_download_dir, consts.datasets_and_preprocessing.archives
+    )
+    world_clim_download_path = os.path.join(
+        download_path, consts.datasets_and_preprocessing.world_clim_download_dir, consts.datasets_and_preprocessing.archives
+    )
 
     os.makedirs(cruts_download_path, exist_ok=True)
     os.makedirs(world_clim_download_path, exist_ok=True)
@@ -141,11 +147,18 @@ def handle_file_download(
         logging.info(f"PROGRESS: {idx + 1}/{len(all_urls)}")
         try_file_download_and_extraction(url, download_path, replace_underscore_flag)
 
+    fix_paths_for_world_clim(world_clim_download_path)
+
 
 def try_file_download_and_extraction(url: str, download_path: str, replace_underscore_flag: Optional[bool] = False) -> None:
     retry = 0
     MAX_RETRY_COUNT = 3
     while True and retry < MAX_RETRY_COUNT:
+        if retry > 0:
+            logging.warning(
+                f"Attempting to re-download the file {url} due to issues with the file integrity. Attempt #{retry + 1}"
+            )
+
         f_name, error = download_file(url, download_path)
 
         # break on failed download
@@ -162,6 +175,9 @@ def try_file_download_and_extraction(url: str, download_path: str, replace_under
             os.remove(f_name)
 
         retry = retry + 1
+
+    if retry == 3:
+        logging.error(f"Maximum number of retries for file {url} has been reached. Re-download the file manually")
 
 
 def gunzip(source_filepath: str, dest_filepath: str, block_size: Optional[int] = 65536) -> None:
@@ -182,7 +198,9 @@ def unzip(source_filepath: str, dest_filepath: str) -> None:
 
 def handle_file_extraction(f_name: str, replace_underscore: Optional[bool] = False) -> None:
     logging.info(f"Extracting {f_name}")
-    extraction_path = os.path.splitext(f_name)[0]
+    extraction_path = os.path.splitext(f_name)[0].replace(
+        consts.datasets_and_preprocessing.archives, consts.datasets_and_preprocessing.extracted
+    )
 
     if replace_underscore:
         extraction_path = extraction_path.replace("_", os.sep)
@@ -204,3 +222,39 @@ def handle_file_extraction(f_name: str, replace_underscore: Optional[bool] = Fal
         else:
             os.rmdir(extraction_path)
         raise
+
+
+def fix_paths_for_world_clim(world_clim_download_path: str = "downloads/world-clim") -> None:
+    world_clim_extraction_path = os.path.join(world_clim_download_path, "wc2.1")
+    logging.info(f"Fixing folder structure for files in World Clim extraction directory: {world_clim_extraction_path}")
+    pattern = os.path.join(world_clim_extraction_path, "**/*.tif")
+    files = glob(pattern, recursive=True)
+    logging.info(f"Found {len(files)} files in total. Processing...")
+
+    def build_lookup() -> List[str]:
+        resolutions = np.array(consts.world_clim.data_resolutions).astype("<U12")
+        gcms = np.array(consts.world_clim.GCMs).astype("<U12")
+        scenarios = np.array(consts.world_clim.scenarios).astype("<U12")
+        prod = cartesian([resolutions, gcms, scenarios])
+        lookup_strings: List[str] = []
+        for res, gcm, scenario in prod:
+            lookup_strings.append(f"share/spatial03/worldclim/cmip6/7_fut/{res}/{gcm}/{scenario}/")
+        return lookup_strings
+
+    def move_if_match_in_lookup(fp: str, lookup: List[str]) -> None:
+        for lookup_str in lookup:
+            if lookup_str not in fp:
+                continue
+            # match found, move file to new destination
+            destination = fp.replace(lookup_str, "")
+            shutil.move(fp, destination)
+            break
+
+    str_lookup_array = build_lookup()
+
+    for file_path in tqdm(files):
+        move_if_match_in_lookup(file_path, str_lookup_array)
+
+    logging.info("Cleaning up after file movement... Removing empty directories...")
+    for directory in tqdm(glob(os.path.join(world_clim_extraction_path, "**/share"), recursive=True)):
+        shutil.rmtree(directory)

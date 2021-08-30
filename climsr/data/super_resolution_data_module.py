@@ -98,7 +98,7 @@ class SuperResolutionDataModule(DataModuleBase):
     def load_data(
         self,
     ) -> Tuple[pd.DataFrame, pd.DataFrame, List[pd.DataFrame], pd.DataFrame, Union[Dict[str, float], None]]:
-        elevation_df = self.load_dataframe(consts.world_clim.elevation, f"{consts.world_clim.elevation}.csv")
+        elevation_df = self.load_dataframe(consts.world_clim.elev, f"{consts.world_clim.elev}.csv")
 
         stats_df = pd.read_csv(os.path.join(self.cfg.data_path, "statistics_min_max.csv"))
 

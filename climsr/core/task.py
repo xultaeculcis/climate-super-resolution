@@ -6,7 +6,6 @@ import pytorch_lightning as pl
 import torch
 from pytorch_lightning.utilities import rank_zero_info
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
-from task.metrics import MetricsResult, MetricsSimple
 from torch import Tensor
 from torchmetrics.functional import mean_absolute_error, mean_squared_error, psnr, ssim
 
@@ -15,6 +14,7 @@ from climsr.core.config import DiscriminatorConfig, GeneratorConfig, OptimizerCo
 from climsr.core.instantiator import Instantiator
 from climsr.data import normalization
 from climsr.data.normalization import MinMaxScaler, StandardScaler
+from climsr.task.metrics import MetricsResult, MetricsSimple
 
 
 class LitSuperResolutionModule(pl.LightningModule):
@@ -247,7 +247,7 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
             denormalized_mae.append(np.absolute(diff).mean())
             denormalized_mse.append((diff ** 2).mean())
             denormalized_rmse.append(np.sqrt(denormalized_mse[-1]))
-            denormalized_r2.append(1 - (np.sum(diff ** 2) / (np.sum((i_original - np.mean(i_original)) ** 2) + 1e-5)))
+            denormalized_r2.append(1 - (np.sum(diff ** 2) / (np.sum((i_original - np.mean(i_original)) ** 2) + 1e-8)))
 
         denormalized_mae = np.mean(denormalized_mae)
         denormalized_mse = np.mean(denormalized_mse)

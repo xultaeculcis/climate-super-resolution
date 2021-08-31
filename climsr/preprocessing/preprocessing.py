@@ -15,6 +15,7 @@ import rioxarray  # noqa F401
 import xarray
 from hydra.utils import to_absolute_path
 from rasterio import DatasetReader
+from rasterio.io import DatasetWriter
 from tqdm import tqdm
 
 import climsr.consts as consts
@@ -120,20 +121,35 @@ def resize_raster_to_target_hr_resolution(
         target_width, target_height = consts.world_clim.target_hr_resolution
 
         profile = raster.profile
-        profile.update(transform=transform, height=target_height, width=target_width)
-
-        data = raster.read(
-            out_shape=(raster.count, target_height, target_width),
-            resampling=rio.enums.Resampling.nearest,
+        profile.update(
+            transform=transform,
+            height=target_height,
+            width=target_width,
+            count=1,
+            nodata=consts.world_clim.target_missing_indicator,
+            dtype="float32",
         )
 
         path_after_removal = file_path.replace(remove_path, "").strip("/")
-        final_file_path = os.path.join(out_dir, consts.world_clim.resized_dir, path_after_removal)
+        file_path_template = os.path.join(out_dir, consts.world_clim.resized_dir, path_after_removal)
+        os.makedirs(os.path.dirname(file_path_template), exist_ok=True)
 
-        os.makedirs(os.path.dirname(final_file_path), exist_ok=True)
+        for band_idx in raster.indexes:
+            data: np.ndarray = raster.read(
+                indexes=[band_idx],
+                out_shape=(1, target_height, target_width),
+                resampling=rio.enums.Resampling.nearest,
+            ).astype(np.float32)
 
-        with rio.open(final_file_path, "w", **profile) as dataset:
-            dataset.write(data)
+            for missing_indicator in consts.world_clim.missing_indicators:
+                data[data == missing_indicator] = consts.world_clim.target_missing_indicator
+
+            final_file_path = (
+                file_path_template.replace(".tif", f"_{band_idx:02d}.tif") if raster.count > 1 else file_path_template
+            )
+
+            with rio.open(final_file_path, "w", **profile) as dataset:
+                dataset.write(data)
 
 
 def get_tiles(
@@ -186,7 +202,6 @@ def make_patches(
     out_path: str,
     tile_shape: Optional[Tuple[int, int]] = (128, 128),
     stride: Optional[int] = 64,
-    normalize: Optional[bool] = True,
 ) -> None:
     """
     Create tiles of specified size for ML purposes from specified geo-tiff file.
@@ -196,18 +211,15 @@ def make_patches(
         out_path (str): The output path.
         tile_shape (Optional[Tuple[int, int]]): The shape of the image patches.
         stride (Optional[int]): The stride of the tiles. Default: 64.
-        normalize (Optional[bool]): Whether to normalize the patches to [0,1] range. True by default.
 
     """
     with rio.open(file_path) as in_dataset:
         tile_width, tile_height = tile_shape
+        idx = file_path.index(consts.datasets_and_preprocessing.world_clim_main_extraction_folder)
+        out_dir = os.path.join(out_path, os.path.dirname(file_path)[idx:])
         fname = os.path.basename(os.path.splitext(file_path)[0]) + ".{}.{}.tif"
 
-        if normalize:
-            data = in_dataset.read().astype(np.float32)
-            data[data == consts.world_clim.elevation_missing_indicator] = np.nan
-            min = np.nanmin(data)
-            max = np.nanmax(data)
+        os.makedirs(out_dir, exist_ok=True)
 
         meta = in_dataset.meta.copy()
 
@@ -216,7 +228,7 @@ def make_patches(
             meta["dtype"] = np.float32
             meta["width"], meta["height"] = window.width, window.height
 
-            out_fp = os.path.join(out_path, fname.format(int(window.col_off), int(window.row_off)))
+            out_fp = os.path.join(out_dir, fname.format(int(window.col_off), int(window.row_off)))
 
             subset = in_dataset.read(window=window).astype(np.float32)
 
@@ -226,11 +238,6 @@ def make_patches(
                 continue
 
             with rio.open(out_fp, "w", **meta) as out_dataset:
-                if normalize:
-                    subset[subset == consts.world_clim.elevation_missing_indicator] = np.nan
-                    subset = (subset + (-min)) / (max - min + 1e-8)
-                    subset[np.isnan(subset)] = 0.0
-
                 out_dataset.write(subset)
 
 
@@ -259,8 +266,7 @@ def compute_stats_for_zscore(cfg: PreProcessingConfig) -> None:
     results = []
     for var in tqdm(consts.cruts.temperature_vars + [consts.world_clim.elev]):
         if var == consts.world_clim.elev:
-            elevation = rio.open(to_absolute_path(cfg.world_clim_elevation_fp)).read().astype(np.float32)
-            elevation[elevation == consts.world_clim.elevation_missing_indicator] = np.nan
+            elevation = rio.open(to_absolute_path(cfg.world_clim_elevation_fp)).read()
             compute_stats(var, elevation)
         else:
             ds = xarray.open_dataset(os.path.join(to_absolute_path(cfg.data_dir_cruts), consts.cruts.file_pattern.format(var)))
@@ -482,23 +488,6 @@ def run_world_clim_resize(cfg: PreProcessingConfig) -> None:
         ).compute()
 
 
-def run_world_clim_elevation_resize(cfg: PreProcessingConfig) -> None:
-    """
-    Runs WorldClim elevation resize operation.
-
-    Args:
-        cfg (PreProcessingConfig): The arguments.
-
-    """
-    if cfg.run_world_clim_elevation_resize:
-        logging.info("Running WorldClim pre-processing for variable: elevation")
-        resize_raster_to_target_hr_resolution(
-            file_path=to_absolute_path(cfg.world_clim_elevation_fp),
-            out_dir=to_absolute_path(cfg.out_dir_world_clim),
-            remove_path=to_absolute_path(cfg.data_dir_world_clim),
-        )
-
-
 def run_world_clim_tiling(cfg: PreProcessingConfig) -> None:
     """
     Runs WorldClim tiling operation.
@@ -508,30 +497,27 @@ def run_world_clim_tiling(cfg: PreProcessingConfig) -> None:
 
     """
     if cfg.run_world_clim_tiling:
-        variables = consts.world_clim.variables_wc + [consts.world_clim.elev]
-        for var in variables:
-            files = sorted(
-                glob(
-                    os.path.join(
-                        to_absolute_path(cfg.out_dir_world_clim),
-                        var,
-                        consts.world_clim.resized_dir,
-                        "*.tif",
-                    )
-                )
-            )
-            logging.info(f"WorldClim - Running tile generation. Total files: {len(files)}, variable: {var}")
-            dask.bag.from_sequence(files).map(
-                make_patches,
+        files = sorted(
+            glob(
                 os.path.join(
                     to_absolute_path(cfg.out_dir_world_clim),
-                    var,
-                    consts.world_clim.tiles_dir,
+                    consts.world_clim.resized_dir,
+                    "**",
+                    consts.world_clim.pattern_wc,
                 ),
-                cfg.patch_size,
-                cfg.patch_stride,
-                cfg.normalize_patches,
-            ).compute()
+                recursive=True,
+            )
+        )
+        logging.info(f"WorldClim - Running tile generation. Total files: {len(files)}")
+        dask.bag.from_sequence(files).map(
+            make_patches,
+            os.path.join(
+                to_absolute_path(cfg.out_dir_world_clim),
+                consts.world_clim.tiles_dir,
+            ),
+            cfg.patch_size,
+            cfg.patch_stride,
+        ).compute()
 
 
 def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
@@ -794,13 +780,25 @@ def generate_tavg_raster(tmin_raster_fname: str) -> None:
         f"_{consts.world_clim.tmin}_", f"_{consts.world_clim.tmax}_"
     )
 
-    with rio.open(tmin_raster_fname) as tmin_raster:
-        with rio.open(tmax_raster_fname) as tmax_raster:
-            with rio.open(output_file_name, **tmin_raster.profile, mode="w") as temp_raster:
-                tmin_values = tmin_raster.read()
-                tmax_values = tmax_raster.read()
-                temp_values = (tmax_values + tmin_values) / 2.0
-                temp_raster.write(temp_values)
+    if os.path.exists(output_file_name):
+        logging.warning(f"Conflict! File {output_file_name} already exists. tavg raster will not be generated.")
+        return
+
+    os.makedirs(os.path.dirname(output_file_name), exist_ok=True)
+
+    try:
+        tmin_raster: DatasetReader
+        tmax_raster: DatasetReader
+        tavg_raster: DatasetWriter
+        with rio.open(tmin_raster_fname) as tmin_raster, rio.open(tmax_raster_fname) as tmax_raster, rio.open(
+            output_file_name, **tmin_raster.profile, mode="w"
+        ) as tavg_raster:
+            tmin_values: np.ndarray = tmin_raster.read().astype(float)
+            tmax_values: np.ndarray = tmax_raster.read().astype(float)
+            tavg_values: np.ndarray = (tmax_values + tmin_values) / 2.0
+            tavg_raster.write(tavg_values.astype(np.float32))
+    except Exception as ex:
+        logging.info(f"Generation of tavg raster could not be done due to following error: {ex}")
 
 
 def run_tavg_rasters_generation(cfg: PreProcessingConfig) -> None:
@@ -811,31 +809,14 @@ def run_tavg_rasters_generation(cfg: PreProcessingConfig) -> None:
     """
     if cfg.run_tavg_rasters_generation:
         logging.info("Running tavg raster generation")
-        os.makedirs(
-            os.path.join(
-                to_absolute_path(cfg.out_dir_world_clim),
-                consts.world_clim.tavg,
-                consts.world_clim.resized_dir,
-            ),
-            exist_ok=True,
-        )
 
-        tmin_files = sorted(
-            glob(
-                os.path.join(
-                    to_absolute_path(cfg.out_dir_world_clim),
-                    consts.world_clim.tmin,
-                    consts.world_clim.resized_dir,
-                    "*.tif",
-                )
-            )
+        pattern = os.path.join(
+            to_absolute_path("datasets/pre-processed/world-clim"),
+            consts.world_clim.resized_dir,
+            f"**/*{consts.world_clim.tmin}*.tif",
         )
+        tmin_files = sorted(glob(pattern, recursive=True))
 
         dask.bag.from_sequence(tmin_files).map(generate_tavg_raster).compute()
 
         logging.info("Done with tavg raster generation")
-
-
-def run_tiff_extraction_from_multiband_rasters(cfg: PreProcessingConfig) -> None:
-    # todo
-    return None

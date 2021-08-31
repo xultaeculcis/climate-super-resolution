@@ -225,7 +225,7 @@ def handle_file_extraction(f_name: str, replace_underscore: Optional[bool] = Fal
 
 
 def fix_paths_for_world_clim(world_clim_download_path: str = "downloads/world-clim") -> None:
-    world_clim_extraction_path = os.path.join(world_clim_download_path, "wc2.1")
+    world_clim_extraction_path = os.path.join(world_clim_download_path, consts.datasets_and_preprocessing.extracted, "wc2.1")
     logging.info(f"Fixing folder structure for files in World Clim extraction directory: {world_clim_extraction_path}")
     pattern = os.path.join(world_clim_extraction_path, "**/*.tif")
     files = glob(pattern, recursive=True)

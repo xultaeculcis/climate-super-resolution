@@ -31,7 +31,6 @@ class PreProcessingConfig:
     run_statistics_computation: Optional[bool] = True
     run_world_clim_resize: Optional[bool] = True
     run_world_clim_tiling: Optional[bool] = True
-    run_world_clim_elevation_resize: Optional[bool] = True
     run_train_val_test_split: Optional[bool] = True
     run_extent_extraction: Optional[bool] = True
     run_z_score_stats_computation: Optional[bool] = True
@@ -39,7 +38,6 @@ class PreProcessingConfig:
 
     patch_size: Optional[Tuple[int, int]] = (128, 128)
     patch_stride: Optional[int] = 64
-    normalize_patches: Optional[bool] = False
     n_workers: Optional[int] = 8
     threads_per_worker: Optional[int] = 1
     res_mult_inx: Optional[int] = 2

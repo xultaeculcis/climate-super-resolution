@@ -22,7 +22,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dir",
         type=str,
-        default="/media/xultaeculcis/2TB/datasets/wc/pre-processed-v2",
+        default="/media/xultaeculcis/2TB/datasets/wc/",
     )
     parser.add_argument("--n_workers", type=int, default=8)
     parser.add_argument("--threads_per_worker", type=int, default=16)

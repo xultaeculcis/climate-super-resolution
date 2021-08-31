@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Consts with default values for the World Clim dataset."""
+import numpy as np
 
 elev = "elev"
 tmin = "tmin"
@@ -18,7 +19,14 @@ pattern_wc = "*.tif"
 resized_dir = "resized"
 tiles_dir = "tiles"
 CRS = "EPSG:4326"
+
 elevation_missing_indicator = -32768.0
+scenario_missing_indicator = np.float32(-3.4e38)
+missing_indicators = [
+    elevation_missing_indicator,
+    scenario_missing_indicator,
+]
+target_missing_indicator = np.nan
 
 gcm_BCC_CSM2_MR = "BCC-CSM2-MR"
 gcm_CNRM_CM6_1 = "CNRM-CM6-1"

@@ -11,6 +11,7 @@ train_csv = "train.csv"
 val_csv = "val.csv"
 test_csv = "test.csv"
 tile_file_path = "tile_file_path"
+stage = "stage"
 multiplier = "multiplier"
 
 europe_bbox_lr = ((-16.0, 84.5), (40.5, 33.0))

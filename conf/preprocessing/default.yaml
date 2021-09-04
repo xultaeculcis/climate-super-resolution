@@ -14,9 +14,9 @@ run_world_clim_resize: False
 run_tavg_rasters_generation: False
 run_world_clim_tiling: False
 
-run_statistics_computation: True
-run_z_score_stats_computation: True
-run_min_max_stats_computation: True
+run_statistics_computation: False
+run_z_score_stats_computation: False
+run_min_max_stats_computation: False
 
 run_train_val_test_split: False
 run_extent_extraction: False
@@ -26,6 +26,6 @@ patch_stride: 64
 n_workers: 8
 threads_per_worker: 1
 
-train_years: [1961, 2004]
-val_years: [2005, 2017]
-test_years: [2018, 2019]
+train_years: [1961, 1999]
+val_years: [2000, 2005]
+test_years: [2006, 2020]

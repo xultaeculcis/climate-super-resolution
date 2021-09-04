@@ -26,25 +26,24 @@ class PreProcessingConfig:
     elevation_file: Optional[str] = MISSING
     land_mask_file: Optional[str] = MISSING
 
-    run_cruts_to_tiff: Optional[bool] = True
-    run_tavg_rasters_generation: Optional[bool] = True
-    run_statistics_computation: Optional[bool] = True
-    run_world_clim_resize: Optional[bool] = True
-    run_world_clim_tiling: Optional[bool] = True
+    run_cruts_to_tiff: Optional[bool] = False
+    run_tavg_rasters_generation: Optional[bool] = False
+    run_statistics_computation: Optional[bool] = False
+    run_world_clim_resize: Optional[bool] = False
+    run_world_clim_tiling: Optional[bool] = False
     run_train_val_test_split: Optional[bool] = True
-    run_extent_extraction: Optional[bool] = True
-    run_z_score_stats_computation: Optional[bool] = True
-    run_min_max_stats_computation: Optional[bool] = True
+    run_extent_extraction: Optional[bool] = False
+    run_z_score_stats_computation: Optional[bool] = False
+    run_min_max_stats_computation: Optional[bool] = False
 
     patch_size: Optional[Tuple[int, int]] = (128, 128)
     patch_stride: Optional[int] = 64
     n_workers: Optional[int] = 8
     threads_per_worker: Optional[int] = 1
-    res_mult_inx: Optional[int] = 2
 
-    train_years: Optional[Tuple[int, int]] = (1961, 2004)
-    val_years: Optional[Tuple[int, int]] = (2005, 2017)
-    test_years: Optional[Tuple[int, int]] = (2018, 2019)
+    train_years: Optional[Tuple[int, int]] = (1961, 1999)
+    val_years: Optional[Tuple[int, int]] = (2000, 2005)
+    test_years: Optional[Tuple[int, int]] = (2006, 2020)
 
 
 @dataclass

@@ -11,10 +11,10 @@ prec = "prec"
 variables_wc = [
     tmin,
     tmax,
-    temp,
+    tavg,
     prec,
 ]
-temperature_vars = [tmin, temp, tmax]
+temperature_vars = [tmin, tavg, tmax]
 pattern_wc = "*.tif"
 resized_dir = "resized"
 tiles_dir = "tiles"

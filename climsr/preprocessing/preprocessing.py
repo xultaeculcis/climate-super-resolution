@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 import logging
 import os
+import re
 from glob import glob
 from itertools import product
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import dask.bag
 import numpy as np
@@ -20,6 +21,19 @@ from tqdm import tqdm
 
 import climsr.consts as consts
 from climsr.core.config import PreProcessingConfig
+
+year_pattern = re.compile(r"(\d\d\d\d)")
+month_pattern = re.compile(r"[-_](\d\d)\.")
+
+
+def _year_from_filename(fname: str) -> int:
+    match = re.search(pattern=year_pattern, string=fname)
+    return int(match.group()) if match is not None else -1
+
+
+def _month_from_filename(fname: str) -> int:
+    match = re.search(pattern=month_pattern, string=fname)
+    return int(match.group().replace(".", "").replace("_", "").replace("-", "")) if match is not None else -1
 
 
 def ensure_sub_dirs_exist_cts(out_dir: str) -> None:
@@ -304,7 +318,6 @@ def compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
     def compute_stats(fp):
         with rio.open(fp) as ds:
             arr = ds.read(1)
-            arr[arr == consts.world_clim.elevation_missing_indicator] = 0.0  # handle elevation masked values
             min = np.nanmin(arr)
             max = np.nanmax(arr)
             return min, max
@@ -324,7 +337,7 @@ def compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
             *compute_stats(fp),
         )
 
-    for var in consts.cruts.variables_cts:
+    for var in consts.cruts.temperature_vars:
         logging.info(f"Computing stats for CRU-TS - '{var}'")
         results.extend(
             dask.bag.from_sequence(
@@ -335,8 +348,9 @@ def compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
         )
 
     def _stats_for_wc(fp):
-        year_from_filename = int(os.path.basename(fp).split("-")[0].split("_")[-1]) if var != consts.world_clim.elev else -1
-        month_from_filename = int(os.path.basename(fp).split("-")[1].split(".")[0]) if var != consts.world_clim.elev else -1
+        fname = os.path.basename(fp)
+        year_from_filename = _year_from_filename(fname)
+        month_from_filename = _month_from_filename(fname)
         return (
             "world-clim",
             fp,
@@ -347,24 +361,15 @@ def compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
             *compute_stats(fp),
         )
 
-    for var in consts.world_clim.variables_wc + [consts.world_clim.elev]:
+    for var in consts.world_clim.temperature_vars + [consts.world_clim.elev]:
         logging.info(f"Computing stats for World Clim - '{var}'")
-        results.extend(
-            dask.bag.from_sequence(
-                sorted(
-                    glob(
-                        os.path.join(
-                            to_absolute_path(cfg.out_dir_world_clim),
-                            var,
-                            consts.world_clim.resized_dir,
-                            "*.tif",
-                        )
-                    )
-                )
-            )
-            .map(_stats_for_wc)
-            .compute()
+        pattern = os.path.join(
+            to_absolute_path(cfg.out_dir_world_clim),
+            consts.world_clim.resized_dir,
+            "**",
+            f"*{var}*.tif",
         )
+        results.extend(dask.bag.from_sequence(sorted(glob(pattern, recursive=True))).map(_stats_for_wc).compute())
 
     output_file = os.path.join(to_absolute_path(cfg.dataframe_output_path), "statistics_min_max.csv")
     columns = [
@@ -373,7 +378,7 @@ def compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
         consts.datasets_and_preprocessing.filename,
         consts.datasets_and_preprocessing.variable,
         consts.datasets_and_preprocessing.year,
-        consts.datasets_and_preprocessing.year,
+        consts.datasets_and_preprocessing.month,
         consts.stats.min,
         consts.stats.max,
     ]
@@ -413,8 +418,6 @@ def compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
         if key in consts.world_clim.temperature_vars:
             val[consts.stats.global_min] = wc_global_min
             val[consts.stats.global_max] = wc_global_max
-
-    global_min_max_lookup[consts.world_clim.elev][consts.stats.global_min] = 0.0
 
     for idx, row in df.iterrows():
         var = row[consts.datasets_and_preprocessing.variable]
@@ -528,140 +531,140 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
         cfg (PreProcessingConfig): The arguments.
 
     """
+
+    def _is_future(year: int) -> bool:
+        return year >= 2020
+
+    def generate_possible_tile_paths(var: str) -> List[Tuple[str, str, int, int]]:
+        logging.info(f"Generating possible tile list for variable: {var}")
+
+        original_rasters = sorted(
+            glob(
+                os.path.join(
+                    to_absolute_path(cfg.out_dir_world_clim),
+                    consts.world_clim.resized_dir,
+                    "**",
+                    f"*{var}*.tif",
+                ),
+                recursive=True,
+            )
+        )
+        tile_paths = []
+        for fp in tqdm(original_rasters):
+            files = [
+                (
+                    f"{fp.replace('.tif', '').replace(consts.world_clim.resized_dir, consts.world_clim.tiles_dir)}"
+                    f".{x_offset}.{y_offset}.tif",
+                    fp,
+                    x_offset,
+                    y_offset,
+                )
+                for x_offset, y_offset in offsets
+            ]
+            tile_paths.extend(files)
+
+        return tile_paths
+
+    def assign_single_tile_to_stage(
+        file_path: str,
+        original_file_path,
+        x: int,
+        y: int,
+        var: str,
+    ) -> Union[Tuple[str, str, str, int, int, int, int, str], None]:
+        if not os.path.exists(file_path):
+            return None
+
+        original_filename = os.path.basename(original_file_path)
+        year_from_filename = _year_from_filename(original_filename)
+        month_from_filename = _month_from_filename(original_filename)
+
+        stage_to_assign = ""
+
+        if (train_years_lower_bound <= year_from_filename <= train_years_upper_bound) or _is_future(year_from_filename):
+            stage_to_assign = consts.stages.train
+
+        elif (
+            (val_years_lower_bound <= year_from_filename <= val_years_upper_bound)
+            and x % cfg.patch_size[1] == 0
+            and y % cfg.patch_size[0] == 0
+        ):
+            stage_to_assign = consts.stages.val
+
+        elif (
+            (test_years_lower_bound <= year_from_filename <= test_years_upper_bound)
+            and x % cfg.patch_size[1] == 0
+            and y % cfg.patch_size[0] == 0
+        ):
+            stage_to_assign = consts.stages.test
+
+        elif consts.world_clim.elev in file_path:
+            stage_to_assign = consts.world_clim.elev
+
+        return (
+            file_path,
+            original_filename,
+            var,
+            year_from_filename,
+            month_from_filename,
+            x,
+            y,
+            stage_to_assign,
+        )
+
     if cfg.run_train_val_test_split:
-        variables = consts.world_clim.variables_wc + [consts.world_clim.elev]
-
-        for var in variables:
-            if var != consts.world_clim.elev:
-                logging.info(f"Generating Train/Validation/Test splits for variable: {var}")
-
-            files = sorted(
-                glob(
-                    os.path.join(
-                        to_absolute_path(cfg.out_dir_world_clim),
-                        var,
-                        consts.world_clim.tiles_dir,
-                        "*.tif",
-                    )
+        variables = consts.world_clim.temperature_vars + [consts.world_clim.elev]
+        ncols, nrows = consts.world_clim.target_hr_resolution
+        offsets = np.array(
+            list(
+                product(
+                    range(0, ncols, cfg.patch_stride if cfg.patch_stride else ncols),
+                    range(0, nrows, cfg.patch_stride if cfg.patch_stride else nrows),
                 )
             )
+        )
 
-            train_images = []
-            val_images = []
-            test_images = []
-            elevation_images = []
+        for variable in variables:
+            os.makedirs(os.path.join(to_absolute_path(cfg.dataframe_output_path), variable), exist_ok=True)
+            possible_tiles = generate_possible_tile_paths(variable)
+
+            logging.info(f"Generating Train/Validation/Test splits for variable: {variable}")
 
             train_years_lower_bound, train_years_upper_bound = cfg.train_years
             val_years_lower_bound, val_years_upper_bound = cfg.val_years
             test_years_lower_bound, test_years_upper_bound = cfg.test_years
 
-            os.makedirs(os.path.join(to_absolute_path(cfg.dataframe_output_path), var), exist_ok=True)
+            tile_assignments = [assign_single_tile_to_stage(*tile_metadata, variable) for tile_metadata in tqdm(possible_tiles)]
+            tile_assignments = [ta for ta in tile_assignments if ta is not None]
 
-            for file_path in files:
-                filename = os.path.basename(file_path)
-                x = int(file_path.split(".")[-3])
-                y = int(file_path.split(".")[-2])
-                original_filename = os.path.basename(file_path).replace(f".{x}.{y}.", ".")
-                year_from_filename = int(filename.split("-")[0].split("_")[-1]) if var != consts.world_clim.elev else -1
-                month_from_filename = int(filename.split("-")[1].split(".")[0]) if var != consts.world_clim.elev else -1
+            columns = [
+                consts.datasets_and_preprocessing.tile_file_path,
+                consts.datasets_and_preprocessing.filename,
+                consts.datasets_and_preprocessing.variable,
+                consts.datasets_and_preprocessing.year,
+                consts.datasets_and_preprocessing.month,
+                consts.datasets_and_preprocessing.x,
+                consts.datasets_and_preprocessing.y,
+                consts.datasets_and_preprocessing.stage,
+            ]
+            df = pd.DataFrame.from_records(
+                tile_assignments,
+                columns=columns,
+            )
 
-                if train_years_lower_bound <= year_from_filename <= train_years_upper_bound:
-                    train_images.append(
-                        (
-                            file_path,
-                            original_filename,
-                            var,
-                            year_from_filename,
-                            month_from_filename,
-                            x,
-                            y,
-                        )
-                    )
+            for stage in [consts.stages.train, consts.stages.val, consts.stages.test, consts.world_clim.elev]:
+                stage_images_df = df[df[consts.datasets_and_preprocessing.stage] == stage]
 
-                elif (
-                    (val_years_lower_bound <= year_from_filename <= val_years_upper_bound)
-                    and x % cfg.patch_size[1] == 0
-                    and y % cfg.patch_size[0] == 0
-                ):
-                    val_images.append(
-                        (
-                            file_path,
-                            original_filename,
-                            var,
-                            year_from_filename,
-                            month_from_filename,
-                            x,
-                            y,
-                        )
-                    )
+                if not len(stage_images_df) > 0:
+                    continue
 
-                elif (
-                    (test_years_lower_bound <= year_from_filename <= test_years_upper_bound)
-                    and x % cfg.patch_size[1] == 0
-                    and y % cfg.patch_size[0] == 0
-                ):
-                    test_images.append(
-                        (
-                            file_path,
-                            original_filename,
-                            var,
-                            year_from_filename,
-                            month_from_filename,
-                            x,
-                            y,
-                        )
-                    )
-
-                elif consts.world_clim.elev in file_path:
-                    elevation_images.append((file_path, var, x, y))
-
-            for stage, images in zip(
-                [
-                    consts.stages.train,
-                    consts.stages.val,
-                    consts.stages.test,
-                    consts.world_clim.elev,
-                ],
-                [train_images, val_images, test_images, elevation_images],
-            ):
-                if images:
-                    columns = (
-                        [
-                            consts.datasets_and_preprocessing.file_path,
-                            consts.datasets_and_preprocessing.variable,
-                            consts.datasets_and_preprocessing.x,
-                            consts.datasets_and_preprocessing.y,
-                        ]
-                        if stage == consts.world_clim.elev
-                        else [
-                            consts.datasets_and_preprocessing.tile_file_path,
-                            consts.datasets_and_preprocessing.filename,
-                            consts.datasets_and_preprocessing.variable,
-                            consts.datasets_and_preprocessing.year,
-                            consts.datasets_and_preprocessing.year,
-                            consts.datasets_and_preprocessing.x,
-                            consts.datasets_and_preprocessing.y,
-                        ]
-                    )
-                    df = pd.DataFrame(
-                        images,
-                        columns=columns,
-                    )
-                    df.to_csv(
-                        os.path.join(to_absolute_path(cfg.dataframe_output_path), var, f"{stage}.csv"),
-                        index=False,
-                        header=True,
-                    )
-
-            if var != consts.world_clim.elev:
-                logging.info(
-                    f"Generated Train ({len(train_images)}) / "
-                    f"Validation ({len(val_images)}) / "
-                    f"Test ({len(test_images)}) splits "
-                    f"for variable: {var}"
+                stage_images_df.to_csv(
+                    os.path.join(to_absolute_path(cfg.dataframe_output_path), variable, f"{stage}.csv"),
+                    index=False,
+                    header=True,
                 )
-            else:
-                logging.info(f"({len(elevation_images)}) images for variable: {var}")
+
+                logging.info(f"Generated {len(stage_images_df)} {stage} images for variable: {variable}")
 
 
 def extract_extent_single(

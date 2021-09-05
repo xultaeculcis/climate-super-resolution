@@ -28,7 +28,7 @@ class DataModuleBase(pl.LightningDataModule):
     def val_dataloader(self) -> DataLoader:
         return DataLoader(
             self.ds["val"],
-            batch_size=self.cfg.batch_size,
+            batch_size=self.cfg.validation_batch_size,
             shuffle=False,
             num_workers=self.cfg.num_workers,
             pin_memory=self.cfg.pin_memory,
@@ -39,7 +39,7 @@ class DataModuleBase(pl.LightningDataModule):
             return [
                 DataLoader(
                     test_dataset,
-                    batch_size=self.cfg.batch_size,
+                    batch_size=self.cfg.validation_batch_size,
                     shuffle=False,
                     num_workers=self.cfg.num_workers,
                     pin_memory=self.cfg.pin_memory,
@@ -50,7 +50,7 @@ class DataModuleBase(pl.LightningDataModule):
             return [
                 DataLoader(
                     self.ds["test"][0],
-                    batch_size=self.cfg.batch_size,
+                    batch_size=self.cfg.validation_batch_size,
                     shuffle=False,
                     num_workers=self.cfg.num_workers,
                 )

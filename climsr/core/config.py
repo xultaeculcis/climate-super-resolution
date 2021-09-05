@@ -52,6 +52,7 @@ class SuperResolutionDataConfig:
     world_clim_variable: Optional[str] = consts.world_clim.temp
     generator_type: Optional[str] = consts.models.rcan
     batch_size: Optional[int] = 192
+    validation_batch_size: Optional[int] = 192
     num_workers: Optional[int] = 8
     scale_factor: Optional[int] = 4
     hr_size: Optional[int] = 128

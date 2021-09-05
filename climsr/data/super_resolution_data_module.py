@@ -4,12 +4,12 @@ import os
 from typing import Dict, List, Optional, Tuple, Union
 
 import pandas as pd
-from core.data import DataModuleBase
-from data.sr.climate_dataset import ClimateDataset
 
 import climsr.consts as consts
 from climsr.core.config import SuperResolutionDataConfig
+from climsr.core.data import DataModuleBase
 from climsr.data import normalization
+from climsr.data.sr.climate_dataset import ClimateDataset
 
 logging.basicConfig(level=logging.INFO)
 os.environ["NUMEXPR_MAX_THREADS"] = "16"

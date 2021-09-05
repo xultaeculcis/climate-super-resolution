@@ -5,8 +5,9 @@ from typing import Optional
 import hydra
 import pytorch_lightning as pl
 import torch
-from data.super_resolution_data_module import SuperResolutionDataModule
 from omegaconf import DictConfig
+
+from climsr.data.super_resolution_data_module import SuperResolutionDataModule
 
 
 class Instantiator:

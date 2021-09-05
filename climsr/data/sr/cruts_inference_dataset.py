@@ -4,7 +4,6 @@ from typing import Optional, Tuple
 import numpy as np
 import pandas as pd
 import xarray as xr
-from data.sr.climate_dataset_base import ClimateDatasetBase
 from PIL import Image
 from torchvision import transforms as transforms
 from torchvision.transforms import InterpolationMode
@@ -12,6 +11,7 @@ from torchvision.transforms import InterpolationMode
 import climsr.consts as consts
 from climsr.data import utils as utils
 from climsr.data.normalization import MinMaxScaler, StandardScaler
+from climsr.data.sr.climate_dataset_base import ClimateDatasetBase
 
 
 class CRUTSInferenceDataset(ClimateDatasetBase):

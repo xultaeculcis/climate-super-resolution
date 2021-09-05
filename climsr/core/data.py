@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 from typing import Callable, Dict, List, Optional
 
-import consts as consts
 import pytorch_lightning as pl
-from core.config import SuperResolutionDataConfig
 from torch.utils.data import DataLoader
+
+import climsr.consts as consts
+from climsr.core.config import SuperResolutionDataConfig
 
 default_cfg = SuperResolutionDataConfig()
 

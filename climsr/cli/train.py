@@ -4,7 +4,6 @@ from typing import Any, List, Optional
 
 import hydra
 import pytorch_lightning as pl
-from data.super_resolution_data_module import SuperResolutionDataModule
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import Callback, seed_everything
 from pytorch_lightning.loggers import LightningLoggerBase
@@ -14,6 +13,7 @@ from climsr.core.config import SuperResolutionDataConfig, TaskConfig, TrainerCon
 from climsr.core.instantiator import HydraInstantiator, Instantiator
 from climsr.core.task import TaskSuperResolutionModule
 from climsr.core.utils import set_ignore_warnings
+from climsr.data.super_resolution_data_module import SuperResolutionDataModule
 
 default_sr_dm_config = SuperResolutionDataConfig()
 default_task_config = TaskConfig()

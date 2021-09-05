@@ -18,8 +18,8 @@ from torchvision.transforms import ToTensor
 from torchvision.utils import make_grid
 
 import climsr.consts as consts
+from climsr.consts.datasets_and_preprocessing import world_clim_to_cruts_mapping
 from climsr.data import normalization
-from climsr.preprocessing.variable_mappings import world_clim_to_cruts_mapping
 
 MAX_ITEMS = 88
 

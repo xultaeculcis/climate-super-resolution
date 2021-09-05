@@ -1,6 +1,7 @@
 _target_: climsr.data.super_resolution_data_module.SuperResolutionDataModule
 cfg:
   batch_size: ${training.batch_size}
+  validation_batch_size: ${training.validation_batch_size}
   num_workers: ${training.num_workers}
   pin_memory: True
   data_path: "datasets"

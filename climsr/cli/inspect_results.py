@@ -4,10 +4,10 @@ import logging
 import hydra
 import pandas as pd
 import xarray as xr
-from core.config import ResultInspectionConfig
 from omegaconf import DictConfig, OmegaConf
 
 import climsr.consts as consts
+from climsr.core.config import ResultInspectionConfig
 from climsr.result_inspection.models import CompareStatsResults
 
 logging.basicConfig(level=logging.INFO)

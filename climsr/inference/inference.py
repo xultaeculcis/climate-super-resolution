@@ -10,17 +10,17 @@ import pytorch_lightning as pl
 import rasterio as rio
 import torch
 import xarray as xr
-from core.config import InferenceConfig
-from core.task import TaskSuperResolutionModule
-from data.sr.cruts_inference_dataset import CRUTSInferenceDataset
-from data.sr.geo_tiff_inference_dataset import GeoTiffInferenceDataset
 from matplotlib import pyplot as plt
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
 import climsr.consts as consts
+from climsr.core.config import InferenceConfig
+from climsr.core.task import TaskSuperResolutionModule
 from climsr.data.normalization import MinMaxScaler
+from climsr.data.sr.cruts_inference_dataset import CRUTSInferenceDataset
+from climsr.data.sr.geo_tiff_inference_dataset import GeoTiffInferenceDataset
 
 
 def inference_on_full_images(

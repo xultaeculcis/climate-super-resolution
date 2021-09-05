@@ -26,51 +26,23 @@ year_pattern = re.compile(r"(\d\d\d\d)")
 month_pattern = re.compile(r"[-_](\d\d)\.")
 
 
+def _is_future(year: int) -> bool:
+    return year >= 2020
+
+
 def _year_from_filename(fname: str) -> int:
+    """Extracts year form the World Clim Geo-Tiff filename"""
     match = re.search(pattern=year_pattern, string=fname)
     return int(match.group()) if match is not None else -1
 
 
 def _month_from_filename(fname: str) -> int:
+    """Extracts month form the World Clim Geo-Tiff filename"""
     match = re.search(pattern=month_pattern, string=fname)
     return int(match.group().replace(".", "").replace("_", "").replace("-", "")) if match is not None else -1
 
 
-def ensure_sub_dirs_exist_cts(out_dir: str) -> None:
-    """
-    Ensures, that output dir structure exists for CRU-TS data.
-
-    Args:
-        out_dir (str): Output dir.
-
-    """
-    logging.info("Creating sub-dirs for CRU-TS")
-    for var in consts.cruts.temperature_vars:
-        sub_dir_name = os.path.join(out_dir, consts.cruts.full_res_dir, var)
-        logging.info(f"Creating sub-dir: '{sub_dir_name}'")
-        os.makedirs(sub_dir_name, exist_ok=True)
-
-
-def ensure_sub_dirs_exist_wc(out_dir: str) -> None:
-    """
-    Ensures, that output dir structure exists for World Clim data.
-
-    Args:
-        out_dir (str): Output dir.
-
-    """
-    logging.info("Creating sub-dirs for WorldClim")
-
-    sub_dir_name = os.path.join(out_dir, consts.world_clim.resized_dir)
-    logging.info(f"Creating sub-dir: '{sub_dir_name}'")
-    os.makedirs(sub_dir_name, exist_ok=True)
-
-    sub_dir_name = os.path.join(out_dir, consts.world_clim.tiles_dir)
-    logging.info(f"Creating sub-dir: '{sub_dir_name}'")
-    os.makedirs(sub_dir_name, exist_ok=True)
-
-
-def cruts_as_tiff(variable: str, data_dir: str, out_dir: str, dataframe_output_path: str) -> None:
+def _cruts_as_tiff(variable: str, data_dir: str, out_dir: str, df_output_path: str) -> None:
     """
     Creates a Geo-Tiff file for each time step in the CRU-TS dataset.
 
@@ -78,7 +50,7 @@ def cruts_as_tiff(variable: str, data_dir: str, out_dir: str, dataframe_output_p
         variable (str): The variable name.
         data_dir (str): Data dir.
         out_dir (str): Where to save the Geo-Tiffs.
-        dataframe_output_path (str): Where to save the dataframe with results.
+        df_output_path (str): Where to save the dataframe with results.
 
     """
     fp = consts.cruts.file_pattern.format(variable)
@@ -86,8 +58,8 @@ def cruts_as_tiff(variable: str, data_dir: str, out_dir: str, dataframe_output_p
     out_path = os.path.join(out_dir, consts.cruts.full_res_dir, variable)
     ds = xarray.open_dataset(file_path)
     file_paths = []
-    dataframe_output_path = os.path.join(dataframe_output_path, "cruts")
-    os.makedirs(dataframe_output_path, exist_ok=True)
+    df_output_path = os.path.join(df_output_path, "cruts")
+    os.makedirs(df_output_path, exist_ok=True)
 
     for i in range(ds.dims["time"]):
         # get frame at time index i
@@ -107,11 +79,11 @@ def cruts_as_tiff(variable: str, data_dir: str, out_dir: str, dataframe_output_p
         arr.rio.to_raster(fname)
 
     pd.DataFrame(file_paths, columns=[consts.datasets_and_preprocessing.file_path]).to_csv(
-        os.path.join(dataframe_output_path, f"{variable}.csv"), index=False, header=True
+        os.path.join(df_output_path, f"{variable}.csv"), index=False, header=True
     )
 
 
-def resize_raster_to_target_hr_resolution(
+def _resize_raster_to_target_hr_resolution(
     file_path: str,
     out_dir: str,
     remove_path: Optional[str] = "",
@@ -166,7 +138,7 @@ def resize_raster_to_target_hr_resolution(
                 dataset.write(data)
 
 
-def get_tiles(
+def _get_tiles(
     ds: Any,
     width: Optional[int] = 128,
     height: Optional[int] = 128,
@@ -211,7 +183,7 @@ def get_tiles(
         yield window, transform
 
 
-def make_patches(
+def _make_patches(
     file_path: str,
     out_path: str,
     tile_shape: Optional[Tuple[int, int]] = (128, 128),
@@ -237,7 +209,7 @@ def make_patches(
 
         meta = in_dataset.meta.copy()
 
-        for window, transform in get_tiles(in_dataset, tile_width, tile_height, stride):
+        for window, transform in _get_tiles(in_dataset, tile_width, tile_height, stride):
             meta["transform"] = transform
             meta["dtype"] = np.float32
             meta["width"], meta["height"] = window.width, window.height
@@ -255,7 +227,7 @@ def make_patches(
                 out_dataset.write(subset)
 
 
-def compute_stats_for_zscore(cfg: PreProcessingConfig) -> None:
+def _compute_stats_for_zscore(cfg: PreProcessingConfig) -> None:
     """
     Computes dataset statistics for z-score standardization.
 
@@ -286,7 +258,7 @@ def compute_stats_for_zscore(cfg: PreProcessingConfig) -> None:
             ds = xarray.open_dataset(os.path.join(to_absolute_path(cfg.data_dir_cruts), consts.cruts.file_pattern.format(var)))
             compute_stats(var, ds[var].values)
 
-    output_file = os.path.join(to_absolute_path(cfg.dataframe_output_path), "statistics_zscore.csv")
+    output_file = os.path.join(to_absolute_path(cfg.output_path), "statistics_zscore.csv")
     df = pd.DataFrame(
         results,
         columns=[
@@ -302,7 +274,7 @@ def compute_stats_for_zscore(cfg: PreProcessingConfig) -> None:
     df.to_csv(output_file, header=True, index=False)
 
 
-def compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
+def _compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
     """
     Computes dataset statistics for min max normalization.
 
@@ -371,7 +343,7 @@ def compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
         )
         results.extend(dask.bag.from_sequence(sorted(glob(pattern, recursive=True))).map(_stats_for_wc).compute())
 
-    output_file = os.path.join(to_absolute_path(cfg.dataframe_output_path), "statistics_min_max.csv")
+    output_file = os.path.join(to_absolute_path(cfg.output_path), "statistics_min_max.csv")
     columns = [
         consts.datasets_and_preprocessing.dataset,
         consts.datasets_and_preprocessing.file_path,
@@ -427,6 +399,168 @@ def compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
     df.to_csv(output_file, header=True, index=False)
 
 
+def _generate_tavg_raster(tmin_raster_fname: str) -> None:
+    """
+    Generates tavg raster from tmin and tmax rasters.
+    Args:
+        tmin_raster_fname (str): The filename of the tmin raster.
+    """
+    output_file_name = tmin_raster_fname.replace(f"/{consts.world_clim.tmin}/", f"/{consts.world_clim.tavg}/").replace(
+        f"_{consts.world_clim.tmin}_", f"_{consts.world_clim.tavg}_"
+    )
+    tmax_raster_fname = tmin_raster_fname.replace(f"/{consts.world_clim.tmin}/", f"/{consts.world_clim.tmax}/").replace(
+        f"_{consts.world_clim.tmin}_", f"_{consts.world_clim.tmax}_"
+    )
+
+    if os.path.exists(output_file_name):
+        logging.warning(f"Conflict! File {output_file_name} already exists. tavg raster will not be generated.")
+        return
+
+    os.makedirs(os.path.dirname(output_file_name), exist_ok=True)
+
+    try:
+        tmin_raster: DatasetReader
+        tmax_raster: DatasetReader
+        tavg_raster: DatasetWriter
+        with rio.open(tmin_raster_fname) as tmin_raster, rio.open(tmax_raster_fname) as tmax_raster, rio.open(
+            output_file_name, **tmin_raster.profile, mode="w"
+        ) as tavg_raster:
+            tmin_values: np.ndarray = tmin_raster.read().astype(float)
+            tmax_values: np.ndarray = tmax_raster.read().astype(float)
+            tavg_values: np.ndarray = (tmax_values + tmin_values) / 2.0
+            tavg_raster.write(tavg_values.astype(np.float32))
+    except Exception as ex:
+        logging.info(f"Generation of tavg raster could not be done due to following error: {ex}")
+
+
+def _extract_extent_single(
+    fp: str,
+    bbox: List[Dict[str, Any]],
+    variable: str,
+    extent_out_path: str,
+) -> None:
+    """
+    Extracts polygon extent form a single Geo-Tiff file.
+
+    Args:
+        fp (str): The Geo-Tiff file path.
+        bbox (List[Dict[str, Any]]): The bounding box acceptable by `rasterio.mask()` method.
+        variable (str): The name of the variable.
+        extent_out_path (str): The out file path.
+
+    """
+    filename = os.path.basename(fp)
+
+    with rio.open(fp) as ds:
+        crop, transform = rio.mask.mask(ds, bbox, crop=True)
+        meta = ds.meta
+
+    meta.update(
+        {
+            "height": crop.shape[1],
+            "width": crop.shape[2],
+            "transform": transform,
+        }
+    )
+
+    with rio.open(os.path.join(extent_out_path, variable, filename), "w", **meta) as dest:
+        dest.write(crop)
+
+
+def _extract_extent_cruts(
+    src_dir: str,
+    extent_out_path: str,
+    cruts_variables: List[str],
+    bbox: List[Dict[str, Any]],
+) -> None:
+    """
+    Extracts the polygon extent from the CRU-TS variable Geo-Tiff files.
+
+    Args:
+        src_dir (str): The source Geo-Tiff directory.
+        extent_out_path (str): The extent out path.
+        cruts_variables (List[str]): The CRU-TS variables.
+        bbox (List[Dict[str, Any]]): The bounding box of the extent.
+
+    """
+
+    for var in cruts_variables:
+        logging.info(f"Extracting Europe polygon extents for variable '{var}'")
+        files = sorted(glob(os.path.join(src_dir, var, "*.tif")))
+        os.makedirs(os.path.join(extent_out_path, var), exist_ok=True)
+        dask.bag.from_sequence(files).map(
+            _extract_extent_single,
+            bbox=bbox,
+            variable=var,
+            extent_out_path=extent_out_path,
+        ).compute()
+        logging.info(f"Done for variable '{var}'")
+
+
+def _extract_extent_world_clim(
+    src_dir: str,
+    extent_out_path: str,
+    variables: List[str],
+    bbox: List[Dict[str, Any]],
+) -> None:
+    """
+    Extracts the polygon extent from the World-Clim variable Geo-Tiff files.
+
+    Args:
+        src_dir (str): The source Geo-Tiff directory.
+        extent_out_path (str): The extent out path.
+        variables (List[str]): The CRU-TS variables.
+        bbox (List[Dict[str, Any]]): The bounding box of the extent.
+
+    """
+
+    for var in variables:
+        files = sorted(glob(os.path.join(src_dir, "**", f"*{var}*.tif"), recursive=True))
+        logging.info(f"Extracting Europe polygon extents for variable '{var}'. {len(files)} files to process.")
+        os.makedirs(os.path.join(extent_out_path, var), exist_ok=True)
+        dask.bag.from_sequence(files).map(
+            _extract_extent_single,
+            bbox=bbox,
+            variable=var,
+            extent_out_path=extent_out_path,
+        ).compute()
+        logging.info(f"Done for variable '{var}'")
+
+
+def ensure_sub_dirs_exist_cts(out_dir: str) -> None:
+    """
+    Ensures, that output dir structure exists for CRU-TS data.
+
+    Args:
+        out_dir (str): Output dir.
+
+    """
+    logging.info("Creating sub-dirs for CRU-TS")
+    for var in consts.cruts.temperature_vars:
+        sub_dir_name = os.path.join(out_dir, consts.cruts.full_res_dir, var)
+        logging.info(f"Creating sub-dir: '{sub_dir_name}'")
+        os.makedirs(sub_dir_name, exist_ok=True)
+
+
+def ensure_sub_dirs_exist_wc(out_dir: str) -> None:
+    """
+    Ensures, that output dir structure exists for World Clim data.
+
+    Args:
+        out_dir (str): Output dir.
+
+    """
+    logging.info("Creating sub-dirs for WorldClim")
+
+    sub_dir_name = os.path.join(out_dir, consts.world_clim.resized_dir)
+    logging.info(f"Creating sub-dir: '{sub_dir_name}'")
+    os.makedirs(sub_dir_name, exist_ok=True)
+
+    sub_dir_name = os.path.join(out_dir, consts.world_clim.tiles_dir)
+    logging.info(f"Creating sub-dir: '{sub_dir_name}'")
+    os.makedirs(sub_dir_name, exist_ok=True)
+
+
 def run_cruts_to_tiff(cfg: PreProcessingConfig) -> None:
     """
     Runs CRU-TS transformation from Net CDF to Cloud Optimized Geo-Tiffs.
@@ -439,26 +573,11 @@ def run_cruts_to_tiff(cfg: PreProcessingConfig) -> None:
         logging.info("Running CRU-TS pre-processing - Geo Tiff generation")
 
         dask.bag.from_sequence(consts.cruts.temperature_vars).map(
-            cruts_as_tiff,
+            _cruts_as_tiff,
             to_absolute_path(cfg.data_dir_cruts),
             to_absolute_path(cfg.out_dir_cruts),
-            to_absolute_path(cfg.dataframe_output_path),
+            to_absolute_path(cfg.output_path),
         ).compute()
-
-
-def run_statistics_computation(cfg: PreProcessingConfig) -> None:
-    """
-    Runs CRU-TS and World Clim statistics computation.
-
-    Args:
-        cfg (PreProcessingConfig): The arguments.
-
-    """
-    if cfg.run_statistics_computation:
-        logging.info("Running statistics computation")
-
-        compute_stats_for_zscore(cfg)
-        compute_stats_for_min_max_normalization(cfg)
 
 
 def run_world_clim_resize(cfg: PreProcessingConfig) -> None:
@@ -485,10 +604,31 @@ def run_world_clim_resize(cfg: PreProcessingConfig) -> None:
             f"Total files to process: {len(files)}"
         )
         dask.bag.from_sequence(files, npartitions=1000).map(
-            resize_raster_to_target_hr_resolution,
+            _resize_raster_to_target_hr_resolution,
             to_absolute_path(cfg.out_dir_world_clim),
             to_absolute_path(cfg.data_dir_world_clim),
         ).compute()
+
+
+def run_tavg_rasters_generation(cfg: PreProcessingConfig) -> None:
+    """
+    Runs tavg raster generation from tmin and tmax rasters.
+    Args:
+        cfg (PreProcessingConfig): The arguments.
+    """
+    if cfg.run_tavg_rasters_generation:
+        logging.info("Running tavg raster generation")
+
+        pattern = os.path.join(
+            to_absolute_path("datasets/pre-processed/world-clim"),
+            consts.world_clim.resized_dir,
+            f"**/*{consts.world_clim.tmin}*.tif",
+        )
+        tmin_files = sorted(glob(pattern, recursive=True))
+
+        dask.bag.from_sequence(tmin_files).map(_generate_tavg_raster).compute()
+
+        logging.info("Done with tavg raster generation")
 
 
 def run_world_clim_tiling(cfg: PreProcessingConfig) -> None:
@@ -513,7 +653,7 @@ def run_world_clim_tiling(cfg: PreProcessingConfig) -> None:
         )
         logging.info(f"WorldClim - Running tile generation. Total files: {len(files)}")
         dask.bag.from_sequence(files).map(
-            make_patches,
+            _make_patches,
             os.path.join(
                 to_absolute_path(cfg.out_dir_world_clim),
                 consts.world_clim.tiles_dir,
@@ -521,6 +661,21 @@ def run_world_clim_tiling(cfg: PreProcessingConfig) -> None:
             cfg.patch_size,
             cfg.patch_stride,
         ).compute()
+
+
+def run_statistics_computation(cfg: PreProcessingConfig) -> None:
+    """
+    Runs CRU-TS and World Clim statistics computation.
+
+    Args:
+        cfg (PreProcessingConfig): The arguments.
+
+    """
+    if cfg.run_statistics_computation:
+        logging.info("Running statistics computation")
+
+        _compute_stats_for_zscore(cfg)
+        _compute_stats_for_min_max_normalization(cfg)
 
 
 def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
@@ -532,10 +687,7 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
 
     """
 
-    def _is_future(year: int) -> bool:
-        return year >= 2020
-
-    def generate_possible_tile_paths(var: str) -> List[Tuple[str, str, int, int]]:
+    def _generate_possible_tile_paths(var: str) -> List[Tuple[str, str, int, int]]:
         logging.info(f"Generating possible tile list for variable: {var}")
 
         original_rasters = sorted(
@@ -565,7 +717,7 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
 
         return tile_paths
 
-    def assign_single_tile_to_stage(
+    def _assign_single_tile_to_stage(
         file_path: str,
         original_file_path,
         x: int,
@@ -625,8 +777,8 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
         )
 
         for variable in variables:
-            os.makedirs(os.path.join(to_absolute_path(cfg.dataframe_output_path), variable), exist_ok=True)
-            possible_tiles = generate_possible_tile_paths(variable)
+            os.makedirs(os.path.join(to_absolute_path(cfg.output_path), variable), exist_ok=True)
+            possible_tiles = _generate_possible_tile_paths(variable)
 
             logging.info(f"Generating Train/Validation/Test splits for variable: {variable}")
 
@@ -634,7 +786,7 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
             val_years_lower_bound, val_years_upper_bound = cfg.val_years
             test_years_lower_bound, test_years_upper_bound = cfg.test_years
 
-            tile_assignments = [assign_single_tile_to_stage(*tile_metadata, variable) for tile_metadata in tqdm(possible_tiles)]
+            tile_assignments = [_assign_single_tile_to_stage(*tile_metadata, variable) for tile_metadata in tqdm(possible_tiles)]
             tile_assignments = [ta for ta in tile_assignments if ta is not None]
 
             columns = [
@@ -659,77 +811,12 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
                     continue
 
                 stage_images_df.to_csv(
-                    os.path.join(to_absolute_path(cfg.dataframe_output_path), variable, f"{stage}.csv"),
+                    os.path.join(to_absolute_path(cfg.output_path), variable, f"{stage}.csv"),
                     index=False,
                     header=True,
                 )
 
                 logging.info(f"Generated {len(stage_images_df)} {stage} images for variable: {variable}")
-
-
-def extract_extent_single(
-    fp: str,
-    bbox: List[Dict[str, Any]],
-    variable: str,
-    extent_out_path: str,
-) -> None:
-    """
-    Extracts polygon extent form a single Geo-Tiff file.
-
-    Args:
-        fp (str): The Geo-Tiff file path.
-        bbox (List[Dict[str, Any]]): The bounding box acceptable by `rasterio.mask()` method.
-        variable (str): The name of the variable.
-        extent_out_path (str): The out file path.
-
-    """
-    filename = os.path.basename(fp)
-
-    with rio.open(fp) as ds:
-        crop, transform = rio.mask.mask(ds, bbox, crop=True)
-        meta = ds.meta
-
-    meta.update(
-        {
-            "driver": "GTiff",
-            "height": crop.shape[1],
-            "width": crop.shape[2],
-            "transform": transform,
-        }
-    )
-
-    with rio.open(os.path.join(extent_out_path, variable, filename), "w", **meta) as dest:
-        dest.write(crop)
-
-
-def extract_extent(
-    src_dir: str,
-    extent_out_path: str,
-    cruts_variables: List[str],
-    bbox: List[Dict[str, Any]],
-) -> None:
-    """
-    Extracts the polygon extent from the CRU-TS variable Geo-Tiff files.
-
-    Args:
-        src_dir (str): The source Geo-Tiff directory.
-        extent_out_path (str): The extent out path.
-        cruts_variables (List[str]): The CRU-TS variables.
-        bbox (List[Dict[str, Any]]): The bounding box of the extent.
-
-    """
-
-    for var in cruts_variables:
-        logging.info(f"Extracting Europe polygon extents for variable '{var}'")
-        files = sorted(glob(os.path.join(src_dir, var, "*.tif")))
-        os.makedirs(os.path.join(extent_out_path, var), exist_ok=True)
-        dask.bag.from_sequence(files).map(
-            extract_extent_single,
-            bbox=bbox,
-            variable=var,
-            extent_out_path=extent_out_path,
-        ).compute()
-        logging.info(f"Done for variable '{var}'")
 
 
 def run_cruts_extent_extraction(cfg: PreProcessingConfig) -> None:
@@ -741,85 +828,109 @@ def run_cruts_extent_extraction(cfg: PreProcessingConfig) -> None:
 
     """
 
+    def _assign_single_extent_to_stage(
+        file_path: str,
+        var: str,
+    ) -> Union[Tuple[str, str, str, int, int, str], None]:
+        filename = os.path.basename(file_path)
+        year_from_filename = _year_from_filename(filename)
+        month_from_filename = _month_from_filename(filename)
+
+        stage_to_assign = ""
+
+        if (train_years_lower_bound <= year_from_filename <= train_years_upper_bound) or _is_future(year_from_filename):
+            stage_to_assign = consts.stages.train
+
+        elif val_years_lower_bound <= year_from_filename <= val_years_upper_bound:
+            stage_to_assign = consts.stages.val
+
+        elif test_years_lower_bound <= year_from_filename <= test_years_upper_bound:
+            stage_to_assign = consts.stages.test
+
+        return (
+            file_path,
+            filename,
+            var,
+            year_from_filename,
+            month_from_filename,
+            stage_to_assign,
+        )
+
+    def _train_val_test_split_extent_files() -> None:
+        for var in consts.world_clim.temperature_vars:
+            extent_raster_paths = glob(
+                to_absolute_path(os.path.join(cfg.out_dir_world_clim, consts.cruts.europe_extent, "**", f"*{var}*.tif"))
+            )
+
+            logging.info(
+                f"Generating Train/Validation/Test splits for variable: {var}. " f"{len(extent_raster_paths)} files to process."
+            )
+
+            records = [_assign_single_extent_to_stage(raster_path, var) for raster_path in tqdm(extent_raster_paths)]
+            records = [record for record in records if record is not None]
+            columns = [
+                consts.datasets_and_preprocessing.file_path,
+                consts.datasets_and_preprocessing.filename,
+                consts.datasets_and_preprocessing.variable,
+                consts.datasets_and_preprocessing.year,
+                consts.datasets_and_preprocessing.month,
+                consts.datasets_and_preprocessing.stage,
+            ]
+            df = pd.DataFrame.from_records(records, columns=columns)
+
+            path_to_save = to_absolute_path(
+                os.path.join(
+                    cfg.output_path,
+                    consts.datasets_and_preprocessing.csv_path,
+                    var,
+                )
+            )
+
+            os.makedirs(path_to_save, exist_ok=True)
+
+            for stage in consts.stages.stages:
+                df[df["stage"] == stage].to_csv(
+                    os.path.join(path_to_save, f"{stage}_europe_extent.csv"),
+                    header=True,
+                    index=False,
+                )
+
     if cfg.run_extent_extraction:
         # handle extent dirs
         extent_dir = to_absolute_path(os.path.join(cfg.out_dir_cruts, consts.cruts.europe_extent))
         os.makedirs(os.path.join(extent_dir, consts.batch_items.mask), exist_ok=True)
         os.makedirs(os.path.join(extent_dir, consts.cruts.elev), exist_ok=True)
 
-        logging.info("Extracting polygon extents for Europe.")
-        extract_extent(
+        logging.info("Extracting polygon extents for Europe for CRU-TS files.")
+        _extract_extent_cruts(
             to_absolute_path(os.path.join(cfg.out_dir_cruts, consts.cruts.full_res_dir)),
             extent_dir,
-            consts.cruts.variables_cts,
+            consts.cruts.temperature_vars,
             consts.datasets_and_preprocessing.lr_bbox,
         )
         logging.info("Extracting polygon extents for Europe for land mask file.")
-        extract_extent_single(
+        _extract_extent_single(
             to_absolute_path(cfg.land_mask_file),
             consts.datasets_and_preprocessing.hr_bbox,
             consts.batch_items.mask,
             extent_dir,
         )
         logging.info("Extracting polygon extents for Europe for elevation file.")
-        extract_extent_single(
+        _extract_extent_single(
             to_absolute_path(cfg.elevation_file),
             consts.datasets_and_preprocessing.hr_bbox,
             consts.cruts.elev,
             extent_dir,
         )
-
-
-def generate_tavg_raster(tmin_raster_fname: str) -> None:
-    """
-    Generates tavg raster from tmin and tmax rasters.
-    Args:
-        tmin_raster_fname (str): The filename of the tmin raster.
-    """
-    output_file_name = tmin_raster_fname.replace(f"/{consts.world_clim.tmin}/", f"/{consts.world_clim.tavg}/").replace(
-        f"_{consts.world_clim.tmin}_", f"_{consts.world_clim.tavg}_"
-    )
-    tmax_raster_fname = tmin_raster_fname.replace(f"/{consts.world_clim.tmin}/", f"/{consts.world_clim.tmax}/").replace(
-        f"_{consts.world_clim.tmin}_", f"_{consts.world_clim.tmax}_"
-    )
-
-    if os.path.exists(output_file_name):
-        logging.warning(f"Conflict! File {output_file_name} already exists. tavg raster will not be generated.")
-        return
-
-    os.makedirs(os.path.dirname(output_file_name), exist_ok=True)
-
-    try:
-        tmin_raster: DatasetReader
-        tmax_raster: DatasetReader
-        tavg_raster: DatasetWriter
-        with rio.open(tmin_raster_fname) as tmin_raster, rio.open(tmax_raster_fname) as tmax_raster, rio.open(
-            output_file_name, **tmin_raster.profile, mode="w"
-        ) as tavg_raster:
-            tmin_values: np.ndarray = tmin_raster.read().astype(float)
-            tmax_values: np.ndarray = tmax_raster.read().astype(float)
-            tavg_values: np.ndarray = (tmax_values + tmin_values) / 2.0
-            tavg_raster.write(tavg_values.astype(np.float32))
-    except Exception as ex:
-        logging.info(f"Generation of tavg raster could not be done due to following error: {ex}")
-
-
-def run_tavg_rasters_generation(cfg: PreProcessingConfig) -> None:
-    """
-    Runs tavg raster generation from tmin and tmax rasters.
-    Args:
-        cfg (PreProcessingConfig): The arguments.
-    """
-    if cfg.run_tavg_rasters_generation:
-        logging.info("Running tavg raster generation")
-
-        pattern = os.path.join(
-            to_absolute_path("datasets/pre-processed/world-clim"),
-            consts.world_clim.resized_dir,
-            f"**/*{consts.world_clim.tmin}*.tif",
+        logging.info("Extracting polygon extents for Europe for World-Clim files.")
+        _extract_extent_world_clim(
+            to_absolute_path(os.path.join(cfg.out_dir_world_clim, consts.world_clim.resized_dir)),
+            to_absolute_path(os.path.join(cfg.out_dir_world_clim, consts.cruts.europe_extent)),
+            consts.world_clim.temperature_vars,
+            consts.datasets_and_preprocessing.hr_bbox,
         )
-        tmin_files = sorted(glob(pattern, recursive=True))
-
-        dask.bag.from_sequence(tmin_files).map(generate_tavg_raster).compute()
-
-        logging.info("Done with tavg raster generation")
+        logging.info("Running Train/Val/Test split on Europe extent raster files.")
+        train_years_lower_bound, train_years_upper_bound = cfg.train_years
+        val_years_lower_bound, val_years_upper_bound = cfg.val_years
+        test_years_lower_bound, test_years_upper_bound = cfg.test_years
+        _train_val_test_split_extent_files()

@@ -1,25 +1,25 @@
 data_dir_cruts: ${data_download.download_path}/cruts/extracted
 data_dir_world_clim: ${data_download.download_path}/world-clim/extracted
-out_dir_cruts: "datasets/pre-processed/cruts"
-out_dir_world_clim: "datasets/pre-processed/world-clim"
+output_path: "datasets/pre-processed"
+out_dir_cruts: ${preprocessing.output_path}/cruts
+out_dir_world_clim: ${preprocessing.output_path}/world-clim
 
-world_clim_elevation_fp: ${data_download.download_path}/world-clim/extracted/wc2.1/2.5m/elev/wc2.1_2.5m_elev.tif
-dataframe_output_path: "datasets/pre-processed/"
-elevation_file: "datasets/pre-processed/world-clim/elev/resized/4x/world_clim2.1_2.5m_elev.tif"
-land_mask_file: "datasets/pre-processed/world-clim/tmin/resized/4x/world_clim2.1_2.5m_tmin_1961-01.tif"
+world_clim_elevation_fp: ${data_download.download_path}/world-clim/extracted/wc2.1/2.5m/elev/wc2.1_2.5m_elev.tif # do not modify on your own
+elevation_file: ${preprocessing.out_dir_world_clim}/resized/wc2.1/2.5m/elev/wc2.1_2.5m_elev.tif # do not modify on your own
+land_mask_file: ${preprocessing.out_dir_world_clim}/resized/wc2.1/2.5m/tmin/1960-1969/wc2.1_2.5m_tmin_1961-01.tif # do not modify on your own
 
-run_cruts_to_tiff: False
+run_cruts_to_tiff: True
 
-run_world_clim_resize: False
-run_tavg_rasters_generation: False
-run_world_clim_tiling: False
+run_world_clim_resize: True
+run_tavg_rasters_generation: True
+run_world_clim_tiling: True
 
-run_statistics_computation: False
-run_z_score_stats_computation: False
-run_min_max_stats_computation: False
+run_statistics_computation: True
+run_z_score_stats_computation: True
+run_min_max_stats_computation: True
 
-run_train_val_test_split: False
-run_extent_extraction: False
+run_train_val_test_split: True
+run_extent_extraction: True
 
 patch_size: [128, 128]
 patch_stride: 64

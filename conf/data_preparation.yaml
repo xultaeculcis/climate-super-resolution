@@ -3,5 +3,5 @@ defaults:
   - data_download: default
   - preprocessing: default
 
-run_download: False
+run_download: True
 run_preprocessing: True

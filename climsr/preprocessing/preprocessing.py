@@ -58,7 +58,7 @@ def _cruts_as_tiff(variable: str, data_dir: str, out_dir: str, df_output_path: s
     out_path = os.path.join(out_dir, consts.cruts.full_res_dir, variable)
     ds = xarray.open_dataset(file_path)
     file_paths = []
-    df_output_path = os.path.join(df_output_path, "cruts")
+    df_output_path = os.path.join(df_output_path, consts.datasets_and_preprocessing.csv_path)
     os.makedirs(df_output_path, exist_ok=True)
 
     for i in range(ds.dims["time"]):
@@ -240,7 +240,9 @@ def _compute_stats_for_zscore(cfg: PreProcessingConfig) -> None:
 
     logging.info("Running statistical computation for z-score")
 
-    def compute_stats(var_name, arr):
+    def compute_stats(var_name: str, arr: np.ndarray):
+        for missing_indicator in consts.world_clim.missing_indicators:
+            arr[arr == missing_indicator] = consts.world_clim.target_missing_indicator
         mean = np.nanmean(arr)
         std = np.nanstd(arr)
         min = np.nanmin(arr)
@@ -252,13 +254,21 @@ def _compute_stats_for_zscore(cfg: PreProcessingConfig) -> None:
     results = []
     for var in tqdm(consts.cruts.temperature_vars + [consts.world_clim.elev]):
         if var == consts.world_clim.elev:
-            elevation = rio.open(to_absolute_path(cfg.world_clim_elevation_fp)).read()
+            elevation = rio.open(to_absolute_path(cfg.world_clim_elevation_fp)).read().astype(float)
             compute_stats(var, elevation)
         else:
-            ds = xarray.open_dataset(os.path.join(to_absolute_path(cfg.data_dir_cruts), consts.cruts.file_pattern.format(var)))
+            ds = xarray.open_dataset(
+                os.path.join(
+                    to_absolute_path(cfg.data_dir_cruts),
+                    consts.datasets_and_preprocessing.extracted,
+                    consts.cruts.file_pattern.format(var),
+                )
+            )
             compute_stats(var, ds[var].values)
 
-    output_file = os.path.join(to_absolute_path(cfg.output_path), "statistics_zscore.csv")
+    output_file = os.path.join(
+        to_absolute_path(cfg.output_path), consts.datasets_and_preprocessing.csv_path, "statistics_zscore.csv"
+    )
     df = pd.DataFrame(
         results,
         columns=[
@@ -343,7 +353,9 @@ def _compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
         )
         results.extend(dask.bag.from_sequence(sorted(glob(pattern, recursive=True))).map(_stats_for_wc).compute())
 
-    output_file = os.path.join(to_absolute_path(cfg.output_path), "statistics_min_max.csv")
+    output_file = os.path.join(
+        to_absolute_path(cfg.output_path), consts.datasets_and_preprocessing.csv_path, "statistics_min_max.csv"
+    )
     columns = [
         consts.datasets_and_preprocessing.dataset,
         consts.datasets_and_preprocessing.file_path,

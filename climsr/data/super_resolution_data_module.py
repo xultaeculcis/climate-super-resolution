@@ -89,8 +89,8 @@ class SuperResolutionDataModule(DataModuleBase):
         return pd.read_csv(
             os.path.join(
                 self.cfg.data_path,
+                consts.datasets_and_preprocessing.csv_path,
                 var,
-                self.cfg.world_clim_multiplier,
                 filename,
             )
         )
@@ -100,18 +100,15 @@ class SuperResolutionDataModule(DataModuleBase):
     ) -> Tuple[pd.DataFrame, pd.DataFrame, List[pd.DataFrame], pd.DataFrame, Union[Dict[str, float], None]]:
         elevation_df = self.load_dataframe(consts.world_clim.elev, f"{consts.world_clim.elev}.csv")
 
-        stats_df = pd.read_csv(os.path.join(self.cfg.data_path, "statistics_min_max.csv"))
+        stats_df = pd.read_csv(
+            os.path.join(self.cfg.data_path, consts.datasets_and_preprocessing.csv_path, "statistics_min_max.csv")
+        )
 
         if self.cfg.world_clim_variable == consts.world_clim.temp:
             train_dfs = []
             val_dfs = []
             test_dfs = []
-            variables = [
-                consts.world_clim.tmin,
-                consts.world_clim.tmax,
-                consts.world_clim.temp,
-            ]
-            for var in variables:
+            for var in consts.world_clim.temperature_vars:
                 train_dfs.append(self.load_dataframe(var, consts.datasets_and_preprocessing.train_csv))
                 val_dfs.append(self.load_dataframe(var, consts.datasets_and_preprocessing.val_csv))
                 test_dfs.append(self.load_dataframe(var, consts.datasets_and_preprocessing.test_csv))
@@ -139,7 +136,7 @@ class SuperResolutionDataModule(DataModuleBase):
                 consts.datasets_and_preprocessing.filename,
                 consts.datasets_and_preprocessing.variable,
                 consts.datasets_and_preprocessing.year,
-                consts.datasets_and_preprocessing.year,
+                consts.datasets_and_preprocessing.month,
             ],
         )
 
@@ -151,7 +148,7 @@ class SuperResolutionDataModule(DataModuleBase):
                 consts.datasets_and_preprocessing.filename,
                 consts.datasets_and_preprocessing.variable,
                 consts.datasets_and_preprocessing.year,
-                consts.datasets_and_preprocessing.year,
+                consts.datasets_and_preprocessing.month,
             ],
         )
 
@@ -165,12 +162,16 @@ class SuperResolutionDataModule(DataModuleBase):
                     consts.datasets_and_preprocessing.filename,
                     consts.datasets_and_preprocessing.variable,
                     consts.datasets_and_preprocessing.year,
-                    consts.datasets_and_preprocessing.year,
+                    consts.datasets_and_preprocessing.month,
                 ],
             )
             output_test_dfs.append(test_df)
 
-        return train_df, val_df, output_test_dfs, elevation_df, consts.cruts.statistics
+        standardization_stats_df = pd.read_csv(
+            os.path.join(self.cfg.data_path, consts.datasets_and_preprocessing.csv_path, "statistics_zscore.csv")
+        )
+
+        return train_df, val_df, output_test_dfs, elevation_df, standardization_stats_df
 
     @property
     def model_data_kwargs(self) -> Dict:

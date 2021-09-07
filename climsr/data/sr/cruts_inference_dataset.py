@@ -28,8 +28,6 @@ class CRUTSInferenceDataset(ClimateDatasetBase):
         normalize_range: Optional[Tuple[float, float]] = (0.0, 1.0),
     ):
         super().__init__(
-            elevation_file=elevation_file,
-            land_mask_file=land_mask_file,
             generator_type=generator_type,
             variable=utils.get_variable_from_ds_fp(ds_path),
             scaling_factor=scaling_factor,
@@ -40,6 +38,8 @@ class CRUTSInferenceDataset(ClimateDatasetBase):
         )
 
         self.ds = xr.open_dataset(ds_path)
+        self.elevation_file = elevation_file
+        self.land_mask_file = land_mask_file
 
         if self.standardize:
             self.scaler = StandardScaler(

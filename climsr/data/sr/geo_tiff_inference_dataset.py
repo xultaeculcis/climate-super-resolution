@@ -36,8 +36,6 @@ class GeoTiffInferenceDataset(ClimateDatasetBase):
         use_global_min_max: Optional[bool] = True,
     ):
         super().__init__(
-            elevation_file=elevation_file,
-            land_mask_file=land_mask_file,
             generator_type=generator_type,
             variable=variable,
             scaling_factor=scaling_factor,
@@ -53,6 +51,8 @@ class GeoTiffInferenceDataset(ClimateDatasetBase):
         self.use_elevation = use_elevation
         self.use_mask_as_3rd_channel = use_mask_as_3rd_channel
         self.use_global_min_max = use_global_min_max
+        self.elevation_file = elevation_file
+        self.land_mask_file = land_mask_file
 
         if self.standardize:
             self.scaler = StandardScaler(

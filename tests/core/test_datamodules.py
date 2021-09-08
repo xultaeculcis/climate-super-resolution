@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
+import os
+from pathlib import Path
+
 import climsr.consts as consts
 from climsr.core.config import SuperResolutionDataConfig
 from climsr.data.super_resolution_data_module import SuperResolutionDataModule
 
-cfg = SuperResolutionDataConfig(
-    data_path="../../datasets/pre-processed",
-)
+cfg = SuperResolutionDataConfig(data_path=os.path.join(str(Path(__file__).parent.parent), "data/dummy_data/"))
 dm = SuperResolutionDataModule(cfg)
 dm.setup()
 

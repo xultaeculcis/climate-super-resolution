@@ -18,7 +18,7 @@ var = "tmp"
 root_dir = str(Path(__file__).parent.parent.parent)
 data_dir = os.path.join(root_dir, "datasets/pre-processed")
 
-df = pd.read_csv(os.path.join(data_dir, "csv/statistics_min_max.csv"))
+df = pd.read_feather(os.path.join(data_dir, "feather/statistics_min_max.feather"))
 df = df[(df[consts.datasets_and_preprocessing.dataset] == "cru-ts") & (df[consts.datasets_and_preprocessing.variable] == var)]
 tiff_dir = os.path.join(data_dir, f"cruts/europe-extent/{var}")
 elevation_file = os.path.join(data_dir, "cruts/europe-extent/elevation/wc2.1_2.5m_elev.tif")

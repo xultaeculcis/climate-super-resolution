@@ -86,10 +86,10 @@ class SuperResolutionDataModule(DataModuleBase):
         ]
 
     def load_dataframe(self, var, filename) -> pd.DataFrame:
-        return pd.read_csv(
+        return pd.read_feather(
             os.path.join(
                 self.cfg.data_path,
-                consts.datasets_and_preprocessing.csv_path,
+                consts.datasets_and_preprocessing.feather_path,
                 var,
                 filename,
             )
@@ -98,10 +98,10 @@ class SuperResolutionDataModule(DataModuleBase):
     def load_data(
         self,
     ) -> Tuple[pd.DataFrame, pd.DataFrame, List[pd.DataFrame], pd.DataFrame, Union[Dict[str, float], None]]:
-        elevation_df = self.load_dataframe(consts.world_clim.elev, f"{consts.world_clim.elev}.csv")
+        elevation_df = self.load_dataframe(consts.world_clim.elev, f"{consts.world_clim.elev}.feather")
 
-        stats_df = pd.read_csv(
-            os.path.join(self.cfg.data_path, consts.datasets_and_preprocessing.csv_path, "statistics_min_max.csv")
+        stats_df = pd.read_feather(
+            os.path.join(self.cfg.data_path, consts.datasets_and_preprocessing.feather_path, "statistics_min_max.feather")
         )
 
         if self.cfg.world_clim_variable == consts.world_clim.temp:
@@ -109,22 +109,22 @@ class SuperResolutionDataModule(DataModuleBase):
             val_dfs = []
             test_dfs = []
             for var in consts.world_clim.temperature_vars:
-                train_dfs.append(self.load_dataframe(var, consts.datasets_and_preprocessing.train_csv))
-                val_dfs.append(self.load_dataframe(var, consts.datasets_and_preprocessing.val_csv))
-                test_dfs.append(self.load_dataframe(var, consts.datasets_and_preprocessing.test_csv))
+                train_dfs.append(self.load_dataframe(var, consts.datasets_and_preprocessing.train_feather))
+                val_dfs.append(self.load_dataframe(var, consts.datasets_and_preprocessing.val_feather))
+                test_dfs.append(self.load_dataframe(var, consts.datasets_and_preprocessing.test_feather))
 
             train_df = pd.concat(train_dfs)
             val_df = pd.concat(val_dfs)
         else:
             train_df = self.load_dataframe(
                 self.cfg.world_clim_variable,
-                consts.datasets_and_preprocessing.train_csv,
+                consts.datasets_and_preprocessing.train_feather,
             )
-            val_df = self.load_dataframe(self.cfg.world_clim_variable, consts.datasets_and_preprocessing.val_csv)
+            val_df = self.load_dataframe(self.cfg.world_clim_variable, consts.datasets_and_preprocessing.val_feather)
             test_dfs = [
                 self.load_dataframe(
                     self.cfg.world_clim_variable,
-                    consts.datasets_and_preprocessing.test_csv,
+                    consts.datasets_and_preprocessing.test_feather,
                 )
             ]
 
@@ -167,8 +167,8 @@ class SuperResolutionDataModule(DataModuleBase):
             )
             output_test_dfs.append(test_df)
 
-        standardization_stats_df = pd.read_csv(
-            os.path.join(self.cfg.data_path, consts.datasets_and_preprocessing.csv_path, "statistics_zscore.csv")
+        standardization_stats_df = pd.read_feather(
+            os.path.join(self.cfg.data_path, consts.datasets_and_preprocessing.feather_path, "statistics_zscore.feather")
         )
 
         return train_df, val_df, output_test_dfs, elevation_df, standardization_stats_df

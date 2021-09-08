@@ -58,7 +58,7 @@ def _cruts_as_tiff(variable: str, data_dir: str, out_dir: str, df_output_path: s
     out_path = os.path.join(out_dir, consts.cruts.full_res_dir, variable)
     ds = xarray.open_dataset(file_path)
     file_paths = []
-    df_output_path = os.path.join(df_output_path, consts.datasets_and_preprocessing.csv_path)
+    df_output_path = os.path.join(df_output_path, consts.datasets_and_preprocessing.feather_path)
     os.makedirs(df_output_path, exist_ok=True)
 
     for i in range(ds.dims["time"]):
@@ -78,8 +78,8 @@ def _cruts_as_tiff(variable: str, data_dir: str, out_dir: str, df_output_path: s
         # Write as Cloud Optimized GeoTIFF
         arr.rio.to_raster(fname)
 
-    pd.DataFrame(file_paths, columns=[consts.datasets_and_preprocessing.file_path]).to_csv(
-        os.path.join(df_output_path, f"{variable}.csv"), index=False, header=True
+    pd.DataFrame(file_paths, columns=[consts.datasets_and_preprocessing.file_path]).to_feather(
+        os.path.join(df_output_path, f"{variable}.feather"), index=False, header=True
     )
 
 
@@ -267,7 +267,7 @@ def _compute_stats_for_zscore(cfg: PreProcessingConfig) -> None:
             compute_stats(var, ds[var].values)
 
     output_file = os.path.join(
-        to_absolute_path(cfg.output_path), consts.datasets_and_preprocessing.csv_path, "statistics_zscore.csv"
+        to_absolute_path(cfg.output_path), consts.datasets_and_preprocessing.feather_path, "statistics_zscore.feather"
     )
     df = pd.DataFrame(
         results,
@@ -281,7 +281,7 @@ def _compute_stats_for_zscore(cfg: PreProcessingConfig) -> None:
             consts.stats.normalized_max,
         ],
     )
-    df.to_csv(output_file, header=True, index=False)
+    df.to_feather(output_file, header=True, index=False)
 
 
 def _compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
@@ -354,7 +354,7 @@ def _compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
         results.extend(dask.bag.from_sequence(sorted(glob(pattern, recursive=True))).map(_stats_for_wc).compute())
 
     output_file = os.path.join(
-        to_absolute_path(cfg.output_path), consts.datasets_and_preprocessing.csv_path, "statistics_min_max.csv"
+        to_absolute_path(cfg.output_path), consts.datasets_and_preprocessing.feather_path, "statistics_min_max.feather"
     )
     columns = [
         consts.datasets_and_preprocessing.dataset,
@@ -408,7 +408,7 @@ def _compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
         df.loc[idx, consts.stats.global_min] = global_min_max_lookup[var][consts.stats.global_min]
         df.loc[idx, consts.stats.global_max] = global_min_max_lookup[var][consts.stats.global_max]
 
-    df.to_csv(output_file, header=True, index=False)
+    df.to_feather(output_file, header=True, index=False)
 
 
 def _generate_tavg_raster(tmin_raster_fname: str) -> None:
@@ -822,8 +822,8 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
                 if not len(stage_images_df) > 0:
                     continue
 
-                stage_images_df.to_csv(
-                    os.path.join(to_absolute_path(cfg.output_path), variable, f"{stage}.csv"),
+                stage_images_df.to_feather(
+                    os.path.join(to_absolute_path(cfg.output_path), variable, f"{stage}.feather"),
                     index=False,
                     header=True,
                 )
@@ -893,7 +893,7 @@ def run_cruts_extent_extraction(cfg: PreProcessingConfig) -> None:
             path_to_save = to_absolute_path(
                 os.path.join(
                     cfg.output_path,
-                    consts.datasets_and_preprocessing.csv_path,
+                    consts.datasets_and_preprocessing.feather_path,
                     var,
                 )
             )
@@ -901,8 +901,8 @@ def run_cruts_extent_extraction(cfg: PreProcessingConfig) -> None:
             os.makedirs(path_to_save, exist_ok=True)
 
             for stage in consts.stages.stages:
-                df[df["stage"] == stage].to_csv(
-                    os.path.join(path_to_save, f"{stage}_europe_extent.csv"),
+                df[df["stage"] == stage].to_feather(
+                    os.path.join(path_to_save, f"{stage}_europe_extent.feather"),
                     header=True,
                     index=False,
                 )

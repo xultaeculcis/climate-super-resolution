@@ -117,7 +117,7 @@ def run_inference(cfg: Union[InferenceConfig, DictConfig], cruts_variables: List
         logging.info(f"Running inference for variable: {var}")
         logging.info(f"Running inference with model: {model_file}")
 
-        min_max_lookup = pd.read_csv(cfg.min_max_lookup)
+        min_max_lookup = pd.read_feather(cfg.min_max_lookup)
         min_max_lookup = min_max_lookup[
             (min_max_lookup[consts.datasets_and_preprocessing.dataset] == "cru-ts")
             & (min_max_lookup[consts.datasets_and_preprocessing.variable] == var)

@@ -54,7 +54,7 @@ cruts_variable: "tmp" # Select null if you want to run in a loop for all variabl
 scaling_factor: 4
 normalize: True
 normalization_range: [-1.0, 1.0]
-min_max_lookup: "./datasets/statistics_min_max.csv"
+min_max_lookup: "./datasets/statistics_min_max.feather"
 
 # Run steps
 run_inference: True

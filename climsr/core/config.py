@@ -154,4 +154,4 @@ class InferenceConfig:
 class ResultInspectionConfig:
     ds_temp_nn_path: Optional[str] = MISSING
     ds_temp_cru_path: Optional[str] = MISSING
-    peaks_csv: Optional[str] = MISSING
+    peaks_feather: Optional[str] = MISSING

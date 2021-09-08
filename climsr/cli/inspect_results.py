@@ -67,7 +67,7 @@ def main(cfg: ResultInspectionConfig) -> None:
     logging.info(OmegaConf.to_yaml(cfg))
     ds_temp_nn = xr.open_dataset(cfg.ds_temp_nn_path)
     ds_temp_cru = xr.open_dataset(cfg.ds_temp_cru_path)
-    peaks = pd.read_csv(cfg.peaks_csv)
+    peaks = pd.read_feather(cfg.peaks_feather)
     run(ds_temp_nn, ds_temp_cru, peaks)
 
 

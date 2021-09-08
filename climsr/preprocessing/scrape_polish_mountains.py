@@ -34,7 +34,7 @@ def scrape_url1():
         records,
         columns=["mountain_range", "mountain_peak_name", "lat", "lon", "altitude"],
     )
-    df.to_csv("../../datasets/mountain_peaks.csv", index=False, header=True)
+    df.to_feather("../../datasets/mountain_peaks.feather", index=False, header=True)
 
 
 if __name__ == "__main__":

@@ -182,7 +182,7 @@ class ClimateDataset(ClimateDatasetBase):
         self, img_hr: np.ndarray, img_elev: np.ndarray, mask: np.ndarray, original_image: np.ndarray, min: float, max: float
     ) -> Dict[str, Union[Tensor, list]]:
         img_lr = self.resize(image=img_hr)["image"]
-        img_sr_cubic = self.to_tensor(self.upscale_cubic(img_lr))
+        img_sr_cubic = self.to_tensor(self.upscale_cubic(image=img_lr)["image"])
 
         (
             img_lr,

@@ -24,6 +24,7 @@ class SuperResolutionDataModule(DataModuleBase):
         assert cfg.hr_size % cfg.scale_factor == 0
 
         self.cfg = cfg
+        self.ds = dict()
 
     def setup(self, stage: Optional[str] = None) -> None:
         train_df, val_df, test_dfs, elevation_df, standardize_stats = self.load_data()

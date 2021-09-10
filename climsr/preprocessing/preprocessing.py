@@ -267,7 +267,10 @@ def _compute_stats_for_zscore(cfg: PreProcessingConfig) -> None:
             compute_stats(var, ds[var].values)
 
     output_file = os.path.join(
-        to_absolute_path(cfg.output_path), consts.datasets_and_preprocessing.feather_path, "statistics_zscore.feather"
+        to_absolute_path(cfg.output_path),
+        consts.datasets_and_preprocessing.preprocessing_output_path,
+        consts.datasets_and_preprocessing.feather_path,
+        consts.datasets_and_preprocessing.zscore_stats_filename,
     )
     df = pd.DataFrame(
         results,
@@ -354,7 +357,10 @@ def _compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
         results.extend(dask.bag.from_sequence(sorted(glob(pattern, recursive=True))).map(_stats_for_wc).compute())
 
     output_file = os.path.join(
-        to_absolute_path(cfg.output_path), consts.datasets_and_preprocessing.feather_path, "statistics_min_max.feather"
+        to_absolute_path(cfg.output_path),
+        consts.datasets_and_preprocessing.preprocessing_output_path,
+        consts.datasets_and_preprocessing.feather_path,
+        consts.datasets_and_preprocessing.min_max_stats_filename,
     )
     columns = [
         consts.datasets_and_preprocessing.dataset,
@@ -588,7 +594,10 @@ def run_cruts_to_tiff(cfg: PreProcessingConfig) -> None:
             _cruts_as_tiff,
             to_absolute_path(cfg.data_dir_cruts),
             to_absolute_path(cfg.out_dir_cruts),
-            to_absolute_path(cfg.output_path),
+            os.path.join(
+                to_absolute_path(cfg.output_path),
+                consts.datasets_and_preprocessing.preprocessing_output_path,
+            ),
         ).compute()
 
 
@@ -789,7 +798,12 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
         )
 
         for variable in variables:
-            os.makedirs(os.path.join(to_absolute_path(cfg.output_path), variable), exist_ok=True)
+            os.makedirs(
+                os.path.join(
+                    to_absolute_path(cfg.output_path), consts.datasets_and_preprocessing.preprocessing_output_path, variable
+                ),
+                exist_ok=True,
+            )
             possible_tiles = _generate_possible_tile_paths(variable)
 
             logging.info(f"Generating Train/Validation/Test splits for variable: {variable}")
@@ -823,7 +837,12 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
                     continue
 
                 stage_images_df.to_feather(
-                    os.path.join(to_absolute_path(cfg.output_path), variable, f"{stage}.feather"),
+                    os.path.join(
+                        to_absolute_path(cfg.output_path),
+                        consts.datasets_and_preprocessing.preprocessing_output_path,
+                        variable,
+                        f"{stage}.feather",
+                    ),
                     index=False,
                     header=True,
                 )
@@ -893,6 +912,7 @@ def run_cruts_extent_extraction(cfg: PreProcessingConfig) -> None:
             path_to_save = to_absolute_path(
                 os.path.join(
                     cfg.output_path,
+                    consts.datasets_and_preprocessing.preprocessing_output_path,
                     consts.datasets_and_preprocessing.feather_path,
                     var,
                 )

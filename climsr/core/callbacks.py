@@ -7,6 +7,7 @@ from typing import Any, List, Optional, Tuple
 
 import matplotlib
 import numpy as np
+import pandas as pd
 import torch
 from matplotlib import pyplot as plt
 from PIL import Image
@@ -18,7 +19,7 @@ from torchvision.transforms import ToTensor
 from torchvision.utils import make_grid
 
 import climsr.consts as consts
-from climsr.consts.datasets_and_preprocessing import world_clim_to_cruts_mapping
+from climsr.core.task import TaskSuperResolutionModule
 from climsr.data import normalization
 
 MAX_ITEMS = 88
@@ -40,10 +41,9 @@ class LogImagesCallback(Callback):
         self.use_elevation = use_elevation
         self.standardize = normalization_method == normalization.zscore
         self.world_clim_variable = world_clim_variable
-        self.stats = consts.cruts.statistics[world_clim_to_cruts_mapping[self.world_clim_variable]]
         self.normalization_range = normalization_range
 
-    def on_validation_end(self, trainer: Trainer, pl_module: LightningModule) -> None:
+    def on_validation_end(self, trainer: Trainer, pl_module: TaskSuperResolutionModule) -> None:
         """Log a single batch of images from the validation set to monitor image quality progress."""
         if isinstance(pl_module.logger, DummyLogger):
             return
@@ -94,11 +94,12 @@ class LogImagesCallback(Callback):
                 img_dir=img_dir,
                 current_epoch=pl_module.current_epoch,
                 global_step=pl_module.global_step,
+                stats=pl_module.stats,
             )
 
     def _log_images(
         self,
-        pl_module: LightningModule,
+        pl_module: TaskSuperResolutionModule,
         img_dir: str,
         names: List[str],
         tensors: List[Tensor],
@@ -113,13 +114,13 @@ class LogImagesCallback(Callback):
 
             if name == consts.batch_items.elevation:
                 value_range = (
-                    consts.cruts.statistics[consts.cruts.elev][consts.stats.normalized_min],
-                    consts.cruts.statistics[consts.cruts.elev][consts.stats.normalized_max],
+                    pl_module.stats.at[consts.cruts.elev, consts.stats.normalized_min],
+                    pl_module.stats.at[consts.cruts.elev, consts.stats.normalized_max],
                 )
             else:
                 value_range = (
-                    self.stats[consts.stats.normalized_min],
-                    self.stats[consts.stats.normalized_max],
+                    pl_module.stats.at[self.world_clim_variable, consts.stats.normalized_min],
+                    pl_module.stats.at[self.world_clim_variable, consts.stats.normalized_max],
                 )
 
             self._save_tensor_batch_as_image(
@@ -196,6 +197,7 @@ class LogImagesCallback(Callback):
         img_dir: str,
         current_epoch: int,
         global_step: int,
+        stats: pd.DataFrame,
         items: Optional[int] = 16,
     ) -> None:
         """
@@ -276,8 +278,8 @@ class LogImagesCallback(Callback):
             axes[i][0].imshow(
                 hr_arr[i],
                 cmap=cmap,
-                vmin=self.stats[consts.stats.normalized_min] if self.standardize else self.normalization_range[0],
-                vmax=self.stats[consts.stats.normalized_max] if self.standardize else self.normalization_range[1],
+                vmin=stats.at[consts.stats.normalized_min] if self.standardize else self.normalization_range[0],
+                vmax=stats[consts.stats.normalized_max] if self.standardize else self.normalization_range[1],
             )
             axes[i][0].set_xlabel("MAE/RMSE")
 
@@ -290,8 +292,16 @@ class LogImagesCallback(Callback):
                 axes[i][offset + idx].imshow(
                     arr[i],
                     cmap=cmap,
-                    vmin=self.stats[consts.stats.normalized_min] if self.standardize else self.normalization_range[0],
-                    vmax=self.stats[consts.stats.normalized_max] if self.standardize else self.normalization_range[1],
+                    vmin=(
+                        stats.at[self.world_clim_variable, consts.stats.normalized_min]
+                        if self.standardize
+                        else self.normalization_range[0]
+                    ),
+                    vmax=(
+                        stats.at[self.world_clim_variable, consts.stats.normalized_max]
+                        if self.standardize
+                        else self.normalization_range[1]
+                    ),
                 )
                 mae_value = maes[idx][i]
                 rmse_value = rmses[idx][i]

@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
+import os
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
+import pandas as pd
 import pytorch_lightning as pl
 import torch
 from pytorch_lightning.utilities import rank_zero_info
@@ -13,7 +15,7 @@ import climsr.consts as consts
 from climsr.core.config import DiscriminatorConfig, GeneratorConfig, OptimizerConfig, SchedulerConfig
 from climsr.core.instantiator import Instantiator
 from climsr.data import normalization
-from climsr.data.normalization import MinMaxScaler, StandardScaler
+from climsr.data.normalization import MinMaxScaler, Scaler, StandardScaler
 from climsr.task.metrics import MetricsResult, MetricsSimple
 
 
@@ -116,18 +118,35 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
         # loss
         self.loss = torch.nn.MSELoss() if self.hparams.generator == consts.models.srcnn else torch.nn.L1Loss()
 
-        # standardization
-        self.stats = consts.cruts.statistics[
-            consts.datasets_and_preprocessing.world_clim_to_cruts_mapping[self.hparams.world_clim_variable]
-        ]
-        self.scaler = (
+        # normalization
+        self.stats, self.scaler = self._configure_scaler()
+
+    def _configure_scaler(self) -> Tuple[pd.DataFrame, Scaler]:
+        stats = pd.read_feather(
+            os.path.join(
+                self.hparams.data_path,
+                consts.datasets_and_preprocessing.preprocessing_output_path,
+                consts.datasets_and_preprocessing.feather_path,
+                consts.datasets_and_preprocessing.zscore_stats_filename,
+            )
+        ).set_index(consts.datasets_and_preprocessing.variable, drop=True)
+
+        scaler = (
             StandardScaler(
-                self.stats[consts.stats.mean],
-                self.stats[consts.stats.std],
+                mean=stats.at[
+                    consts.datasets_and_preprocessing.world_clim_to_cruts_mapping[self.hparams.world_clim_variable],
+                    consts.stats.mean,
+                ],
+                std=stats.at[
+                    consts.datasets_and_preprocessing.world_clim_to_cruts_mapping[self.hparams.world_clim_variable],
+                    consts.stats.std,
+                ],
             )
             if self.hparams.normalization_method == normalization.zscore
             else MinMaxScaler(feature_range=self.hparams.normalization_range)
         )
+
+        return stats, scaler
 
     def configure_optimizers(
         self,

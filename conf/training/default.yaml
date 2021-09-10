@@ -7,4 +7,4 @@ run_test_after_fit: True
 batch_size: 192
 validation_batch_size: 192
 num_workers: 8
-lr_find_only: False
+lr_find_only: True

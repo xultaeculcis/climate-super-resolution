@@ -1,6 +1,6 @@
 data_dir_cruts: ${data_download.download_path}/cruts/extracted
 data_dir_world_clim: ${data_download.download_path}/world-clim/extracted
-output_path: "datasets/pre-processed"
+output_path: "datasets"
 out_dir_cruts: ${preprocessing.output_path}/cruts
 out_dir_world_clim: ${preprocessing.output_path}/world-clim
 

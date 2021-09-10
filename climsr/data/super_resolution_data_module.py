@@ -4,6 +4,7 @@ import os
 from typing import Dict, List, Optional, Tuple, Union
 
 import pandas as pd
+from hydra.utils import to_absolute_path
 
 import climsr.consts as consts
 from climsr.core.config import SuperResolutionDataConfig
@@ -86,10 +87,11 @@ class SuperResolutionDataModule(DataModuleBase):
             for test_df in test_dfs
         ]
 
-    def load_dataframe(self, var, filename) -> pd.DataFrame:
+    def load_dataframe(self, var: str, filename: str) -> pd.DataFrame:
         return pd.read_feather(
             os.path.join(
-                self.cfg.data_path,
+                to_absolute_path(self.cfg.data_path),
+                consts.datasets_and_preprocessing.preprocessing_output_path,
                 consts.datasets_and_preprocessing.feather_path,
                 var,
                 filename,
@@ -102,7 +104,12 @@ class SuperResolutionDataModule(DataModuleBase):
         elevation_df = self.load_dataframe(consts.world_clim.elev, f"{consts.world_clim.elev}.feather")
 
         stats_df = pd.read_feather(
-            os.path.join(self.cfg.data_path, consts.datasets_and_preprocessing.feather_path, "statistics_min_max.feather")
+            os.path.join(
+                to_absolute_path(self.cfg.data_path),
+                consts.datasets_and_preprocessing.preprocessing_output_path,
+                consts.datasets_and_preprocessing.feather_path,
+                consts.datasets_and_preprocessing.min_max_stats_filename,
+            )
         )
 
         if self.cfg.world_clim_variable == consts.world_clim.temp:
@@ -169,7 +176,12 @@ class SuperResolutionDataModule(DataModuleBase):
             output_test_dfs.append(test_df)
 
         standardization_stats_df = pd.read_feather(
-            os.path.join(self.cfg.data_path, consts.datasets_and_preprocessing.feather_path, "statistics_zscore.feather")
+            os.path.join(
+                to_absolute_path(self.cfg.data_path),
+                consts.datasets_and_preprocessing.preprocessing_output_path,
+                consts.datasets_and_preprocessing.feather_path,
+                consts.datasets_and_preprocessing.zscore_stats_filename,
+            )
         )
 
         return train_df, val_df, output_test_dfs, elevation_df, standardization_stats_df
@@ -182,6 +194,7 @@ class SuperResolutionDataModule(DataModuleBase):
         Returns: Dict of args
         """
         return {
+            "data_path": to_absolute_path(self.cfg.data_path),
             "world_clim_variable": self.cfg.world_clim_variable,
             "normalization_method": self.cfg.normalization_method,
             "normalization_range": self.cfg.normalization_range,

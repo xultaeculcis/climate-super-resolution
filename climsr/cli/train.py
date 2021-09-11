@@ -86,10 +86,15 @@ def run(
 def main(cfg: DictConfig) -> None:
     # Reproducibility
     if "seed" in cfg.training:
-        seed_everything(cfg.training.seed, workers=True)
+        seed_everything(cfg.training.seed)
 
     rank_zero_info(OmegaConf.to_yaml(cfg))
     instantiator = HydraInstantiator()
+
+    task_cfg = cfg.get("task")
+    task_cfg.generator = cfg.get("generator")
+    task_cfg.optimizers = cfg.get("optimizers")
+    task_cfg.schedulers = cfg.get("schedulers")
 
     run(
         instantiator,
@@ -97,7 +102,7 @@ def main(cfg: DictConfig) -> None:
         run_test_after_fit=cfg.get("training").get("run_test_after_fit"),
         lr_find_only=cfg.get("training").get("lr_find_only"),
         datamodule_cfg=cfg.get("datamodule"),
-        task_cfg=cfg.get("task"),
+        task_cfg=task_cfg,
         trainer_cfg=cfg.get("trainer"),
         logger_cfgs=cfg.get("logger"),
         callback_cfgs=cfg.get("callbacks"),

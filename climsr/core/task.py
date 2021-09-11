@@ -101,8 +101,8 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
     def __init__(
         self,
         generator: GeneratorConfig,
-        optimizers: List[OptimizerConfig],
-        schedulers: List[SchedulerConfig],
+        optimizers: Dict[str, OptimizerConfig],
+        schedulers: Dict[str, SchedulerConfig],
         discriminator: Optional[DiscriminatorConfig] = None,
         instantiator: Optional[Instantiator] = None,
         **kwargs,
@@ -113,7 +113,13 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
         super().__init__(generator=instantiator.instantiate(generator), discriminator=instantiator.instantiate(discriminator))
 
         # store parameters
-        self.save_hyperparameters()
+        self.save_hyperparameters(
+            "generator",
+            "optimizers",
+            "schedulers",
+            "generator",
+            *kwargs.keys(),
+        )
 
         # loss
         self.loss = torch.nn.MSELoss() if self.hparams.generator == consts.models.srcnn else torch.nn.L1Loss()
@@ -160,27 +166,46 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
         # compute_warmup needs the datamodule to be available when `self.num_training_steps`
         # is called that is why this is done here and not in the __init__
         num_training_steps, num_warmup_steps = self.compute_warmup(
-            num_training_steps=getattr(self.scheduler_cfgs[0], "num_training_steps", None),
-            num_warmup_steps=getattr(self.scheduler_cfgs[0], "num_warmup_steps", None),
+            num_training_steps=getattr(self.scheduler_cfgs[consts.training.generator_scheduler_key], "num_training_steps", -1),
+            num_warmup_steps=getattr(self.scheduler_cfgs[consts.training.generator_scheduler_key], "num_warmup_steps", None),
         )
-        for scheduler_cfg in self.scheduler_cfgs:
-            scheduler_cfg.num_training_steps = num_training_steps
-            scheduler_cfg.num_warmup_steps = num_warmup_steps
+        for key in self.scheduler_cfgs.keys():
+            if self.scheduler_cfgs[key] is not None:
+                self.scheduler_cfgs[key].num_training_steps = num_training_steps
+                self.scheduler_cfgs[key].num_warmup_steps = num_warmup_steps
 
-        rank_zero_info(f"Inferring number of training steps, set to {self.scheduler_cfgs[0].num_training_steps}")
-        rank_zero_info(f"Inferring number of warmup steps from ratio, set to {self.scheduler_cfgs[0].num_warmup_steps}")
+        rank_zero_info(
+            "Inferring number of training steps, set to "
+            f"{self.scheduler_cfgs[consts.training.generator_scheduler_key].num_training_steps}"
+        )
+        rank_zero_info(
+            "Inferring number of warmup steps from ratio, set to "
+            f"{self.scheduler_cfgs[consts.training.generator_scheduler_key].num_warmup_steps}"
+        )
 
         self.optimizers = []
         self.schedulers = []
 
-        generator_optimizer = self.instantiator.optimizer(self.generator, self.optimizer_cfgs[0])
+        generator_optimizer = self.instantiator.optimizer(
+            self.generator, self.optimizer_cfgs[consts.training.generator_optimizer_key]
+        )
         self.optimizers.append(generator_optimizer)
-        self.schedulers.append(self.instantiator.scheduler(self.scheduler_cfgs[0], generator_optimizer))
+        self.schedulers.append(
+            self.instantiator.scheduler(self.scheduler_cfgs[consts.training.generator_scheduler_key], generator_optimizer)
+        )
 
-        if len(self.optimizer_cfgs) == 2:
-            discriminator_optimizer = self.instantiator.optimizer(self.generator, self.optimizer_cfgs[1])
+        if self.optimizer_cfgs[consts.training.discriminator_optimizer_key] is not None:
+            discriminator_optimizer = self.instantiator.optimizer(
+                self.discriminator,
+                self.optimizer_cfgs[consts.training.discriminator_optimizer_key],
+            )
             self.optimizers.append(discriminator_optimizer)
-            self.schedulers.append(self.instantiator.scheduler(self.scheduler_cfgs[1], discriminator_optimizer))
+            self.schedulers.append(
+                self.instantiator.scheduler(
+                    self.scheduler_cfgs[consts.training.discriminator_scheduler_key],
+                    discriminator_optimizer,
+                )
+            )
 
         return super().configure_optimizers()
 
@@ -192,7 +217,7 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
         self.instantiator = checkpoint.get("instantiator")
 
     def forward(self, x: Tensor, elevation: Tensor = None, mask: Tensor = None) -> Tensor:
-        if self.hparams.generator == consts.models.srcnn:
+        if self.hparams.generator_type == consts.models.srcnn:
             return self.generator(x)
         else:
             return self.generator(x, elevation, mask)

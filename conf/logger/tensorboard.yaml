@@ -2,7 +2,7 @@
 
 tensorboard:
   _target_: pytorch_lightning.loggers.tensorboard.TensorBoardLogger
-  save_dir: "logs/"
+  save_dir: "logs"
   name: "climsr"
   version: null
   log_graph: False

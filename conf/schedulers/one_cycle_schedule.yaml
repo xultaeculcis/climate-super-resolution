@@ -1,8 +1,7 @@
-one_cycle_schedule:
-  _target_: torch.optim.lr_scheduler.OneCycleLR
-  max_lr: ${training.lr}
-  num_training_steps: -1
-  epochs: ${trainer.max_epochs}
-  pct_start: 0.03
-  div_factor: 2
-  final_div_factor: 100
+_target_: torch.optim.lr_scheduler.OneCycleLR
+max_lr: ${training.lr}
+num_training_steps: -1
+epochs: ${trainer.max_epochs}
+pct_start: 0.03
+div_factor: 2
+final_div_factor: 100

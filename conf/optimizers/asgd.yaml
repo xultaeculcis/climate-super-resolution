@@ -1,3 +1,2 @@
-asgd:
-  _target_: torch.optim.ASGD
-  lr: ${training.lr}
+_target_: torch.optim.ASGD
+lr: ${training.lr}

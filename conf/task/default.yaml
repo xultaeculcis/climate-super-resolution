@@ -1,9 +1,9 @@
 _recursive_: false
 _target_: climsr.core.task.TaskSuperResolutionModule
 
-generator: ${generator}
-discriminator: ${discriminator}
-optimizers: ${optimizers}
-schedulers: ${schedulers}
+generator: null
+discriminator: null
+optimizers: null
+schedulers: null
 
 initial_hp_metric_val: 5e-3

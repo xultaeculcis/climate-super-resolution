@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 from omegaconf import MISSING
 
@@ -97,8 +97,8 @@ class DiscriminatorConfig:
 @dataclass
 class TaskConfig:
     generator: GeneratorConfig = None
-    optimizers: List[OptimizerConfig] = None
-    schedulers: List[SchedulerConfig] = None
+    optimizers: Dict[str, OptimizerConfig] = None
+    schedulers: Dict[str, SchedulerConfig] = None
     discriminator: DiscriminatorConfig = None
     initial_hp_metric_val: float = 5e-3
 

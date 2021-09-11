@@ -2,20 +2,28 @@ name: climsr
 channels:
   - conda-forge
   - defaults
+  - nvidia
+  - pytorch
 dependencies:
   - python=3.8
-  - geopandas=0.9.0
-  - dask=2021.4.0
-  - xarray=0.17.01
-  - rioxarray=0.3.1
-  - cartopy=0.18.0
-  - datacube=1.8.3
-  - rasterio=1.2.2
-  - netCDF4=1.5.6
+  - pytorch
+  - torchvision
+  - torchaudio
+  - cudatoolkit=11.1
+  - geopandas
+  - dask
+  - xarray
+  - rioxarray
+  - cartopy
+  - datacube
+  - rasterio
+  - netCDF4
   - pip
   - pip:
       - jupyterlab==3.0.14
       - scikit-learn==0.24.1
+      - pytorch-lightning==1.4.6
+      - albumentations==1.0.3
       - transformers==4.10.2
       - pyarrow==5.0.0
       - seaborn==0.11.1

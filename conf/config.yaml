@@ -1,4 +1,5 @@
 defaults:
+  - _self_
   - task: gan_training
   - callbacks:
       - early_stopping
@@ -8,10 +9,11 @@ defaults:
   - discriminator: ???
   - logger: tensorboard
   - generator: ???
-  - optimizers: ???
-  - schedulers: ???
+  - optimizers: default
+  - schedulers: default
   - trainer: default
   - training: default
+  - hydra: default
 
   - experiment: rcan_final
 

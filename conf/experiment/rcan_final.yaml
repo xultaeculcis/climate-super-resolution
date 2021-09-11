@@ -1,14 +1,14 @@
 # @package _global_
 defaults:
+  - /optimizers@optimizers.generator_optimizer: adam
+  - /optimizers@optimizers.discriminator_optimizer: null
+  - /schedulers@schedulers.generator_scheduler: cosine_schedule_with_warmup
+  - /schedulers@schedulers.discriminator_scheduler: null
   - override /task: generator_pre_training
   - override /datamodule: super_resolution_data_module
   - override /training: default
   - override /generator: rcan
   - override /discriminator: null
-  - override /optimizers:
-    - adam
-  - override /schedulers:
-    - cosine_schedule_with_warmup
   - override /trainer: default
 
 training:

@@ -1,5 +1,4 @@
-cosine_schedule_with_warmup:
-  _target_: transformers.get_cosine_schedule_with_warmup
-  num_training_steps: -1  # -1 specifies to infer number of training steps
-  num_warmup_steps: 0.05  # float values determines percentage of training steps to use as warmup
-  num_cycles: 0.5
+_target_: transformers.get_cosine_schedule_with_warmup
+num_training_steps: -1  # -1 specifies to infer number of training steps
+num_warmup_steps: 0.05  # float values determines percentage of training steps to use as warmup
+num_cycles: 0.5

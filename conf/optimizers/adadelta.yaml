@@ -1,3 +1,2 @@
-adadelta:
-  _target_: torch.optim.Adadelta
-  lr: ${training.lr}
+_target_: torch.optim.Adadelta
+lr: ${training.lr}

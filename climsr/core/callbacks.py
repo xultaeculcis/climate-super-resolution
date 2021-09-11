@@ -69,7 +69,7 @@ class LogImagesCallback(Callback):
 
             sr = pl_module(lr, elev, mask_tensor)
 
-            img_dir = os.path.join(pl_module.logger.log_dir, "images")
+            img_dir = os.path.join(pl_module.logger.experiment[0].log_dir, "images")
 
             # run only on first epoch
             if pl_module.current_epoch == 0 and pl_module.global_step == 0:

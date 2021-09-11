@@ -3,8 +3,8 @@ model_checkpoint:
   monitor: "val/denormalized_rmse" # name of the logged metric which determines when model is improving
   mode: "min" # can be "max" or "min"
   save_top_k: 100 # save k best models (determined by above metric)
-  save_last: null # additionaly always save model from last epoch
+  save_last: null # additionally, always save model from last epoch
   verbose: False
-  dirpath: "model_weights/"
-  filename: "epoch_{epoch:03d}"
+  dirpath: "outputs/model_weights"
+  filename: "epoch_{epoch:03d}_{step:05d}.ckpt"
   auto_insert_metric_name: True

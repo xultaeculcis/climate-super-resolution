@@ -6,5 +6,5 @@ seed: 42
 run_test_after_fit: True
 batch_size: 192
 validation_batch_size: 192
-num_workers: 8
-lr_find_only: True
+num_workers: 4
+lr_find_only: False

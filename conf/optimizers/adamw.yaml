@@ -1,4 +1,4 @@
 adamw:
   _target_: torch.optim.AdamW
   lr: ${training.lr}
-  weight_decay: 0.001
+  weight_decay: 1e-4

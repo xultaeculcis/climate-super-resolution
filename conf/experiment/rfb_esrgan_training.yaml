@@ -9,8 +9,8 @@ defaults:
     - adam
     - adam
   - override /schedulers:
-    - one_cycle_schedule
-    - one_cycle_schedule
+    - cosine_schedule_with_warmup
+    - cosine_schedule_with_warmup
   - override /trainer: default
 
 training:

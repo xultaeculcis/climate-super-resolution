@@ -5,3 +5,5 @@ generator: ${generator}
 discriminator: ${discriminator}
 optimizers: ${optimizers}
 schedulers: ${schedulers}
+
+initial_hp_metric_val: 5e-3

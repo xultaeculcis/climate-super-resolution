@@ -12,7 +12,7 @@ from pytorch_lightning.utilities.distributed import rank_zero_info
 from climsr.core.config import SuperResolutionDataConfig, TaskConfig, TrainerConfig
 from climsr.core.instantiator import HydraInstantiator, Instantiator
 from climsr.core.task import TaskSuperResolutionModule
-from climsr.core.utils import set_ignore_warnings
+from climsr.core.utils import set_gpu_power_limit_if_needed, set_ignore_warnings
 from climsr.data.super_resolution_data_module import SuperResolutionDataModule
 
 default_sr_dm_config = SuperResolutionDataConfig()
@@ -33,6 +33,9 @@ def run(
 ) -> None:
     if ignore_warnings:
         set_ignore_warnings()
+
+    # Limit RTX 3090 power draw if possible to stabilize PSU usage
+    set_gpu_power_limit_if_needed()
 
     # Init data module
     data_module: SuperResolutionDataModule = instantiator.data_module(datamodule_cfg)

@@ -160,15 +160,15 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
         # compute_warmup needs the datamodule to be available when `self.num_training_steps`
         # is called that is why this is done here and not in the __init__
         num_training_steps, num_warmup_steps = self.compute_warmup(
-            num_training_steps=self.scheduler_cfgs[0].num_training_steps,
-            num_warmup_steps=getattr(self.scheduler_cfg, "num_warmup_steps", None),
+            num_training_steps=getattr(self.scheduler_cfgs[0], "num_training_steps", None),
+            num_warmup_steps=getattr(self.scheduler_cfgs[0], "num_warmup_steps", None),
         )
         for scheduler_cfg in self.scheduler_cfgs:
             scheduler_cfg.num_training_steps = num_training_steps
             scheduler_cfg.num_warmup_steps = num_warmup_steps
 
-        rank_zero_info(f"Inferring number of training steps, set to {self.scheduler_cfg.num_training_steps}")
-        rank_zero_info(f"Inferring number of warmup steps from ratio, set to {self.scheduler_cfg.num_warmup_steps}")
+        rank_zero_info(f"Inferring number of training steps, set to {self.scheduler_cfgs[0].num_training_steps}")
+        rank_zero_info(f"Inferring number of warmup steps from ratio, set to {self.scheduler_cfgs[0].num_warmup_steps}")
 
         self.optimizers = []
         self.schedulers = []
@@ -298,9 +298,11 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
         Returns (MetricsSimple): A dataclass with metrics: L1_Loss, PSNR, SSIM, MAE, MSE, RMSE.
 
         """
+        hr = hr.to(sr.dtype)
+
         loss = self.loss(sr, hr)
         psnr_score = psnr(sr, hr)
-        ssim_score = ssim(sr, hr.half() if self.hparams.precision == 16 else hr)
+        ssim_score = ssim(sr, hr)
         mae = mean_absolute_error(sr, hr)
         mse = mean_squared_error(sr, hr)
         rmse = torch.sqrt(mse)

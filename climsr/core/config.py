@@ -68,7 +68,7 @@ class SuperResolutionDataConfig:
 @dataclass
 class OptimizerConfig:
     lr: float = 1e-3
-    weight_decay: float = 0.0
+    weight_decay: float = 1e-4
 
 
 @dataclass
@@ -100,6 +100,7 @@ class TaskConfig:
     optimizers: List[OptimizerConfig] = None
     schedulers: List[SchedulerConfig] = None
     discriminator: DiscriminatorConfig = None
+    initial_hp_metric_val: float = 5e-3
 
 
 @dataclass

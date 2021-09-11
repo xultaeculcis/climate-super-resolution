@@ -16,6 +16,7 @@ dependencies:
   - pip:
       - jupyterlab==3.0.14
       - scikit-learn==0.24.1
+      - transformers==4.10.2
       - pyarrow==5.0.0
       - seaborn==0.11.1
       - isort==5.8.0

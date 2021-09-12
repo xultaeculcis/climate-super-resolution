@@ -2,22 +2,23 @@
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
+import torch
 
 minmax = "minmax"
 zscore = "zscore"
 
 
 class Scaler:
-    def _normalize(self, *args, **kwargs) -> np.ndarray:
+    def _normalize(self, *args, **kwargs) -> Union[np.ndarray, torch.Tensor]:
         pass
 
-    def _denormalize(self, *args, **kwargs) -> np.ndarray:
+    def _denormalize(self, *args, **kwargs) -> Union[np.ndarray, torch.Tensor]:
         pass
 
-    def normalize(self, *args, **kwargs) -> np.ndarray:
+    def normalize(self, *args, **kwargs) -> Union[np.ndarray, torch.Tensor]:
         return self._normalize(*args, **kwargs)
 
-    def denormalize(self, *args, **kwargs) -> np.ndarray:
+    def denormalize(self, *args, **kwargs) -> Union[np.ndarray, torch.Tensor]:
         return self._denormalize(*args, **kwargs)
 
 
@@ -39,7 +40,7 @@ class MinMaxScaler(Scaler):
         min: Optional[float] = None,
         max: Optional[float] = None,
         missing_indicator: Optional[float] = None,
-    ) -> np.ndarray:
+    ) -> Union[np.ndarray, torch.Tensor]:
         out_arr = arr.copy()
         if missing_indicator:
             out_arr[arr == missing_indicator] = np.nan
@@ -64,7 +65,7 @@ class MinMaxScaler(Scaler):
         arr: np.ndarray,
         min: float,
         max: float,
-    ) -> np.ndarray:
+    ) -> Union[np.ndarray, torch.Tensor]:
         data_range = max - min
         scale = (self.b - self.a) / (data_range + self.eps)
         min_ = self.a - min * scale
@@ -92,7 +93,7 @@ class StandardScaler(Scaler):
         self.missing_indicator = missing_indicator
         self.nan_substitution = nan_substitution
 
-    def _normalize(self, arr: np.ndarray) -> np.array:
+    def _normalize(self, arr: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
         if self.missing_indicator:
             arr[arr == self.missing_indicator] = np.nan
 
@@ -103,5 +104,5 @@ class StandardScaler(Scaler):
 
         return out_arr.astype(np.float32)
 
-    def _denormalize(self, arr: np.ndarray) -> np.array:
+    def _denormalize(self, arr: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Tensor]:
         return (arr * self.std) + self.mean

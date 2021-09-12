@@ -2,7 +2,6 @@
 import os
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 import torch
@@ -10,14 +9,23 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.utilities import rank_zero_info
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
 from torch import Tensor
-from torchmetrics.functional import mean_absolute_error, mean_squared_error, psnr, ssim
+from torch.nn import L1Loss, MSELoss
+from torchmetrics import (
+    PSNR,
+    SSIM,
+    MeanAbsoluteError,
+    MeanAbsolutePercentageError,
+    MeanSquaredError,
+    R2Score,
+    SymmetricMeanAbsolutePercentageError,
+)
 
 import climsr.consts as consts
 from climsr.core.config import DiscriminatorConfig, GeneratorConfig, OptimizerConfig, SchedulerConfig
 from climsr.core.instantiator import Instantiator
 from climsr.data import normalization
 from climsr.data.normalization import MinMaxScaler, Scaler, StandardScaler
-from climsr.metrics.models import MetricsResult, MetricsSimple
+from climsr.metrics.regression_accuracy import RegressionAccuracy
 
 
 class LitSuperResolutionModule(pl.LightningModule):
@@ -83,6 +91,7 @@ class LitSuperResolutionModule(pl.LightningModule):
         return num_training_steps, num_warmup_steps
 
     def setup(self, stage: Optional[str] = None) -> None:
+        rank_zero_info(f"Running LitModule setup for stage: {stage}")
         self.configure_metrics(stage)
 
     def configure_metrics(self, stage: str) -> Optional[Any]:
@@ -122,8 +131,11 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
             *kwargs.keys(),
         )
 
+        # metrics placeholder
+        self.metrics = {}
+
         # loss
-        self.loss = torch.nn.MSELoss() if self.hparams.generator == consts.models.srcnn else torch.nn.L1Loss()
+        self.loss = MSELoss() if self.hparams.generator == consts.models.srcnn else L1Loss()
 
         # normalization
         self.stats, self.scaler = self._configure_scaler()
@@ -244,102 +256,98 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
 
         return hr, sr
 
-    def common_val_test_step(self, batch: Any) -> "MetricsResult":
+    def common_val_test_step(self, batch: Any, prefix: Optional[str] = consts.stages.val) -> Tensor:
         """
         Rus common validation and test steps.
 
         Args:
             batch (Any): The batch of data.
+            prefix (Optional[str]): The prefix for metrics grouping.
 
-        Returns (MetricsResult): The MetricsResult.
+        Returns (Tensor): The loss.
 
         """
         original = batch[consts.batch_items.original_data]
-        mask = batch[consts.batch_items.mask_np].cpu().numpy()
-        max_vals = batch[consts.batch_items.max].cpu().numpy()
-        min_vals = batch[consts.batch_items.min].cpu().numpy()
+        mask = batch[consts.batch_items.mask]
+        max_vals = batch[consts.batch_items.max]
+        min_vals = batch[consts.batch_items.min]
 
         hr, sr = self.common_step(batch)
 
-        metrics = self.compute_metrics_common(hr, sr)
-
-        denormalized_mae = []
-        denormalized_mse = []
-        denormalized_rmse = []
-        denormalized_r2 = []
-
-        original = original.squeeze(1).cpu().numpy()
-        squeezed_sr = sr.squeeze(1).cpu().numpy()
-
-        for i in range(squeezed_sr.shape[0]):
-            # to numpy
-            i_original = original[i]
-            i_sr = squeezed_sr[i]
-
-            # denormalize/destandardize
-            i_sr = (
-                self.scaler.denormalize(i_sr)
-                if self.hparams.normalization_method == normalization.zscore
-                else self.scaler.denormalize(i_sr, min_vals[i], max_vals[i])
-            )
-
-            # ocean mask
-            i_sr[mask[i]] = 0.0
-            i_original[mask[i]] = 0.0
-
-            # compute metrics
-            diff = i_sr - i_original
-            denormalized_mae.append(np.absolute(diff).mean())
-            denormalized_mse.append((diff ** 2).mean())
-            denormalized_rmse.append(np.sqrt(denormalized_mse[-1]))
-            denormalized_r2.append(1 - (np.sum(diff ** 2) / (np.sum((i_original - np.mean(i_original)) ** 2) + 1e-8)))
-
-        denormalized_mae = np.mean(denormalized_mae)
-        denormalized_mse = np.mean(denormalized_mse)
-        denormalized_rmse = np.mean(denormalized_rmse)
-        denormalized_r2 = np.mean(denormalized_r2)
-
-        return MetricsResult(
-            denormalized_mae=denormalized_mae,
-            denormalized_mse=denormalized_mse,
-            denormalized_rmse=denormalized_rmse,
-            denormalized_r2=denormalized_r2,
-            pixel_level_loss=metrics.pixel_level_loss,
-            mae=metrics.mae,
-            mse=metrics.mse,
-            psnr=metrics.psnr,
-            rmse=metrics.rmse,
-            ssim=metrics.ssim,
-            sr=sr,
+        # denormalize/destandardize
+        sr = (
+            self.scaler.denormalize(sr)
+            if self.hparams.normalization_method == normalization.zscore
+            else self.scaler.denormalize(sr, min_vals[0], max_vals[0])  # we can use 0'th elements since they are the same
         )
 
-    def compute_metrics_common(self, hr: Tensor, sr: Tensor) -> "MetricsSimple":
+        sr[mask.long()] = 0.0
+        original[mask.long()] = 0.0
+
+        metric_dict = self.compute_metrics(sr, hr, mode=prefix)
+        loss = self.loss(sr, hr)
+        self.log_dict(metric_dict, prog_bar=True, on_step=False, on_epoch=True)
+        self.log(f"{prefix}/loss", loss, prog_bar=True, sync_dist=True)
+
+        return loss
+
+    def configure_metrics(self, stage: str) -> None:
+        if stage == "fit":
+            return
+
+        self.acc_at_0_1 = RegressionAccuracy(eps=0.1)
+        self.acc_at_0_25 = RegressionAccuracy(eps=0.25)
+        self.acc_at_0_5 = RegressionAccuracy(eps=0.5)
+        self.acc_at_0_75 = RegressionAccuracy(eps=0.75)
+        self.acc_at_1 = RegressionAccuracy(eps=1.0)
+        self.acc_at_1_25 = RegressionAccuracy(eps=1.25)
+        self.acc_at_1_5 = RegressionAccuracy(eps=1.5)
+        self.acc_at_2 = RegressionAccuracy(eps=2.0)
+        self.psnr = PSNR()
+        self.ssim = SSIM()
+        self.mae = MeanAbsoluteError()
+        self.mse = MeanSquaredError()
+        self.rmse = MeanSquaredError(squared=False)
+        self.mape = MeanAbsolutePercentageError()
+        self.smape = SymmetricMeanAbsolutePercentageError()
+        self.r2 = R2Score()
+        self.metrics = {
+            "acc@0.1": self.acc_at_0_1,
+            "acc@0.25": self.acc_at_0_25,
+            "acc@0.5": self.acc_at_0_5,
+            "acc@0.75": self.acc_at_0_75,
+            "acc@1": self.acc_at_1,
+            "acc@01.25": self.acc_at_1_25,
+            "acc@1.5": self.acc_at_1_5,
+            "acc@2": self.acc_at_2,
+            "psnr": self.psnr,
+            "ssim": self.ssim,
+            "mae": self.mae,
+            "mse": self.mse,
+            "rmse": self.rmse,
+            "mape": self.mape,
+            "smape": self.smape,
+            "r2": self.r2,
+        }
+
+    def compute_metrics(self, hr: Tensor, sr: Tensor, mode: Optional[str] = "val") -> Dict[str, torch.Tensor]:
         """
         Common step to compute all of the metrics.
 
         Args:
             hr (Tensor): The ground truth HR image.
             sr (Tensor): The hallucinated SR image.
+            mode (Optional[str]): The optional mode. "val" by default.
 
-        Returns (MetricsSimple): A dataclass with metrics: L1_Loss, PSNR, SSIM, MAE, MSE, RMSE.
+        Returns (Dict[str, torch.Tensor]): A dictionary with metrics.
 
         """
         hr = hr.to(sr.dtype)
-
-        loss = self.loss(sr, hr)
-        psnr_score = psnr(sr, hr)
-        ssim_score = ssim(sr, hr)
-        mae = mean_absolute_error(sr, hr)
-        mse = mean_squared_error(sr, hr)
-        rmse = torch.sqrt(mse)
-
-        return MetricsSimple(
-            pixel_level_loss=loss,
-            psnr=psnr_score,
-            ssim=ssim_score,
-            mae=mae,
-            mse=mse,
-            rmse=rmse,
+        return dict(
+            [
+                (f"{mode}/{k}", metric(sr, hr)) if k != "r2" else (f"{mode}/{k}", metric(torch.flatten(sr), torch.flatten(hr)))
+                for k, metric in self.metrics.items()
+            ]
         )
 
     def on_train_start(self):

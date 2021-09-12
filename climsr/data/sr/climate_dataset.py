@@ -92,7 +92,7 @@ class ClimateDataset(ClimateDatasetBase):
         img_elev: Tensor,
         img_elev_lr: Tensor,
         mask_tensor: Tensor,
-        mask: np.ndarray,
+        mask_np: np.ndarray,
     ) -> Tensor:
         """Concatenates elevation and/or mask data as 2nd and/or 3rd channel to LR raster data."""
 
@@ -106,7 +106,7 @@ class ClimateDataset(ClimateDatasetBase):
             if self.generator_type == consts.models.srcnn:
                 img_lr = torch.cat([img_lr, mask_tensor], dim=0)
             else:
-                mask_lr = self.to_tensor(self.resize(image=mask.astype(np.float32))["image"])
+                mask_lr = self.to_tensor(self.resize(image=mask_np.astype(np.float32))["image"])
                 img_lr = torch.cat([img_lr, mask_lr], dim=0)
 
         return img_lr
@@ -117,7 +117,8 @@ class ClimateDataset(ClimateDatasetBase):
         img_hr: np.ndarray,
         img_elev: np.ndarray,
         mask: np.ndarray,
-    ) -> Tuple[Tensor, Tensor, Tensor, Tensor, np.ndarray, Tensor, Tensor]:
+        original_image: Optional[np.ndarray] = None,
+    ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Optional[Tensor]]:
         """Performs common `to_tensor` transformation on raster data."""
 
         img_sr_nearest = self.to_tensor(self.upscale_nearest(image=img_lr)["image"])
@@ -126,10 +127,11 @@ class ClimateDataset(ClimateDatasetBase):
         img_hr = self.to_tensor(img_hr.copy())
         img_elev = self.to_tensor(img_elev.copy())
         mask_tensor = self.to_tensor(mask.astype(np.float32))
+        original_image = self.to_tensor(original_image.astype(np.float32)) if original_image is not None else None
 
         img_lr = self._concat_if_needed(img_lr, img_sr_nearest, img_elev, img_elev_lr, mask_tensor, mask)
 
-        return img_lr, img_hr, img_elev, img_elev_lr, mask, mask_tensor, img_sr_nearest
+        return img_lr, img_hr, img_elev, img_elev_lr, mask_tensor, img_sr_nearest, original_image
 
     def _get_training_sample(
         self,
@@ -165,10 +167,10 @@ class ClimateDataset(ClimateDatasetBase):
             img_lr,
             img_hr,
             img_elev,
-            _,
-            _,
+            img_elev_lr,
             mask_tensor,
             img_sr_nearest,
+            _,
         ) = self._common_to_tensor(img_lr, img_hr, img_elev, mask)
 
         return {
@@ -189,10 +191,10 @@ class ClimateDataset(ClimateDatasetBase):
             img_hr,
             img_elev,
             img_elev_lr,
-            mask,
             mask_tensor,
             img_sr_nearest,
-        ) = self._common_to_tensor(img_lr, img_hr, img_elev, mask)
+            original_image,
+        ) = self._common_to_tensor(img_lr, img_hr, img_elev, mask, original_image)
 
         return {
             consts.batch_items.lr: img_lr,
@@ -203,7 +205,6 @@ class ClimateDataset(ClimateDatasetBase):
             consts.batch_items.cubic: img_sr_cubic,
             consts.batch_items.original_data: original_image,
             consts.batch_items.mask: mask_tensor,
-            consts.batch_items.mask_np: mask,
             consts.batch_items.min: min,
             consts.batch_items.max: max,
         }

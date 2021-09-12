@@ -4,7 +4,7 @@ defaults:
   - callbacks:
       - early_stopping
       - model_checkpoint
-      - log_images
+#      - log_images
   - datamodule: super_resolution_data_module
   - discriminator: ???
   - logger: tensorboard
@@ -15,7 +15,7 @@ defaults:
   - training: default
   - hydra: default
 
-  - experiment: rcan_final
+  - experiment: srcnn_final
 
 log: False
 ignore_warnings: True

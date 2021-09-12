@@ -18,11 +18,10 @@ class DataDownloadConfig:
 class PreProcessingConfig:
     data_dir_cruts: Optional[str] = MISSING
     data_dir_world_clim: Optional[str] = MISSING
-    out_dir_cruts: Optional[str] = MISSING
-    out_dir_world_clim: Optional[str] = MISSING
+
+    output_path: Optional[str] = MISSING
 
     world_clim_elevation_fp: Optional[str] = MISSING
-    output_path: Optional[str] = MISSING
     elevation_file: Optional[str] = MISSING
     land_mask_file: Optional[str] = MISSING
 

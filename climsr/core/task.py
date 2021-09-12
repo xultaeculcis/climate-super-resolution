@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 import torch
+from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.utilities import rank_zero_info
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
 from torch import Tensor
@@ -343,4 +344,6 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
 
     def on_train_start(self):
         """Run additional steps when training starts."""
-        self.logger.log_hyperparams(self.hparams, {"hp_metric": self.hparams.initial_hp_metric_val})
+        for logger in self.logger:
+            if type(logger) == TensorBoardLogger:
+                self.logger[0].log_hyperparams(self.hparams, {"hp_metric": self.hparams.initial_hp_metric_val})

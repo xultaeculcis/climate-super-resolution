@@ -114,8 +114,8 @@ class LogImagesCallback(Callback):
 
             if name == consts.batch_items.elevation:
                 value_range = (
-                    pl_module.stats.at[consts.cruts.elev, consts.stats.normalized_min],
-                    pl_module.stats.at[consts.cruts.elev, consts.stats.normalized_max],
+                    pl_module.stats.at[consts.world_clim.elev, consts.stats.normalized_min],
+                    pl_module.stats.at[consts.world_clim.elev, consts.stats.normalized_max],
                 )
             else:
                 value_range = (
@@ -330,7 +330,7 @@ class LogImagesCallback(Callback):
     def _log_images_from_file(pl_module: LightningModule, fp: str, name: str) -> None:
         img = Image.open(fp).convert("RGB")
         tensor = ToTensor()(img).unsqueeze(0)  # make it NxCxHxW
-        pl_module.logger.experiment.add_images(
+        pl_module.logger.experiment[0].add_images(
             name,
             tensor,
             pl_module.global_step,

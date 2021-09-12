@@ -75,7 +75,9 @@ cruts_to_world_clim_mapping = {
 
 world_clim_to_cruts_mapping = dict([(v, k) for k, v in cruts_to_world_clim_mapping.items()])
 cruts_download_dir = "cruts"
+cruts_preprocessing_out_path = "cruts"
 world_clim_download_dir = "world-clim"
+world_clim_preprocessing_out_path = "world-clim"
 archives = "archives"
 extracted = "extracted"
 world_clim_main_extraction_folder = "wc2.1"

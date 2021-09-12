@@ -2,10 +2,12 @@
 import logging
 import os
 import re
+from dataclasses import asdict, dataclass
 from glob import glob
 from itertools import product
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import dask.array
 import dask.bag
 import numpy as np
 import pandas as pd
@@ -24,6 +26,17 @@ from climsr.core.config import PreProcessingConfig
 
 year_pattern = re.compile(r"(\d\d\d\d)")
 month_pattern = re.compile(r"[-_](\d\d)\.")
+
+
+@dataclass
+class StatsContainer:
+    variable: str
+    mean: float
+    std: float
+    min: float
+    max: float
+    normalized_min: float
+    normalized_max: float
 
 
 def _is_future(year: int) -> bool:
@@ -79,7 +92,7 @@ def _cruts_as_tiff(variable: str, data_dir: str, out_dir: str, df_output_path: s
         arr.rio.to_raster(fname)
 
     pd.DataFrame(file_paths, columns=[consts.datasets_and_preprocessing.file_path]).to_feather(
-        os.path.join(df_output_path, f"{variable}.feather"), index=False, header=True
+        os.path.join(df_output_path, f"{variable}.feather")
     )
 
 
@@ -239,8 +252,17 @@ def _compute_stats_for_zscore(cfg: PreProcessingConfig) -> None:
         return
 
     logging.info("Running statistical computation for z-score")
+    columns = [
+        consts.datasets_and_preprocessing.variable,
+        consts.stats.mean,
+        consts.stats.std,
+        consts.stats.min,
+        consts.stats.max,
+        consts.stats.normalized_min,
+        consts.stats.normalized_max,
+    ]
 
-    def compute_stats(var_name: str, arr: np.ndarray):
+    def compute_stats_common(variable: str, arr: np.ndarray) -> StatsContainer:
         for missing_indicator in consts.world_clim.missing_indicators:
             arr[arr == missing_indicator] = consts.world_clim.target_missing_indicator
         mean = np.nanmean(arr)
@@ -249,22 +271,67 @@ def _compute_stats_for_zscore(cfg: PreProcessingConfig) -> None:
         max = np.nanmax(arr)
         normalized_min = (min - mean) / (std + 1e-8)
         normalized_max = (max - mean) / (std + 1e-8)
-        results.append((var_name, mean, std, min, max, normalized_min, normalized_max))
+        return StatsContainer(
+            variable=variable,
+            mean=mean,
+            std=std,
+            min=min,
+            max=max,
+            normalized_min=normalized_min,
+            normalized_max=normalized_max,
+        )
+
+    def compute_stats_cruts(var_name: str, arr: np.ndarray):
+        results.append(compute_stats_common(var_name, arr))
+
+    def compute_stats_world_clim_single(
+        file_path: str,
+        var_name: str,
+    ):
+        arr = rio.open(file_path).read().astype(float)
+        return compute_stats_common(var_name, arr)
+
+    def compute_stats_world_clim(var_name: str, file_paths: List[str]):
+        records = dask.bag.from_sequence(file_paths, npartitions=1000).map(compute_stats_world_clim_single, var_name).compute()
+        frame = pd.DataFrame([asdict(record) for record in records])
+        results.append(
+            StatsContainer(
+                variable=var_name,
+                mean=frame[consts.stats.mean].mean(),
+                std=frame[consts.stats.std].mean(),
+                min=frame[consts.stats.min].min(),
+                max=frame[consts.stats.max].max(),
+                normalized_min=frame[consts.stats.normalized_min].min(),
+                normalized_max=frame[consts.stats.normalized_max].max(),
+            )
+        )
 
     results = []
-    for var in tqdm(consts.cruts.temperature_vars + [consts.world_clim.elev]):
-        if var == consts.world_clim.elev:
-            elevation = rio.open(to_absolute_path(cfg.world_clim_elevation_fp)).read().astype(float)
-            compute_stats(var, elevation)
-        else:
-            ds = xarray.open_dataset(
-                os.path.join(
-                    to_absolute_path(cfg.data_dir_cruts),
-                    consts.datasets_and_preprocessing.extracted,
-                    consts.cruts.file_pattern.format(var),
-                )
+    for var in consts.cruts.temperature_vars:
+        logging.info(f"Running statistical computation for z-score on CRU-TS '{var}' variable")
+        ds = xarray.open_dataset(
+            os.path.join(
+                to_absolute_path(cfg.data_dir_cruts),
+                consts.datasets_and_preprocessing.extracted,
+                consts.cruts.file_pattern.format(var),
             )
-            compute_stats(var, ds[var].values)
+        )
+        compute_stats_cruts(var, ds[var].values)
+
+    for var in consts.world_clim.temperature_vars + [consts.world_clim.elev]:
+        logging.info(f"Running statistical computation for z-score on WorldClim '{var}' variable")
+        files = glob(
+            os.path.join(
+                to_absolute_path(cfg.output_path),
+                consts.datasets_and_preprocessing.preprocessing_output_path,
+                consts.datasets_and_preprocessing.world_clim_preprocessing_out_path,
+                consts.world_clim.resized_dir,
+                "**",
+                f"*{var}*.tif",
+            ),
+            recursive=True,
+        )
+        compute_stats_world_clim(var, files)
 
     output_file = os.path.join(
         to_absolute_path(cfg.output_path),
@@ -272,19 +339,20 @@ def _compute_stats_for_zscore(cfg: PreProcessingConfig) -> None:
         consts.datasets_and_preprocessing.feather_path,
         consts.datasets_and_preprocessing.zscore_stats_filename,
     )
-    df = pd.DataFrame(
-        results,
-        columns=[
-            consts.datasets_and_preprocessing.variable,
-            consts.stats.mean,
-            consts.stats.std,
-            consts.stats.min,
-            consts.stats.max,
-            consts.stats.normalized_min,
-            consts.stats.normalized_max,
-        ],
+    df = pd.DataFrame(results, columns=columns)
+    frame = df[df["variable"] != consts.world_clim.elev]
+    temp_stats = StatsContainer(
+        variable=consts.world_clim.temp,
+        mean=frame[consts.stats.mean].mean(),
+        std=frame[consts.stats.std].mean(),
+        min=frame[consts.stats.min].min(),
+        max=frame[consts.stats.max].max(),
+        normalized_min=frame[consts.stats.normalized_min].min(),
+        normalized_max=frame[consts.stats.normalized_max].max(),
     )
-    df.to_feather(output_file, header=True, index=False)
+    df = df.append(pd.DataFrame([asdict(temp_stats)]), ignore_index=True)
+
+    df.to_feather(output_file)
 
 
 def _compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
@@ -326,7 +394,17 @@ def _compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
         logging.info(f"Computing stats for CRU-TS - '{var}'")
         results.extend(
             dask.bag.from_sequence(
-                sorted(glob(to_absolute_path(os.path.join(cfg.out_dir_cruts, consts.cruts.full_res_dir, var, "*.tif"))))
+                sorted(
+                    glob(
+                        os.path.join(
+                            to_absolute_path(cfg.output_path),
+                            consts.datasets_and_preprocessing.cruts_preprocessing_out_path,
+                            consts.cruts.full_res_dir,
+                            var,
+                            "*.tif",
+                        )
+                    )
+                )
             )
             .map(_stats_for_cruts)
             .compute()
@@ -349,7 +427,8 @@ def _compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
     for var in consts.world_clim.temperature_vars + [consts.world_clim.elev]:
         logging.info(f"Computing stats for World Clim - '{var}'")
         pattern = os.path.join(
-            to_absolute_path(cfg.out_dir_world_clim),
+            to_absolute_path(cfg.output_path),
+            consts.datasets_and_preprocessing.world_clim_preprocessing_out_path,
             consts.world_clim.resized_dir,
             "**",
             f"*{var}*.tif",
@@ -414,12 +493,13 @@ def _compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
         df.loc[idx, consts.stats.global_min] = global_min_max_lookup[var][consts.stats.global_min]
         df.loc[idx, consts.stats.global_max] = global_min_max_lookup[var][consts.stats.global_max]
 
-    df.to_feather(output_file, header=True, index=False)
+    df.to_feather(output_file)
 
 
 def _generate_tavg_raster(tmin_raster_fname: str) -> None:
     """
     Generates tavg raster from tmin and tmax rasters.
+
     Args:
         tmin_raster_fname (str): The filename of the tmin raster.
     """
@@ -593,7 +673,7 @@ def run_cruts_to_tiff(cfg: PreProcessingConfig) -> None:
         dask.bag.from_sequence(consts.cruts.temperature_vars).map(
             _cruts_as_tiff,
             to_absolute_path(cfg.data_dir_cruts),
-            to_absolute_path(cfg.out_dir_cruts),
+            os.path.join(to_absolute_path(cfg.output_path), consts.datasets_and_preprocessing.cruts_preprocessing_out_path),
             os.path.join(
                 to_absolute_path(cfg.output_path),
                 consts.datasets_and_preprocessing.preprocessing_output_path,
@@ -626,7 +706,10 @@ def run_world_clim_resize(cfg: PreProcessingConfig) -> None:
         )
         dask.bag.from_sequence(files, npartitions=1000).map(
             _resize_raster_to_target_hr_resolution,
-            to_absolute_path(cfg.out_dir_world_clim),
+            os.path.join(
+                to_absolute_path(cfg.output_path),
+                consts.datasets_and_preprocessing.world_clim_preprocessing_out_path,
+            ),
             to_absolute_path(cfg.data_dir_world_clim),
         ).compute()
 
@@ -664,7 +747,10 @@ def run_world_clim_tiling(cfg: PreProcessingConfig) -> None:
         files = sorted(
             glob(
                 os.path.join(
-                    to_absolute_path(cfg.out_dir_world_clim),
+                    os.path.join(
+                        to_absolute_path(cfg.output_path),
+                        consts.datasets_and_preprocessing.world_clim_preprocessing_out_path,
+                    ),
                     consts.world_clim.resized_dir,
                     "**",
                     consts.world_clim.pattern_wc,
@@ -676,7 +762,10 @@ def run_world_clim_tiling(cfg: PreProcessingConfig) -> None:
         dask.bag.from_sequence(files).map(
             _make_patches,
             os.path.join(
-                to_absolute_path(cfg.out_dir_world_clim),
+                os.path.join(
+                    to_absolute_path(cfg.output_path),
+                    consts.datasets_and_preprocessing.world_clim_preprocessing_out_path,
+                ),
                 consts.world_clim.tiles_dir,
             ),
             cfg.patch_size,
@@ -714,7 +803,10 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
         original_rasters = sorted(
             glob(
                 os.path.join(
-                    to_absolute_path(cfg.out_dir_world_clim),
+                    os.path.join(
+                        to_absolute_path(cfg.output_path),
+                        consts.datasets_and_preprocessing.world_clim_preprocessing_out_path,
+                    ),
                     consts.world_clim.resized_dir,
                     "**",
                     f"*{var}*.tif",
@@ -843,8 +935,6 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
                         variable,
                         f"{stage}.feather",
                     ),
-                    index=False,
-                    header=True,
                 )
 
                 logging.info(f"Generated {len(stage_images_df)} {stage} images for variable: {variable}")
@@ -890,7 +980,13 @@ def run_cruts_extent_extraction(cfg: PreProcessingConfig) -> None:
     def _train_val_test_split_extent_files() -> None:
         for var in consts.world_clim.temperature_vars:
             extent_raster_paths = glob(
-                to_absolute_path(os.path.join(cfg.out_dir_world_clim, consts.cruts.europe_extent, "**", f"*{var}*.tif"))
+                os.path.join(
+                    to_absolute_path(cfg.output_path),
+                    consts.datasets_and_preprocessing.world_clim_preprocessing_out_path,
+                    consts.cruts.europe_extent,
+                    "**",
+                    f"*{var}*.tif",
+                )
             )
 
             logging.info(
@@ -921,21 +1017,29 @@ def run_cruts_extent_extraction(cfg: PreProcessingConfig) -> None:
             os.makedirs(path_to_save, exist_ok=True)
 
             for stage in consts.stages.stages:
-                df[df["stage"] == stage].to_feather(
-                    os.path.join(path_to_save, f"{stage}_europe_extent.feather"),
-                    header=True,
-                    index=False,
-                )
+                df[df["stage"] == stage].to_feather(os.path.join(path_to_save, f"{stage}_europe_extent.feather"))
 
     if cfg.run_extent_extraction:
         # handle extent dirs
-        extent_dir = to_absolute_path(os.path.join(cfg.out_dir_cruts, consts.cruts.europe_extent))
+        extent_dir = to_absolute_path(
+            os.path.join(
+                cfg.output_path,
+                consts.datasets_and_preprocessing.cruts_preprocessing_out_path,
+                consts.cruts.europe_extent,
+            )
+        )
         os.makedirs(os.path.join(extent_dir, consts.batch_items.mask), exist_ok=True)
         os.makedirs(os.path.join(extent_dir, consts.cruts.elev), exist_ok=True)
 
         logging.info("Extracting polygon extents for Europe for CRU-TS files.")
         _extract_extent_cruts(
-            to_absolute_path(os.path.join(cfg.out_dir_cruts, consts.cruts.full_res_dir)),
+            to_absolute_path(
+                os.path.join(
+                    cfg.output_path,
+                    consts.datasets_and_preprocessing.cruts_preprocessing_out_path,
+                    consts.cruts.full_res_dir,
+                )
+            ),
             extent_dir,
             consts.cruts.temperature_vars,
             consts.datasets_and_preprocessing.lr_bbox,
@@ -956,8 +1060,20 @@ def run_cruts_extent_extraction(cfg: PreProcessingConfig) -> None:
         )
         logging.info("Extracting polygon extents for Europe for World-Clim files.")
         _extract_extent_world_clim(
-            to_absolute_path(os.path.join(cfg.out_dir_world_clim, consts.world_clim.resized_dir)),
-            to_absolute_path(os.path.join(cfg.out_dir_world_clim, consts.cruts.europe_extent)),
+            to_absolute_path(
+                os.path.join(
+                    cfg.output_path,
+                    consts.datasets_and_preprocessing.world_clim_preprocessing_out_path,
+                    consts.world_clim.resized_dir,
+                )
+            ),
+            to_absolute_path(
+                os.path.join(
+                    cfg.output_path,
+                    consts.datasets_and_preprocessing.world_clim_preprocessing_out_path,
+                    consts.cruts.europe_extent,
+                )
+            ),
             consts.world_clim.temperature_vars,
             consts.datasets_and_preprocessing.hr_bbox,
         )

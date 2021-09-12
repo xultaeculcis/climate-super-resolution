@@ -1,12 +1,10 @@
 data_dir_cruts: ${data_download.download_path}/cruts/extracted
 data_dir_world_clim: ${data_download.download_path}/world-clim/extracted
 output_path: "datasets"
-out_dir_cruts: ${preprocessing.output_path}/cruts
-out_dir_world_clim: ${preprocessing.output_path}/world-clim
 
 world_clim_elevation_fp: ${data_download.download_path}/world-clim/extracted/wc2.1/2.5m/elev/wc2.1_2.5m_elev.tif # do not modify on your own
-elevation_file: ${preprocessing.out_dir_world_clim}/resized/wc2.1/2.5m/elev/wc2.1_2.5m_elev.tif # do not modify on your own
-land_mask_file: ${preprocessing.out_dir_world_clim}/resized/wc2.1/2.5m/tmin/1960-1969/wc2.1_2.5m_tmin_1961-01.tif # do not modify on your own
+elevation_file: ${preprocessing.out_path}/pre-processed/world-clim/resized/wc2.1/2.5m/elev/wc2.1_2.5m_elev.tif # do not modify on your own
+land_mask_file: ${preprocessing.out_path}/pre-processed/world-clim/resized/wc2.1/2.5m/tmin/1960-1969/wc2.1_2.5m_tmin_1961-01.tif # do not modify on your own
 
 run_cruts_to_tiff: True
 

@@ -17,7 +17,7 @@ from climsr.core.config import DiscriminatorConfig, GeneratorConfig, OptimizerCo
 from climsr.core.instantiator import Instantiator
 from climsr.data import normalization
 from climsr.data.normalization import MinMaxScaler, Scaler, StandardScaler
-from climsr.task.metrics import MetricsResult, MetricsSimple
+from climsr.metrics.models import MetricsResult, MetricsSimple
 
 
 class LitSuperResolutionModule(pl.LightningModule):

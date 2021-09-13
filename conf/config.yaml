@@ -5,7 +5,7 @@ defaults:
       - early_stopping
       - model_checkpoint
       - learning_rate_monitor
-#      - log_images
+      - log_images
   - datamodule: super_resolution_data_module
   - discriminator: ???
   - logger: tensorboard

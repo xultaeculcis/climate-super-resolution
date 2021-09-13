@@ -70,6 +70,8 @@ class LogImagesCallback(Callback):
 
             img_dir = os.path.join(pl_module.logger.experiment[0].log_dir, "images")
 
+            mask = mask.squeeze(1)
+
             # run only on first epoch
             if pl_module.current_epoch == 0 and pl_module.global_step == 0:
                 os.makedirs(img_dir, exist_ok=True)
@@ -175,7 +177,7 @@ class LogImagesCallback(Callback):
 
         if mask_tensor is not None:
             mask_grid = self._batch_tensor_to_grid(mask_tensor[:nitems], nrow=nrows).squeeze(0).to("cpu").numpy()
-            img_grid[mask_grid] = np.nan
+            img_grid[mask_grid.astype(bool)] = np.nan
 
         cmap = deepcopy(matplotlib.cm.jet)
         cmap.set_bad("black", 1.0)
@@ -245,6 +247,7 @@ class LogImagesCallback(Callback):
         hr_arr = hr.squeeze(1).cpu().numpy()
         elev_arr = elev.squeeze(1).cpu().numpy()
         sr_arr = sr.squeeze(1).cpu().numpy()
+        mask = mask.long().cpu().numpy()
 
         hr_arr = hr_arr[:items]
         elev_arr = elev_arr[:items]

@@ -13,8 +13,8 @@ defaults:
 
 training:
   lr: 1e-4
-  batch_size: 256
-  validation_batch_size: 384
+  batch_size: 128
+  validation_batch_size: 128
   generator_type: "srcnn"
   experiment_name: srcnn-${now:%Y%m%d%H%M%S}
   num_workers: 8
@@ -32,7 +32,7 @@ datamodule:
   cfg:
     batch_size: ${training.batch_size}
     num_workers: ${training.num_workers}
-    pin_memory: False
+    pin_memory: True
     data_path: "datasets"
     world_clim_variable: "temp"
     generator_type: ${training.generator_type}

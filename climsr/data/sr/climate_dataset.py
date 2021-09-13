@@ -6,8 +6,8 @@ import albumentations as A
 import cv2
 import numpy as np
 import pandas as pd
-import rasterio as rio
 import torch
+from PIL import Image
 from torch import Tensor
 from torchvision import transforms as transforms
 
@@ -215,9 +215,8 @@ class ClimateDataset(ClimateDatasetBase):
         max = row[consts.stats.max] if not self.use_global_min_max else row[consts.stats.global_max]
 
         # original, hr
-        with rio.open(row[consts.datasets_and_preprocessing.tile_file_path]) as ds:
-            original_image = ds.read(1)
-            img_hr = original_image.copy()
+        original_image = np.array(Image.open(row[consts.datasets_and_preprocessing.tile_file_path]))
+        img_hr = original_image.copy()
 
         # elevation
         elev_fp = self.elevation_df[
@@ -225,9 +224,8 @@ class ClimateDataset(ClimateDatasetBase):
             & (self.elevation_df[consts.datasets_and_preprocessing.y] == row[consts.datasets_and_preprocessing.y])
         ][consts.datasets_and_preprocessing.tile_file_path]
         elev_fp = elev_fp.values[0]
-        with rio.open(elev_fp) as ds:
-            img_elev = ds.read(1)
-            img_elev = img_elev.copy()
+        img_elev = np.array(Image.open(elev_fp))
+        img_elev = img_elev.copy()
 
         # normalize/standardize
         if self.normalize:

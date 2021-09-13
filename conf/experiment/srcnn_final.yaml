@@ -14,7 +14,7 @@ defaults:
 training:
   lr: 1e-4
   batch_size: 128
-  validation_batch_size: 128
+  validation_batch_size: 384
   generator_type: "srcnn"
   experiment_name: srcnn-${now:%Y%m%d%H%M%S}
   num_workers: 8

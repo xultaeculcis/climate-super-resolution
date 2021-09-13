@@ -14,8 +14,10 @@ defaults:
 training:
   lr: 1e-4
   batch_size: 256
+  validation_batch_size: 384
   generator_type: "srcnn"
   experiment_name: srcnn-${now:%Y%m%d%H%M%S}
+  num_workers: 8
 
 trainer:
   gpus: 1
@@ -24,15 +26,13 @@ trainer:
   precision: 16
   flush_logs_every_n_steps: 30
   log_every_n_steps: 30
-  max_epochs: 100
-  limit_train_batches: 100
-  limit_val_batches: 100
+  max_epochs: 30
 
 datamodule:
   cfg:
     batch_size: ${training.batch_size}
     num_workers: ${training.num_workers}
-    pin_memory: True
+    pin_memory: False
     data_path: "datasets"
     world_clim_variable: "temp"
     generator_type: ${training.generator_type}

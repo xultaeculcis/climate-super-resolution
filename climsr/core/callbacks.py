@@ -57,17 +57,16 @@ class LogImagesCallback(Callback):
         batch = next(iter(dl))
 
         with torch.no_grad():
-            lr, hr, nearest, cubic, elev, mask, mask_tensor = (
+            lr, hr, nearest, cubic, elev, mask = (
                 batch[consts.batch_items.lr].to(pl_module.device),
                 batch[consts.batch_items.hr].to(pl_module.device),
                 batch[consts.batch_items.nearest].to(pl_module.device),
                 batch[consts.batch_items.cubic],
                 batch[consts.batch_items.elevation].to(pl_module.device),
-                batch[consts.batch_items.mask_np],
                 batch[consts.batch_items.mask].to(pl_module.device),
             )
 
-            sr = pl_module(lr, elev, mask_tensor)
+            sr = pl_module(lr, elev, mask)
 
             img_dir = os.path.join(pl_module.logger.experiment[0].log_dir, "images")
 

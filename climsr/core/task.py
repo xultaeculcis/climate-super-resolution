@@ -54,8 +54,8 @@ class LitSuperResolutionModule(pl.LightningModule):
     ) -> Tuple[List[torch.optim.Optimizer], List[Dict[str, Union[str, torch.optim.lr_scheduler._LRScheduler]]]]:
         """Prepare optimizers and schedulers"""
         schedulers = []
-        for idx, scheduler in enumerate(self.schedulers):
-            schedulers.append({"scheduler": scheduler, "interval": "step", "name": f"scheduler-{idx}"})
+        for scheduler in self.schedulers:
+            schedulers.append({"scheduler": scheduler, "interval": "step"})
         return self.optimizers, schedulers
 
     @property
@@ -91,7 +91,6 @@ class LitSuperResolutionModule(pl.LightningModule):
         return num_training_steps, num_warmup_steps
 
     def setup(self, stage: Optional[str] = None) -> None:
-        rank_zero_info(f"Running LitModule setup for stage: {stage}")
         self.configure_metrics(stage)
 
     def configure_metrics(self, stage: str) -> Optional[Any]:
@@ -256,7 +255,7 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
 
         return hr, sr
 
-    def common_val_test_step(self, batch: Any, prefix: Optional[str] = consts.stages.val) -> Tensor:
+    def common_val_test_step(self, batch: Any, prefix: Optional[str] = consts.stages.val) -> Dict[str, Tensor]:
         """
         Rus common validation and test steps.
 
@@ -286,15 +285,12 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
 
         metric_dict = self.compute_metrics(sr, hr, mode=prefix)
         loss = self.loss(sr, hr)
-        self.log_dict(metric_dict, prog_bar=True, on_step=False, on_epoch=True)
+        self.log_dict(metric_dict, prog_bar=False, on_step=False, on_epoch=True)
         self.log(f"{prefix}/loss", loss, prog_bar=True, sync_dist=True)
 
-        return loss
+        return metric_dict
 
     def configure_metrics(self, stage: str) -> None:
-        if stage == "fit":
-            return
-
         self.acc_at_0_1 = RegressionAccuracy(eps=0.1)
         self.acc_at_0_25 = RegressionAccuracy(eps=0.25)
         self.acc_at_0_5 = RegressionAccuracy(eps=0.5)

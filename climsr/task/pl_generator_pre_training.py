@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import Any, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import torch
 from torch import Tensor
@@ -33,7 +33,7 @@ class GeneratorPreTrainingLightningModule(TaskSuperResolutionModule):
 
         return loss
 
-    def validation_step(self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None) -> Union[float, int, Tensor]:
+    def validation_step(self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None) -> Dict[str, Tensor]:
         """
         Run validation step.
 
@@ -49,10 +49,10 @@ class GeneratorPreTrainingLightningModule(TaskSuperResolutionModule):
 
     def validation_epoch_end(self, outputs: List[Any]) -> None:
         """Compute and log hp_metric at the epoch level."""
-        loss_mean = torch.stack(outputs).mean()
-        self.log("hp_metric", loss_mean)
+        hp_metric = torch.stack([output["val/rmse"] for output in outputs]).mean()
+        self.log("hp_metric", hp_metric)
 
-    def test_step(self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None) -> Union[float, int, Tensor]:
+    def test_step(self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None) -> Dict[str, Tensor]:
         """
         Run test step.
 

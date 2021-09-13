@@ -6,4 +6,4 @@ discriminator: null
 optimizers: null
 schedulers: null
 
-initial_hp_metric_val: 5e-3
+initial_hp_metric_val: 10.0

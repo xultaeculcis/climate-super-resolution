@@ -46,6 +46,13 @@ def run(
             "The instantiator did not return a DataModule instance." " Hydra hint: is `datamodule._target_` defined?`"
         )
 
+    model_data_kwargs = data_module.model_data_kwargs
+    model_data_kwargs.update(
+        {
+            "accumulate_grad_batches": trainer_cfg.accumulate_grad_batches,
+        }
+    )
+
     # Init lightning module
     model: TaskSuperResolutionModule = instantiator.model(task_cfg, model_data_kwargs=data_module.model_data_kwargs)
 

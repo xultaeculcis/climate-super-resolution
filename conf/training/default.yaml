@@ -1,7 +1,7 @@
 lr: 1e-4
 output_dir: '.'
 generator_type: ???
-experiment_name: ???
+experiment_name: "climsr"
 seed: 42
 run_test_after_fit: True
 batch_size: 192

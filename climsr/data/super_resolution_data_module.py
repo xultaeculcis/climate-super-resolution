@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 import os
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 from hydra.utils import to_absolute_path
@@ -26,8 +26,29 @@ class SuperResolutionDataModule(DataModuleBase):
 
         self.cfg = cfg
         self.ds = dict()
+        self._setup()
 
-    def setup(self, stage: Optional[str] = None) -> None:
+    def _build_dataset(
+        self, stage: str, df: pd.DataFrame, elevation_df: pd.DataFrame, standardize_stats_df: pd.DataFrame
+    ) -> ClimateDataset:
+        return ClimateDataset(
+            df=df,
+            elevation_df=elevation_df,
+            hr_size=self.cfg.hr_size,
+            stage=stage,
+            generator_type=self.cfg.generator_type,
+            variable=self.cfg.world_clim_variable,
+            scaling_factor=self.cfg.scale_factor,
+            normalize=self.cfg.normalization_method == normalization.minmax,
+            standardize=self.cfg.normalization_method == normalization.zscore,
+            standardize_stats=standardize_stats_df,
+            normalize_range=self.cfg.normalization_range,
+            use_elevation=self.cfg.use_elevation,
+            use_mask_as_3rd_channel=self.cfg.use_mask_as_3rd_channel,
+            use_global_min_max=self.cfg.use_global_min_max,
+        )
+
+    def _setup(self) -> None:
         train_df, val_df, test_dfs, elevation_df, standardize_stats = self.load_data()
 
         logging.info(
@@ -35,57 +56,11 @@ class SuperResolutionDataModule(DataModuleBase):
             f"{len(train_df)}/{len(val_df)}/{len(test_dfs)} - {[len(df) for df in test_dfs]}"
         )
 
-        self.ds["train"] = ClimateDataset(
-            df=train_df,
-            elevation_df=elevation_df,
-            hr_size=self.cfg.hr_size,
-            stage=consts.stages.train,
-            generator_type=self.cfg.generator_type,
-            variable=self.cfg.world_clim_variable,
-            scaling_factor=self.cfg.scale_factor,
-            normalize=self.cfg.normalization_method == normalization.minmax,
-            standardize=self.cfg.normalization_method == normalization.zscore,
-            standardize_stats=standardize_stats,
-            normalize_range=self.cfg.normalization_range,
-            use_elevation=self.cfg.use_elevation,
-            use_mask_as_3rd_channel=self.cfg.use_mask_as_3rd_channel,
-            use_global_min_max=self.cfg.use_global_min_max,
-        )
-        self.ds["val"] = ClimateDataset(
-            df=val_df,
-            elevation_df=elevation_df,
-            hr_size=self.cfg.hr_size,
-            stage=consts.stages.val,
-            generator_type=self.cfg.generator_type,
-            variable=self.cfg.world_clim_variable,
-            scaling_factor=self.cfg.scale_factor,
-            normalize=self.cfg.normalization_method == normalization.minmax,
-            standardize=self.cfg.normalization_method == normalization.zscore,
-            standardize_stats=standardize_stats,
-            normalize_range=self.cfg.normalization_range,
-            use_elevation=self.cfg.use_elevation,
-            use_mask_as_3rd_channel=self.cfg.use_mask_as_3rd_channel,
-            use_global_min_max=self.cfg.use_global_min_max,
-        )
-        self.ds["test"] = [
-            ClimateDataset(
-                df=test_df,
-                elevation_df=elevation_df,
-                hr_size=self.cfg.hr_size,
-                stage=consts.stages.test,
-                generator_type=self.cfg.generator_type,
-                variable=self.cfg.world_clim_variable,
-                scaling_factor=self.cfg.scale_factor,
-                normalize=self.cfg.normalization_method == normalization.minmax,
-                standardize=self.cfg.normalization_method == normalization.zscore,
-                standardize_stats=standardize_stats,
-                normalize_range=self.cfg.normalization_range,
-                use_elevation=self.cfg.use_elevation,
-                use_mask_as_3rd_channel=self.cfg.use_mask_as_3rd_channel,
-                use_global_min_max=self.cfg.use_global_min_max,
-            )
-            for test_df in test_dfs
-        ]
+        for stage, frames in zip(consts.stages.stages, [train_df, val_df, test_dfs]):
+            if type(frames) is list:
+                self.ds[stage] = [self._build_dataset(stage, df, elevation_df, standardize_stats) for df in frames]
+            else:
+                self.ds[stage] = self._build_dataset(stage, frames, elevation_df, standardize_stats)
 
     def load_dataframe(self, var: str, filename: str) -> pd.DataFrame:
         return pd.read_feather(
@@ -100,7 +75,7 @@ class SuperResolutionDataModule(DataModuleBase):
 
     def load_data(
         self,
-    ) -> Tuple[pd.DataFrame, pd.DataFrame, List[pd.DataFrame], pd.DataFrame, Union[Dict[str, float], None]]:
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, List[pd.DataFrame], pd.DataFrame, pd.DataFrame]:
         elevation_df = self.load_dataframe(consts.world_clim.elev, f"{consts.world_clim.elev}.feather")
 
         stats_df = pd.read_feather(
@@ -199,4 +174,9 @@ class SuperResolutionDataModule(DataModuleBase):
             "normalization_method": self.cfg.normalization_method,
             "normalization_range": self.cfg.normalization_range,
             "generator_type": self.cfg.generator_type,
+            "batch_size": self.cfg.batch_size,
+            "use_elevation": self.cfg.use_elevation,
+            "use_mask": self.cfg.use_mask_as_3rd_channel,
+            "use_global_min_max": self.cfg.use_global_min_max,
+            "seed": self.cfg.seed,
         }

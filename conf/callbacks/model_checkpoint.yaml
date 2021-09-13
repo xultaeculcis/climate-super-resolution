@@ -1,10 +1,10 @@
 model_checkpoint:
   _target_: pytorch_lightning.callbacks.ModelCheckpoint
-  monitor: "val/rmse" # name of the logged metric which determines when model is improving
+  monitor: "hp_metric" # name of the logged metric which determines when model is improving
   mode: "min" # can be "max" or "min"
   save_top_k: 100 # save k best models (determined by above metric)
   save_last: null # additionally, always save model from last epoch
-  verbose: False
-  dirpath: "outputs/model_weights"
-  filename: "epoch_{epoch:03d}_{step:05d}.ckpt"
+  verbose: True
+  dirpath: "model_weights"
+  filename: "${training.generator_type}_{epoch:03d}_{step:05d}_{hp_metric:0.5f}.ckpt"
   auto_insert_metric_name: True

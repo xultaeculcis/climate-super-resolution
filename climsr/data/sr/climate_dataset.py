@@ -241,7 +241,7 @@ class ClimateDataset(ClimateDatasetBase):
             )
 
         # land mask
-        mask = np.isnan(original_image)
+        mask = ~np.isnan(original_image)
 
         if self.stage == consts.stages.train:
             return self._get_training_sample(img_hr, img_elev, mask)

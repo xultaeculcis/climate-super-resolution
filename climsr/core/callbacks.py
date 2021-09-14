@@ -2,7 +2,6 @@
 import logging
 import math
 import os
-from copy import deepcopy
 from typing import Any, List, Optional, Tuple
 
 import matplotlib
@@ -14,6 +13,7 @@ from PIL import Image
 from pytorch_lightning import LightningModule, Trainer
 from pytorch_lightning.callbacks import Callback
 from pytorch_lightning.loggers.base import DummyLogger
+from pytorch_lightning.utilities import rank_zero_info
 from torch import Tensor
 from torchvision.transforms import ToTensor
 from torchvision.utils import make_grid
@@ -23,6 +23,14 @@ from climsr.core.task import TaskSuperResolutionModule
 from climsr.data import normalization
 
 MAX_ITEMS = 88
+MAX_MINI_BATCHES = 12
+
+cmap_jet = matplotlib.cm.get_cmap("jet").copy()
+cmap_gray = matplotlib.cm.get_cmap("gray").copy()
+cmap_inferno = matplotlib.cm.get_cmap("inferno").copy()
+cmap_jet.set_bad("black", 1.0)
+cmap_gray.set_bad("black", 1.0)
+cmap_inferno.set_bad("black", 1.0)
 
 
 class LogImagesCallback(Callback):
@@ -48,6 +56,8 @@ class LogImagesCallback(Callback):
         if isinstance(pl_module.logger, DummyLogger):
             return
 
+        rank_zero_info(f"Saving generated images")
+
         if trainer.val_dataloaders:
             dl = trainer.val_dataloaders[0]
         else:
@@ -70,7 +80,7 @@ class LogImagesCallback(Callback):
 
             img_dir = os.path.join(pl_module.logger.experiment[0].log_dir, "images")
 
-            mask = mask.squeeze(1)
+            mask = ~mask.squeeze(1).bool()
 
             # run only on first epoch
             if pl_module.current_epoch == 0 and pl_module.global_step == 0:
@@ -177,12 +187,10 @@ class LogImagesCallback(Callback):
 
         if mask_tensor is not None:
             mask_grid = self._batch_tensor_to_grid(mask_tensor[:nitems], nrow=nrows).squeeze(0).to("cpu").numpy()
-            img_grid[mask_grid.astype(bool)] = np.nan
+            img_grid[mask_grid] = np.nan
 
-        cmap = deepcopy(matplotlib.cm.jet)
-        cmap.set_bad("black", 1.0)
         plt.figure(figsize=(2 * nrows, 2 * ncols))
-        plt.imshow(img_grid, cmap=cmap, aspect="auto")
+        plt.imshow(img_grid, cmap=cmap_inferno if consts.cruts.elev in out_path else cmap_jet, aspect="auto")
         plt.axis("off")
 
         plt.savefig(out_path, bbox_inches="tight")
@@ -217,21 +225,11 @@ class LogImagesCallback(Callback):
             items (Optional[int]): Optional number of items from batch to save. 16 by default.
 
         """
-        ncols = 5 if self.use_elevation else 4
-        fig, axes = plt.subplots(
-            nrows=items,
-            ncols=ncols,
-            figsize=(10, 2.2 * items),
-            sharey=True,
-            constrained_layout=True,
-        )
-
-        cmap = deepcopy(matplotlib.cm.jet)
-        cmap.set_bad("black", 1.0)
 
         cols = [
             consts.plotting.hr,
             consts.plotting.elevation,
+            consts.plotting.mask,
             consts.plotting.nearest_interpolation,
             consts.plotting.cubic_interpolation,
             consts.plotting.sr,
@@ -239,94 +237,113 @@ class LogImagesCallback(Callback):
         if not self.use_elevation:
             cols.remove(consts.batch_items.elevation)
 
-        for ax, col in zip(axes[0], cols):
-            ax.set_title(col)
+        ncols = len(cols)
 
-        nearest_arr = sr_nearest.squeeze(1).cpu().numpy()
-        cubic_arr = sr_cubic.squeeze(1).cpu().numpy()
-        hr_arr = hr.squeeze(1).cpu().numpy()
-        elev_arr = elev.squeeze(1).cpu().numpy()
-        sr_arr = sr.squeeze(1).cpu().numpy()
-        mask = mask.long().cpu().numpy()
+        nearest = sr_nearest.squeeze(1).cpu().numpy()
+        cubic = sr_cubic.squeeze(1).cpu().numpy()
+        hr = hr.squeeze(1).cpu().numpy()
+        elev = elev.squeeze(1).cpu().numpy()
+        sr = sr.squeeze(1).cpu().numpy()
+        mask = mask.squeeze(1).cpu().numpy()
 
-        hr_arr = hr_arr[:items]
-        elev_arr = elev_arr[:items]
-        nearest_arr = nearest_arr[:items]
-        cubic_arr = cubic_arr[:items]
-        sr_arr = sr_arr[:items]
-        mask = mask[:items]
-
-        hr_arr[mask] = 0.0
-        elev_arr[mask] = 0.0
-        nearest_arr[mask] = 0.0
-        cubic_arr[mask] = 0.0
-        sr_arr[mask] = 0.0
-
-        arrs = [nearest_arr, cubic_arr, sr_arr]
-        maes = []
-        rmses = []
-        for arr in arrs:
-            diff = hr_arr - arr
-            rmses.append(np.sqrt(np.mean(diff ** 2, axis=(1, 2))))
-            maes.append(np.mean(np.absolute(diff), axis=(1, 2)))
-
-        hr_arr[mask] = np.nan
-        elev_arr[mask] = np.nan
-        nearest_arr[mask] = np.nan
-        cubic_arr[mask] = np.nan
-        sr_arr[mask] = np.nan
-
-        for i in range(items):
-            axes[i][0].imshow(
-                hr_arr[i],
-                cmap=cmap,
-                vmin=stats.at[consts.stats.normalized_min] if self.standardize else self.normalization_range[0],
-                vmax=stats[consts.stats.normalized_max] if self.standardize else self.normalization_range[1],
+        for mini_batch_idx in range(np.min([hr.shape[0] // items, MAX_MINI_BATCHES])):
+            fig, axes = plt.subplots(
+                nrows=items,
+                ncols=ncols,
+                figsize=(10, 2.2 * items),
+                sharey="all",
+                constrained_layout=True,
             )
-            axes[i][0].set_xlabel("MAE/RMSE")
 
-            if self.use_elevation:
-                axes[i][1].imshow(elev_arr[i], cmap=cmap)
-                axes[i][1].set_xlabel("-/-")
+            for ax, col in zip(axes[0], cols):
+                ax.set_title(col)
 
-            offset = 2 if self.use_elevation else 1
-            for idx, arr in enumerate(arrs):
-                axes[i][offset + idx].imshow(
-                    arr[i],
-                    cmap=cmap,
-                    vmin=(
-                        stats.at[self.world_clim_variable, consts.stats.normalized_min]
-                        if self.standardize
-                        else self.normalization_range[0]
-                    ),
-                    vmax=(
-                        stats.at[self.world_clim_variable, consts.stats.normalized_max]
-                        if self.standardize
-                        else self.normalization_range[1]
-                    ),
+            mini_batch_offset_start = mini_batch_idx * items
+            mini_batch_offset_end = mini_batch_offset_start + items
+
+            hr_arr = hr[mini_batch_offset_start:mini_batch_offset_end]
+            elev_arr = elev[mini_batch_offset_start:mini_batch_offset_end]
+            nearest_arr = nearest[mini_batch_offset_start:mini_batch_offset_end]
+            cubic_arr = cubic[mini_batch_offset_start:mini_batch_offset_end]
+            sr_arr = sr[mini_batch_offset_start:mini_batch_offset_end]
+            mask_arr = mask[mini_batch_offset_start:mini_batch_offset_end]
+
+            hr_arr[mask_arr] = 0.0
+            elev_arr[mask_arr] = 0.0
+            nearest_arr[mask_arr] = 0.0
+            cubic_arr[mask_arr] = 0.0
+            sr_arr[mask_arr] = 0.0
+
+            arrs = [nearest_arr, cubic_arr, sr_arr]
+            maes = []
+            rmses = []
+            for arr in arrs:
+                diff = hr_arr - arr
+                rmses.append(np.sqrt(np.mean(diff ** 2, axis=(1, 2))))
+                maes.append(np.mean(np.absolute(diff), axis=(1, 2)))
+
+            hr_arr[mask_arr] = np.nan
+            elev_arr[mask_arr] = np.nan
+            nearest_arr[mask_arr] = np.nan
+            cubic_arr[mask_arr] = np.nan
+            sr_arr[mask_arr] = np.nan
+
+            for i in range(items):
+                axes[i][0].imshow(
+                    hr_arr[i],
+                    cmap=cmap_jet,
+                    vmin=stats.at[consts.stats.normalized_min] if self.standardize else self.normalization_range[0],
+                    vmax=stats[consts.stats.normalized_max] if self.standardize else self.normalization_range[1],
                 )
-                mae_value = maes[idx][i]
-                rmse_value = rmses[idx][i]
-                axes[i][offset + idx].set_xlabel(f"{mae_value:.3f}/{rmse_value:.3f}")
+                axes[i][0].set_xlabel("MAE/RMSE")
 
-            for j in range(ncols):
-                axes[i][j].xaxis.set_ticklabels([])
-                axes[i][j].xaxis.set_ticklabels([])
+                if self.use_elevation:
+                    axes[i][1].imshow(elev_arr[i], cmap=cmap_inferno)
+                    axes[i][1].set_xlabel("-/-")
 
-        plt.xticks([])
-        plt.yticks([])
+                mask_col_idx = 2 if self.use_elevation else 1
+                axes[i][mask_col_idx].imshow(~mask_arr[i], cmap=cmap_gray)
+                axes[i][mask_col_idx].set_xlabel("-/-")
 
-        fig.suptitle(
-            f"Validation batch, epoch={current_epoch}, step={global_step}",
-            fontsize=16,
-        )
+                offset = 3 if self.use_elevation else 2
+                for idx, arr in enumerate(arrs):
+                    axes[i][offset + idx].imshow(
+                        arr[i],
+                        cmap=cmap_jet,
+                        vmin=(
+                            stats.at[self.world_clim_variable, consts.stats.normalized_min]
+                            if self.standardize
+                            else self.normalization_range[0]
+                        ),
+                        vmax=(
+                            stats.at[self.world_clim_variable, consts.stats.normalized_max]
+                            if self.standardize
+                            else self.normalization_range[1]
+                        ),
+                    )
+                    mae_value = maes[idx][i]
+                    rmse_value = rmses[idx][i]
+                    axes[i][offset + idx].set_xlabel(f"{mae_value:.3f}/{rmse_value:.3f}")
 
-        plt.savefig(
-            os.path.join(
-                img_dir,
-                f"figure-{self.experiment_name}-epoch={current_epoch}-step={global_step}.png",
+                for j in range(ncols):
+                    axes[i][j].xaxis.set_ticklabels([])
+                    axes[i][j].xaxis.set_ticklabels([])
+
+            plt.xticks([])
+            plt.yticks([])
+
+            fig.suptitle(
+                f"Validation batch, epoch={current_epoch}, step={global_step}",
+                fontsize=16,
             )
-        )
+
+            plt.savefig(
+                os.path.join(
+                    img_dir,
+                    f"figure-{self.experiment_name}-epoch={current_epoch}-step={global_step}-{mini_batch_idx}.png",
+                )
+            )
+
 
     @staticmethod
     def _log_images_from_file(pl_module: LightningModule, fp: str, name: str) -> None:

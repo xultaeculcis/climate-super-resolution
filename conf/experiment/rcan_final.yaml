@@ -14,8 +14,10 @@ defaults:
 training:
   lr: 1e-4
   batch_size: 192
+  validation_batch_size: 384
   generator_type: "rcan"
   experiment_name: rcan-${now:%Y%m%d%H%M%S}
+  num_workers: 8
 
 trainer:
   gpus: 1
@@ -33,7 +35,7 @@ datamodule:
     pin_memory: True
     data_path: "datasets"
     world_clim_variable: "temp"
-    generator_type: "rcan"
+    generator_type: ${training.generator_type}
     scale_factor: 4
     hr_size: 128
     seed: ${training.seed}

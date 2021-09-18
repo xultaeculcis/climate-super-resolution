@@ -31,7 +31,7 @@ class ClimateDataset(ClimateDatasetBase):
         standardize_stats: pd.DataFrame = None,
         normalize_range: Optional[Tuple[float, float]] = (-1.0, 1.0),
         use_elevation: Optional[bool] = True,
-        use_mask_as_3rd_channel: Optional[bool] = True,
+        use_mask: Optional[bool] = True,
         use_global_min_max: Optional[bool] = True,
     ):
         super().__init__(
@@ -49,7 +49,7 @@ class ClimateDataset(ClimateDatasetBase):
         self.hr_size = hr_size
         self.stage = stage
         self.use_elevation = use_elevation
-        self.use_mask_as_3rd_channel = use_mask_as_3rd_channel
+        self.use_mask = use_mask
         self.use_global_min_max = use_global_min_max
 
         if self.standardize:
@@ -102,7 +102,7 @@ class ClimateDataset(ClimateDatasetBase):
             else:
                 img_lr = torch.cat([img_lr, img_elev_lr], dim=0)
 
-        if self.use_mask_as_3rd_channel:
+        if self.use_mask:
             if self.generator_type == consts.models.srcnn:
                 img_lr = torch.cat([img_lr, mask_tensor], dim=0)
             else:
@@ -222,6 +222,10 @@ class ClimateDataset(ClimateDatasetBase):
         elev_fp = self.elevation_df[
             (self.elevation_df[consts.datasets_and_preprocessing.x] == row[consts.datasets_and_preprocessing.x])
             & (self.elevation_df[consts.datasets_and_preprocessing.y] == row[consts.datasets_and_preprocessing.y])
+            & (
+                self.elevation_df[consts.datasets_and_preprocessing.resolution]
+                == row[consts.datasets_and_preprocessing.resolution]
+            )
         ][consts.datasets_and_preprocessing.tile_file_path]
         elev_fp = elev_fp.values[0]
         img_elev = np.array(Image.open(elev_fp))

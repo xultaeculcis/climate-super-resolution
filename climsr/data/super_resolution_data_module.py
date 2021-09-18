@@ -44,7 +44,7 @@ class SuperResolutionDataModule(DataModuleBase):
             standardize_stats=standardize_stats_df,
             normalize_range=self.cfg.normalization_range,
             use_elevation=self.cfg.use_elevation,
-            use_mask_as_3rd_channel=self.cfg.use_mask_as_3rd_channel,
+            use_mask=self.cfg.use_mask,
             use_global_min_max=self.cfg.use_global_min_max,
         )
 
@@ -120,6 +120,7 @@ class SuperResolutionDataModule(DataModuleBase):
                 consts.datasets_and_preprocessing.variable,
                 consts.datasets_and_preprocessing.year,
                 consts.datasets_and_preprocessing.month,
+                consts.datasets_and_preprocessing.resolution,
             ],
         )
 
@@ -132,6 +133,7 @@ class SuperResolutionDataModule(DataModuleBase):
                 consts.datasets_and_preprocessing.variable,
                 consts.datasets_and_preprocessing.year,
                 consts.datasets_and_preprocessing.month,
+                consts.datasets_and_preprocessing.resolution,
             ],
         )
 
@@ -146,6 +148,7 @@ class SuperResolutionDataModule(DataModuleBase):
                     consts.datasets_and_preprocessing.variable,
                     consts.datasets_and_preprocessing.year,
                     consts.datasets_and_preprocessing.month,
+                    consts.datasets_and_preprocessing.resolution,
                 ],
             )
             output_test_dfs.append(test_df)
@@ -176,7 +179,7 @@ class SuperResolutionDataModule(DataModuleBase):
             "generator_type": self.cfg.generator_type,
             "batch_size": self.cfg.batch_size,
             "use_elevation": self.cfg.use_elevation,
-            "use_mask": self.cfg.use_mask_as_3rd_channel,
+            "use_mask": self.cfg.use_mask,
             "use_global_min_max": self.cfg.use_global_min_max,
             "seed": self.cfg.seed,
         }

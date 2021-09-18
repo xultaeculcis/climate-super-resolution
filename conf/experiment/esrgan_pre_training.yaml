@@ -41,5 +41,5 @@ datamodule:
     normalization_method: "minmax"
     normalization_range: [ -1.0, 1.0 ]
     use_elevation: True
-    use_mask_as_3rd_channel: True
+    use_mask: True
     use_global_min_max: True

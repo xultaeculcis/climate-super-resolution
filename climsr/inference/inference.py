@@ -149,7 +149,7 @@ def run_inference(cfg: Union[InferenceConfig, DictConfig], cruts_variables: List
                 normalize_range=cfg.normalization_range,
                 standardize_stats=None,
                 use_elevation=cfg.use_elevation,
-                use_mask_as_3rd_channel=cfg.use_mask_as_3rd_channel,
+                use_mask=cfg.use_mask,
                 use_global_min_max=cfg.use_global_min_max,
             )
         )

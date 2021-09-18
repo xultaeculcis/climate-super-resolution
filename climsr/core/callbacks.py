@@ -56,7 +56,7 @@ class LogImagesCallback(Callback):
         if isinstance(pl_module.logger, DummyLogger):
             return
 
-        rank_zero_info(f"Saving generated images")
+        rank_zero_info("Saving generated images")
 
         if trainer.val_dataloaders:
             dl = trainer.val_dataloaders[0]
@@ -343,7 +343,6 @@ class LogImagesCallback(Callback):
                     f"figure-{self.experiment_name}-epoch={current_epoch}-step={global_step}-{mini_batch_idx}.png",
                 )
             )
-
 
     @staticmethod
     def _log_images_from_file(pl_module: LightningModule, fp: str, name: str) -> None:

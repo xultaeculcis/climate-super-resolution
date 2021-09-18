@@ -60,7 +60,7 @@ class SuperResolutionDataConfig:
     normalization_range: Optional[Tuple[float, float]] = (-1.0, 1.0)
     pin_memory: Optional[bool] = True
     use_elevation: Optional[bool] = True
-    use_mask_as_3rd_channel: Optional[bool] = True
+    use_mask: Optional[bool] = True
     use_global_min_max: Optional[bool] = True
 
 
@@ -188,7 +188,7 @@ class InferenceConfig:
     elevation_file: Optional[str] = MISSING
     land_mask_file: Optional[str] = MISSING
     use_elevation: Optional[bool] = True
-    use_mask_as_3rd_channel: Optional[bool] = True
+    use_mask: Optional[bool] = True
     use_global_min_max: Optional[bool] = True
     cruts_variable: Optional[str] = "tmp"  # Select null if you want to run in a loop for all variables
     scaling_factor: Optional[int] = 4

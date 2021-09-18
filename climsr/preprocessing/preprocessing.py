@@ -55,6 +55,13 @@ def _month_from_filename(fname: str) -> int:
     return int(match.group().replace(".", "").replace("_", "").replace("-", "")) if match is not None else -1
 
 
+def _resolution_from_filename(fname: str) -> str:
+    """Extracts resolution from the World Clim Geo-Tiff filename"""
+    for res in consts.world_clim.data_resolutions:
+        if res in fname:
+            return res
+
+
 def _cruts_as_tiff(variable: str, data_dir: str, out_dir: str, df_output_path: str) -> None:
     """
     Creates a Geo-Tiff file for each time step in the CRU-TS dataset.
@@ -312,7 +319,6 @@ def _compute_stats_for_zscore(cfg: PreProcessingConfig) -> None:
         ds = xarray.open_dataset(
             os.path.join(
                 to_absolute_path(cfg.data_dir_cruts),
-                consts.datasets_and_preprocessing.extracted,
                 consts.cruts.file_pattern.format(var),
             )
         )
@@ -387,6 +393,7 @@ def _compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
             var,
             year_from_filename,
             month_from_filename,
+            "30m",
             *compute_stats(fp),
         )
 
@@ -398,6 +405,7 @@ def _compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
                     glob(
                         os.path.join(
                             to_absolute_path(cfg.output_path),
+                            consts.datasets_and_preprocessing.preprocessing_output_path,
                             consts.datasets_and_preprocessing.cruts_preprocessing_out_path,
                             consts.cruts.full_res_dir,
                             var,
@@ -414,6 +422,7 @@ def _compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
         fname = os.path.basename(fp)
         year_from_filename = _year_from_filename(fname)
         month_from_filename = _month_from_filename(fname)
+        resolution_from_filename = _resolution_from_filename(fname)
         return (
             "world-clim",
             fp,
@@ -421,6 +430,7 @@ def _compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
             var,
             year_from_filename,
             month_from_filename,
+            resolution_from_filename,
             *compute_stats(fp),
         )
 
@@ -428,6 +438,7 @@ def _compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
         logging.info(f"Computing stats for World Clim - '{var}'")
         pattern = os.path.join(
             to_absolute_path(cfg.output_path),
+            consts.datasets_and_preprocessing.preprocessing_output_path,
             consts.datasets_and_preprocessing.world_clim_preprocessing_out_path,
             consts.world_clim.resized_dir,
             "**",
@@ -448,6 +459,7 @@ def _compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
         consts.datasets_and_preprocessing.variable,
         consts.datasets_and_preprocessing.year,
         consts.datasets_and_preprocessing.month,
+        consts.datasets_and_preprocessing.resolution,
         consts.stats.min,
         consts.stats.max,
     ]
@@ -492,6 +504,8 @@ def _compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
         var = row[consts.datasets_and_preprocessing.variable]
         df.loc[idx, consts.stats.global_min] = global_min_max_lookup[var][consts.stats.global_min]
         df.loc[idx, consts.stats.global_max] = global_min_max_lookup[var][consts.stats.global_max]
+
+    df = df.reset_index(drop=True)
 
     df.to_feather(output_file)
 
@@ -805,6 +819,7 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
                 os.path.join(
                     os.path.join(
                         to_absolute_path(cfg.output_path),
+                        consts.datasets_and_preprocessing.preprocessing_output_path,
                         consts.datasets_and_preprocessing.world_clim_preprocessing_out_path,
                     ),
                     consts.world_clim.resized_dir,
@@ -836,13 +851,14 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
         x: int,
         y: int,
         var: str,
-    ) -> Union[Tuple[str, str, str, int, int, int, int, str], None]:
+    ) -> Union[Tuple[str, str, str, int, int, str, int, int, str], None]:
         if not os.path.exists(file_path):
             return None
 
         original_filename = os.path.basename(original_file_path)
         year_from_filename = _year_from_filename(original_filename)
         month_from_filename = _month_from_filename(original_filename)
+        resolution_from_filename = _resolution_from_filename(original_filename)
 
         stage_to_assign = ""
 
@@ -872,6 +888,7 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
             var,
             year_from_filename,
             month_from_filename,
+            resolution_from_filename,
             x,
             y,
             stage_to_assign,
@@ -892,7 +909,10 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
         for variable in variables:
             os.makedirs(
                 os.path.join(
-                    to_absolute_path(cfg.output_path), consts.datasets_and_preprocessing.preprocessing_output_path, variable
+                    to_absolute_path(cfg.output_path),
+                    consts.datasets_and_preprocessing.preprocessing_output_path,
+                    consts.datasets_and_preprocessing.feather_path,
+                    variable,
                 ),
                 exist_ok=True,
             )
@@ -913,6 +933,7 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
                 consts.datasets_and_preprocessing.variable,
                 consts.datasets_and_preprocessing.year,
                 consts.datasets_and_preprocessing.month,
+                consts.datasets_and_preprocessing.resolution,
                 consts.datasets_and_preprocessing.x,
                 consts.datasets_and_preprocessing.y,
                 consts.datasets_and_preprocessing.stage,
@@ -923,7 +944,7 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
             )
 
             for stage in [consts.stages.train, consts.stages.val, consts.stages.test, consts.world_clim.elev]:
-                stage_images_df = df[df[consts.datasets_and_preprocessing.stage] == stage]
+                stage_images_df = df[df[consts.datasets_and_preprocessing.stage] == stage].reset_index(drop=True)
 
                 if not len(stage_images_df) > 0:
                     continue
@@ -932,6 +953,7 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
                     os.path.join(
                         to_absolute_path(cfg.output_path),
                         consts.datasets_and_preprocessing.preprocessing_output_path,
+                        consts.datasets_and_preprocessing.feather_path,
                         variable,
                         f"{stage}.feather",
                     ),
@@ -940,7 +962,7 @@ def run_train_val_test_split(cfg: PreProcessingConfig) -> None:
                 logging.info(f"Generated {len(stage_images_df)} {stage} images for variable: {variable}")
 
 
-def run_cruts_extent_extraction(cfg: PreProcessingConfig) -> None:
+def run_extent_extraction(cfg: PreProcessingConfig) -> None:
     """
     Run Europe extent extraction for Geo-Tiff files.
 
@@ -952,10 +974,11 @@ def run_cruts_extent_extraction(cfg: PreProcessingConfig) -> None:
     def _assign_single_extent_to_stage(
         file_path: str,
         var: str,
-    ) -> Union[Tuple[str, str, str, int, int, str], None]:
+    ) -> Union[Tuple[str, str, str, int, int, str, str], None]:
         filename = os.path.basename(file_path)
         year_from_filename = _year_from_filename(filename)
         month_from_filename = _month_from_filename(filename)
+        resolution_from_filename = _resolution_from_filename(filename)
 
         stage_to_assign = ""
 
@@ -974,6 +997,7 @@ def run_cruts_extent_extraction(cfg: PreProcessingConfig) -> None:
             var,
             year_from_filename,
             month_from_filename,
+            resolution_from_filename,
             stage_to_assign,
         )
 
@@ -982,6 +1006,7 @@ def run_cruts_extent_extraction(cfg: PreProcessingConfig) -> None:
             extent_raster_paths = glob(
                 os.path.join(
                     to_absolute_path(cfg.output_path),
+                    consts.datasets_and_preprocessing.preprocessing_output_path,
                     consts.datasets_and_preprocessing.world_clim_preprocessing_out_path,
                     consts.cruts.europe_extent,
                     "**",
@@ -1001,6 +1026,7 @@ def run_cruts_extent_extraction(cfg: PreProcessingConfig) -> None:
                 consts.datasets_and_preprocessing.variable,
                 consts.datasets_and_preprocessing.year,
                 consts.datasets_and_preprocessing.month,
+                consts.datasets_and_preprocessing.resolution,
                 consts.datasets_and_preprocessing.stage,
             ]
             df = pd.DataFrame.from_records(records, columns=columns)
@@ -1017,13 +1043,16 @@ def run_cruts_extent_extraction(cfg: PreProcessingConfig) -> None:
             os.makedirs(path_to_save, exist_ok=True)
 
             for stage in consts.stages.stages:
-                df[df["stage"] == stage].to_feather(os.path.join(path_to_save, f"{stage}_europe_extent.feather"))
+                df[df["stage"] == stage].reset_index(drop=True).to_feather(
+                    os.path.join(path_to_save, f"{stage}_europe_extent.feather")
+                )
 
     if cfg.run_extent_extraction:
         # handle extent dirs
         extent_dir = to_absolute_path(
             os.path.join(
                 cfg.output_path,
+                consts.datasets_and_preprocessing.preprocessing_output_path,
                 consts.datasets_and_preprocessing.cruts_preprocessing_out_path,
                 consts.cruts.europe_extent,
             )
@@ -1036,6 +1065,7 @@ def run_cruts_extent_extraction(cfg: PreProcessingConfig) -> None:
             to_absolute_path(
                 os.path.join(
                     cfg.output_path,
+                    consts.datasets_and_preprocessing.preprocessing_output_path,
                     consts.datasets_and_preprocessing.cruts_preprocessing_out_path,
                     consts.cruts.full_res_dir,
                 )
@@ -1044,25 +1074,12 @@ def run_cruts_extent_extraction(cfg: PreProcessingConfig) -> None:
             consts.cruts.temperature_vars,
             consts.datasets_and_preprocessing.lr_bbox,
         )
-        logging.info("Extracting polygon extents for Europe for land mask file.")
-        _extract_extent_single(
-            to_absolute_path(cfg.land_mask_file),
-            consts.datasets_and_preprocessing.hr_bbox,
-            consts.batch_items.mask,
-            extent_dir,
-        )
-        logging.info("Extracting polygon extents for Europe for elevation file.")
-        _extract_extent_single(
-            to_absolute_path(cfg.elevation_file),
-            consts.datasets_and_preprocessing.hr_bbox,
-            consts.cruts.elev,
-            extent_dir,
-        )
         logging.info("Extracting polygon extents for Europe for World-Clim files.")
         _extract_extent_world_clim(
             to_absolute_path(
                 os.path.join(
                     cfg.output_path,
+                    consts.datasets_and_preprocessing.preprocessing_output_path,
                     consts.datasets_and_preprocessing.world_clim_preprocessing_out_path,
                     consts.world_clim.resized_dir,
                 )
@@ -1070,6 +1087,7 @@ def run_cruts_extent_extraction(cfg: PreProcessingConfig) -> None:
             to_absolute_path(
                 os.path.join(
                     cfg.output_path,
+                    consts.datasets_and_preprocessing.preprocessing_output_path,
                     consts.datasets_and_preprocessing.world_clim_preprocessing_out_path,
                     consts.cruts.europe_extent,
                 )

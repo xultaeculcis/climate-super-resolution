@@ -31,7 +31,7 @@ standardize_stats = None
 normalize_range = (-1.0, 1.0)
 use_elevation = True
 use_global_min_max = True
-use_mask_as_3rd_channel = True
+use_mask = True
 
 
 def _get_dataset(gen):
@@ -49,7 +49,7 @@ def _get_dataset(gen):
         normalize_range=normalize_range,
         use_elevation=use_elevation,
         use_global_min_max=use_global_min_max,
-        use_mask_as_3rd_channel=use_mask_as_3rd_channel,
+        use_mask=use_mask,
     )
 
 

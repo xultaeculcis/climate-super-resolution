@@ -32,7 +32,7 @@ class GeoTiffInferenceDataset(ClimateDatasetBase):
         standardize_stats: Dict[str, Dict[str, float]] = None,
         normalize_range: Optional[Tuple[float, float]] = (-1.0, 1.0),
         use_elevation: Optional[bool] = True,
-        use_mask_as_3rd_channel: Optional[bool] = True,
+        use_mask: Optional[bool] = True,
         use_global_min_max: Optional[bool] = True,
     ):
         super().__init__(
@@ -49,7 +49,7 @@ class GeoTiffInferenceDataset(ClimateDatasetBase):
         self.tiffs = glob(f"{tiff_dir}/*.tif")
         self.tiff_df = tiff_df.set_index(consts.datasets_and_preprocessing.filename, drop=True)
         self.use_elevation = use_elevation
-        self.use_mask_as_3rd_channel = use_mask_as_3rd_channel
+        self.use_mask = use_mask
         self.use_global_min_max = use_global_min_max
         self.elevation_file = elevation_file
         self.land_mask_file = land_mask_file
@@ -107,7 +107,7 @@ class GeoTiffInferenceDataset(ClimateDatasetBase):
             else:
                 img_lr = torch.cat([img_lr, self.elevation_lr], dim=0)
 
-        if self.use_mask_as_3rd_channel:
+        if self.use_mask:
             if self.generator_type == consts.models.srcnn:
                 img_lr = torch.cat([img_lr, self.land_mask_tensor], dim=0)
             else:

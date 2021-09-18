@@ -26,16 +26,13 @@ trainer:
   precision: 16
   flush_logs_every_n_steps: 30
   log_every_n_steps: 30
-  max_epochs: 30
-  limit_train_batches: 1
-  limit_val_batches: 1
-  limit_test_batches: 1
+  max_epochs: 10
 
 datamodule:
   cfg:
     batch_size: ${training.batch_size}
     num_workers: ${training.num_workers}
-    pin_memory: True
+    pin_memory: False
     data_path: "datasets"
     world_clim_variable: "temp"
     generator_type: ${training.generator_type}
@@ -45,5 +42,5 @@ datamodule:
     normalization_method: "minmax"
     normalization_range: [ -1.0, 1.0 ]
     use_elevation: True
-    use_mask_as_3rd_channel: True
+    use_mask: True
     use_global_min_max: True

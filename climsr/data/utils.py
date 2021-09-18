@@ -5,9 +5,9 @@ from matplotlib import pyplot as plt
 import climsr.consts as consts
 
 
-def matplotlib_imshow(batch, title=None):
+def matplotlib_imshow(batch, title=None, nrow=8, normalize=False, padding=2, truncate=88):
     # create grid of images
-    img_grid = torchvision.utils.make_grid(batch, nrow=8, normalize=True, padding=0)
+    img_grid = torchvision.utils.make_grid(batch[:truncate], nrow=nrow, normalize=normalize, padding=padding)
 
     # img_grid has 3 channels - they have the same values
     # as they were created using 1 channel data

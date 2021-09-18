@@ -274,17 +274,19 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
         hr, sr = self.common_step(batch)
 
         # denormalize/destandardize
-        sr = (
+        denormalized_sr = (
             self.scaler.denormalize(sr)
             if self.hparams.normalization_method == normalization.zscore
             else self.scaler.denormalize(sr, min_vals[0], max_vals[0])  # we can use 0'th elements since they are the same
         )
 
-        sr[mask.long()] = 0.0
-        original[mask.long()] = 0.0
+        sr[(~mask.bool())] = 0.0
+        hr[(~mask.bool())] = 0.0
+        denormalized_sr[(~mask.bool())] = 0.0
+        original[(~mask.bool())] = 0.0
 
-        metric_dict = self.compute_metrics(sr, hr, mode=prefix)
-        loss = self.loss(sr, hr)
+        metric_dict = self.compute_metrics(sr, hr, denormalized_sr, original, mode=prefix)
+        loss = self.loss(sr, original)
         self.log_dict(metric_dict, prog_bar=False, on_step=False, on_epoch=True)
         self.log(f"{prefix}/loss", loss, prog_bar=True, sync_dist=True)
 
@@ -326,25 +328,45 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
             "r2": self.r2,
         }
 
-    def compute_metrics(self, hr: Tensor, sr: Tensor, mode: Optional[str] = "val") -> Dict[str, torch.Tensor]:
+    def compute_metrics(
+        self,
+        normalized_sr: Tensor,
+        normalized_hr: Tensor,
+        denormalized_sr: Tensor,
+        denormalized_hr: Tensor,
+        mode: Optional[str] = consts.stages.val,
+    ) -> Dict[str, torch.Tensor]:
         """
         Common step to compute all of the metrics.
 
         Args:
-            hr (Tensor): The ground truth HR image.
-            sr (Tensor): The hallucinated SR image.
+            normalized_sr (Tensor): The hallucinated SR normalized image.
+            normalized_hr (Tensor): The ground truth HR normalized image.
+            denormalized_sr (Tensor): The hallucinated SR denormalized image.
+            denormalized_hr (Tensor): The ground truth HR denormalized image.
             mode (Optional[str]): The optional mode. "val" by default.
 
         Returns (Dict[str, torch.Tensor]): A dictionary with metrics.
 
         """
-        hr = hr.to(sr.dtype)
-        return dict(
-            [
-                (f"{mode}/{k}", metric(sr, hr)) if k != "r2" else (f"{mode}/{k}", metric(torch.flatten(sr), torch.flatten(hr)))
-                for k, metric in self.metrics.items()
-            ]
-        )
+        normalized_hr = normalized_hr.to(normalized_sr.dtype)
+        denormalized_hr = denormalized_hr.to(denormalized_sr.dtype)
+
+        results = dict()
+        for k, metric in self.metrics.items():
+            if k == "ssim":
+                hr = normalized_hr
+                sr = normalized_sr
+            elif k == "r2":
+                hr = torch.flatten(denormalized_hr)
+                sr = torch.flatten(denormalized_sr)
+            else:
+                hr = denormalized_hr
+                sr = denormalized_sr
+
+            results[f"{mode}/{k}"] = metric(sr, hr)
+
+        return results
 
     def on_train_start(self):
         """Run additional steps when training starts."""

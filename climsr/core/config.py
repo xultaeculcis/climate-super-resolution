@@ -58,7 +58,7 @@ class SuperResolutionDataConfig:
     seed: Optional[int] = 42
     normalization_method: Optional[str] = normalization.minmax
     normalization_range: Optional[Tuple[float, float]] = (-1.0, 1.0)
-    pin_memory: Optional[bool] = True
+    pin_memory: Optional[bool] = False
     use_elevation: Optional[bool] = True
     use_mask: Optional[bool] = True
     use_global_min_max: Optional[bool] = True

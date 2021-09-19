@@ -16,13 +16,29 @@ europe_extent_expected_shape_lr_3d = (3, 103, 113)
 var = "tmp"
 
 root_dir = str(Path(__file__).parent.parent.parent)
-data_dir = os.path.join(root_dir, "datasets/pre-processed")
+data_dir = os.path.join(root_dir, "datasets")
 
-df = pd.read_feather(os.path.join(data_dir, "feather/statistics_min_max.feather"))
+df = pd.read_feather(
+    os.path.join(data_dir, consts.datasets_and_preprocessing.preprocessing_output_path, "feather/statistics_min_max.feather")
+)
 df = df[(df[consts.datasets_and_preprocessing.dataset] == "cru-ts") & (df[consts.datasets_and_preprocessing.variable] == var)]
-tiff_dir = os.path.join(data_dir, f"cruts/europe-extent/{var}")
-elevation_file = os.path.join(data_dir, "cruts/europe-extent/elevation/wc2.1_2.5m_elev.tif")
-land_mask_file = os.path.join(data_dir, "cruts/europe-extent/mask/wc2.1_2.5m_tmin_1961-01.tif")
+tiff_dir = os.path.join(data_dir, consts.datasets_and_preprocessing.preprocessing_output_path, f"cruts/europe-extent/{var}")
+elevation_file = os.path.join(
+    data_dir,
+    consts.datasets_and_preprocessing.preprocessing_output_path,
+    consts.datasets_and_preprocessing.world_clim_preprocessing_out_path,
+    consts.cruts.europe_extent,
+    consts.world_clim.elev,
+    "wc2.1_5m_elev.tif",
+)
+land_mask_file = os.path.join(
+    data_dir,
+    consts.datasets_and_preprocessing.preprocessing_output_path,
+    consts.datasets_and_preprocessing.world_clim_preprocessing_out_path,
+    consts.cruts.europe_extent,
+    consts.world_clim.tmin,
+    "wc2.1_5m_tmin_01.tif",
+)
 variable = var
 scaling_factor = 4
 normalize = True

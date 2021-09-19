@@ -23,6 +23,7 @@ def test_should_return_proper_data():
             consts.datasets_and_preprocessing.variable,
             consts.datasets_and_preprocessing.year,
             consts.datasets_and_preprocessing.month,
+            consts.datasets_and_preprocessing.resolution,
         ],
     )
     sut = ClimateDataset(

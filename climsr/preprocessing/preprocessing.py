@@ -1092,7 +1092,7 @@ def run_extent_extraction(cfg: PreProcessingConfig) -> None:
                     consts.cruts.europe_extent,
                 )
             ),
-            consts.world_clim.temperature_vars,
+            consts.world_clim.temperature_vars + [consts.world_clim.elev],
             consts.datasets_and_preprocessing.hr_bbox,
         )
         logging.info("Running Train/Val/Test split on Europe extent raster files.")

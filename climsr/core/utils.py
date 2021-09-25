@@ -15,4 +15,4 @@ def set_gpu_power_limit_if_needed():
     gpu_list = stream.read()
     if "NVIDIA GeForce RTX 3090" in gpu_list:
         os.system("sudo nvidia-smi -pm 1")
-        os.system("sudo nvidia-smi -pl 275")
+        os.system("sudo nvidia-smi -pl 300")

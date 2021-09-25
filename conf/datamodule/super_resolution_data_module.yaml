@@ -6,6 +6,10 @@ cfg:
   pin_memory: True
   data_path: "datasets"
   world_clim_variable: "temp"
+  resolutions:
+    - "10m"
+    - "5m"
+    - "2.5m"
   generator_type: "rcan"
   scale_factor: 4
   hr_size: 128

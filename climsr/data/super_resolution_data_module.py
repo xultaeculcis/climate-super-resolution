@@ -49,7 +49,7 @@ class SuperResolutionDataModule(DataModuleBase):
         )
 
     def _setup(self) -> None:
-        train_df, val_df, test_dfs, elevation_df, standardize_stats = self.load_data()
+        train_df, val_df, test_dfs, elevation_df, standardize_stats = self._load_data()
 
         logging.info(
             f"'{self.cfg.world_clim_variable}' - Train/Validation/Test split sizes (HR): "
@@ -62,7 +62,7 @@ class SuperResolutionDataModule(DataModuleBase):
             else:
                 self.ds[stage] = self._build_dataset(stage, frames, elevation_df, standardize_stats)
 
-    def load_dataframe(self, var: str, filename: str) -> pd.DataFrame:
+    def _load_dataframe(self, var: str, filename: str) -> pd.DataFrame:
         return pd.read_feather(
             os.path.join(
                 to_absolute_path(self.cfg.data_path),
@@ -73,10 +73,12 @@ class SuperResolutionDataModule(DataModuleBase):
             )
         )
 
-    def load_data(
-        self,
-    ) -> Tuple[pd.DataFrame, pd.DataFrame, List[pd.DataFrame], pd.DataFrame, pd.DataFrame]:
-        elevation_df = self.load_dataframe(consts.world_clim.elev, f"{consts.world_clim.elev}.feather")
+    def _filter_by_resolution(self, df):
+        return df[df[consts.datasets_and_preprocessing.resolution].isin(self.cfg.resolutions)]
+
+    def _load_data(self) -> Tuple[pd.DataFrame, pd.DataFrame, List[pd.DataFrame], pd.DataFrame, pd.DataFrame]:
+        elevation_df = self._load_dataframe(consts.world_clim.elev, f"{consts.world_clim.elev}.feather")
+        elevation_df = self._filter_by_resolution(elevation_df)
 
         stats_df = pd.read_feather(
             os.path.join(
@@ -86,26 +88,33 @@ class SuperResolutionDataModule(DataModuleBase):
                 consts.datasets_and_preprocessing.min_max_stats_filename,
             )
         )
+        stats_df = self._filter_by_resolution(stats_df)
 
         if self.cfg.world_clim_variable == consts.world_clim.temp:
             train_dfs = []
             val_dfs = []
             test_dfs = []
             for var in consts.world_clim.temperature_vars:
-                train_dfs.append(self.load_dataframe(var, consts.datasets_and_preprocessing.train_feather))
-                val_dfs.append(self.load_dataframe(var, consts.datasets_and_preprocessing.val_feather))
-                test_dfs.append(self.load_dataframe(var, consts.datasets_and_preprocessing.test_feather))
+                train_dfs.append(
+                    self._filter_by_resolution(self._load_dataframe(var, consts.datasets_and_preprocessing.train_feather))
+                )
+                val_dfs.append(
+                    self._filter_by_resolution(self._load_dataframe(var, consts.datasets_and_preprocessing.val_feather))
+                )
+                test_dfs.append(
+                    self._filter_by_resolution(self._load_dataframe(var, consts.datasets_and_preprocessing.test_feather))
+                )
 
             train_df = pd.concat(train_dfs)
             val_df = pd.concat(val_dfs)
         else:
-            train_df = self.load_dataframe(
+            train_df = self._load_dataframe(
                 self.cfg.world_clim_variable,
                 consts.datasets_and_preprocessing.train_feather,
             )
-            val_df = self.load_dataframe(self.cfg.world_clim_variable, consts.datasets_and_preprocessing.val_feather)
+            val_df = self._load_dataframe(self.cfg.world_clim_variable, consts.datasets_and_preprocessing.val_feather)
             test_dfs = [
-                self.load_dataframe(
+                self._load_dataframe(
                     self.cfg.world_clim_variable,
                     consts.datasets_and_preprocessing.test_feather,
                 )

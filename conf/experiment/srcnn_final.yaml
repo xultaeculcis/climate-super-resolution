@@ -38,6 +38,9 @@ datamodule:
     pin_memory: False
     data_path: "datasets"
     world_clim_variable: "temp"
+    resolutions:
+      - "5m"
+      - "2.5m"
     generator_type: ${training.generator_type}
     scale_factor: 4
     hr_size: 128

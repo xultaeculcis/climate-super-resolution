@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
-from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
 
 from omegaconf import MISSING
 
 import climsr.consts as consts
 from climsr.data import normalization
+
+
+def _default_resolution_list():
+    return [consts.world_clim.resolution_5m, consts.world_clim.resolution_2_5m]
 
 
 @dataclass
@@ -50,6 +54,7 @@ class SuperResolutionDataConfig:
     data_path: Optional[str] = MISSING
     world_clim_variable: Optional[str] = consts.world_clim.temp
     generator_type: Optional[str] = consts.models.rcan
+    resolutions: Optional[List[str]] = field(default_factory=_default_resolution_list)
     batch_size: Optional[int] = 192
     validation_batch_size: Optional[int] = 192
     num_workers: Optional[int] = 8

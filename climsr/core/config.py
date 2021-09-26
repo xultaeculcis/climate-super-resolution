@@ -212,3 +212,15 @@ class ResultInspectionConfig:
     ds_temp_nn_path: Optional[str] = MISSING
     ds_temp_cru_path: Optional[str] = MISSING
     peaks_feather: Optional[str] = MISSING
+
+
+def infer_generator_config(generator_cfg: GeneratorConfig, data_config: SuperResolutionDataConfig) -> GeneratorConfig:
+    in_channels = 3
+    if not data_config.use_elevation:
+        in_channels = in_channels - 1
+    if not data_config.use_mask:
+        in_channels = in_channels - 1
+
+    generator_cfg.in_channels = in_channels
+
+    return generator_cfg

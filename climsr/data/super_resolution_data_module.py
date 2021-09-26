@@ -23,6 +23,7 @@ class SuperResolutionDataModule(DataModuleBase):
         super(SuperResolutionDataModule, self).__init__()
 
         assert cfg.hr_size % cfg.scale_factor == 0
+        assert consts.world_clim.resolution_2_5m in cfg.resolutions, "2.5m resolution is required!"
 
         self.cfg = cfg
         self.ds = dict()

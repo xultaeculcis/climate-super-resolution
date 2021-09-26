@@ -17,6 +17,7 @@ from pytorch_lightning.utilities import rank_zero_info
 from torch import Tensor
 from torchvision.transforms import ToTensor
 from torchvision.utils import make_grid
+from tqdm import tqdm
 
 import climsr.consts as consts
 from climsr.core.task import TaskSuperResolutionModule
@@ -190,7 +191,9 @@ class LogImagesCallback(Callback):
             img_grid[mask_grid] = np.nan
 
         plt.figure(figsize=(2 * nrows, 2 * ncols))
-        plt.imshow(img_grid, cmap=cmap_inferno if consts.cruts.elev in out_path else cmap_jet, aspect="auto")
+        plt.imshow(
+            img_grid, cmap=cmap_inferno if os.path.basename(out_path).startswith(consts.cruts.elev) else cmap_jet, aspect="auto"
+        )
         plt.axis("off")
 
         plt.savefig(out_path, bbox_inches="tight")
@@ -235,7 +238,7 @@ class LogImagesCallback(Callback):
             consts.plotting.sr,
         ]
         if not self.use_elevation:
-            cols.remove(consts.batch_items.elevation)
+            cols.remove(consts.plotting.elevation)
 
         ncols = len(cols)
 
@@ -246,7 +249,9 @@ class LogImagesCallback(Callback):
         sr = sr.squeeze(1).cpu().numpy()
         mask = mask.squeeze(1).cpu().numpy()
 
-        for mini_batch_idx in range(np.min([hr.shape[0] // items, MAX_MINI_BATCHES])):
+        batches = np.min([hr.shape[0] // items, MAX_MINI_BATCHES])
+
+        for mini_batch_idx in tqdm(range(batches), desc="Saving figures from mini-batches"):
             fig, axes = plt.subplots(
                 nrows=items,
                 ncols=ncols,

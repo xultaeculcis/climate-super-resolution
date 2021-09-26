@@ -6,5 +6,5 @@ model_checkpoint:
   save_last: null # additionally, always save model from last epoch
   verbose: True
   dirpath: "model_weights"
-  filename: "${training.generator_type}_{epoch:03d}_{step:05d}_{hp_metric:0.5f}.ckpt"
+  filename: "${training.experiment_name}_{epoch:03d}_{step:05d}_{hp_metric:0.5f}"
   auto_insert_metric_name: True

@@ -95,10 +95,12 @@ class ClimateDataset(ClimateDatasetBase):
         mask_np: np.ndarray,
     ) -> Tensor:
         """Concatenates elevation and/or mask data as 2nd and/or 3rd channel to LR raster data."""
+        if self.generator_type == consts.models.srcnn:
+            img_lr = img_sr_nearest
 
         if self.use_elevation:
             if self.generator_type == consts.models.srcnn:
-                img_lr = torch.cat([img_sr_nearest, img_elev], dim=0)
+                img_lr = torch.cat([img_lr, img_elev], dim=0)
             else:
                 img_lr = torch.cat([img_lr, img_elev_lr], dim=0)
 

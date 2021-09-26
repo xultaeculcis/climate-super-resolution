@@ -22,10 +22,12 @@ from torchmetrics import (
 
 import climsr.consts as consts
 from climsr.core.config import DiscriminatorConfig, GeneratorConfig, OptimizerConfig, SchedulerConfig
-from climsr.core.instantiator import Instantiator
+from climsr.core.instantiator import HydraInstantiator, Instantiator
 from climsr.data import normalization
 from climsr.data.normalization import MinMaxScaler, Scaler, StandardScaler
 from climsr.metrics.regression_accuracy import RegressionAccuracy
+
+default_instantiator = HydraInstantiator()
 
 
 class LitSuperResolutionModule(pl.LightningModule):
@@ -113,7 +115,7 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
         optimizers: Dict[str, OptimizerConfig],
         schedulers: Dict[str, SchedulerConfig],
         discriminator: Optional[DiscriminatorConfig] = None,
-        instantiator: Optional[Instantiator] = None,
+        instantiator: Optional[Instantiator] = default_instantiator,
         **kwargs,
     ):
         self.instantiator = instantiator
@@ -285,10 +287,13 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
         denormalized_sr[(~mask.bool())] = 0.0
         original[(~mask.bool())] = 0.0
 
+        normal_loss = self.loss(sr, hr)
+        loss = self.loss(sr, hr)
         metric_dict = self.compute_metrics(sr, hr, denormalized_sr, original, mode=prefix)
-        loss = self.loss(sr, original)
+        metric_dict[f"{prefix}/normalized_loss"] = normal_loss
+        metric_dict[f"{prefix}/loss"] = loss
+
         self.log_dict(metric_dict, prog_bar=False, on_step=False, on_epoch=True)
-        self.log(f"{prefix}/loss", loss, prog_bar=True, sync_dist=True)
 
         return metric_dict
 
@@ -354,7 +359,7 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
 
         results = dict()
         for k, metric in self.metrics.items():
-            if k == "ssim":
+            if k in ["ssim", "mape"]:
                 hr = normalized_hr
                 sr = normalized_sr
             elif k == "r2":

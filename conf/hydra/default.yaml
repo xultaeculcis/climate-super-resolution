@@ -2,7 +2,7 @@
 run:
   dir: outputs/runs/${training.generator_type}/${now:%Y-%m-%d}/${now:%H-%M-%S}
 sweep:
-  dir: outputs/multiruns/${training.generator_type}/${now:%Y-%m-%d_%H-%M-%S}
+  dir: outputs/multiruns/${training.generator_type}/${now:%Y-%m-%d}/${now:%H-%M-%S}
   subdir: ${hydra.job.num}
 
 # you can set here environment variables that are universal for all users

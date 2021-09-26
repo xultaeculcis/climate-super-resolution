@@ -4,12 +4,13 @@ from typing import Any, List, Optional
 
 import hydra
 import pytorch_lightning as pl
+from hydra.utils import to_absolute_path
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import Callback, seed_everything
 from pytorch_lightning.loggers import LightningLoggerBase
 from pytorch_lightning.utilities.distributed import rank_zero_info
 
-from climsr.core.config import SuperResolutionDataConfig, TaskConfig, TrainerConfig
+from climsr.core.config import SuperResolutionDataConfig, TaskConfig, TrainerConfig, infer_generator_config
 from climsr.core.instantiator import HydraInstantiator, Instantiator
 from climsr.core.task import TaskSuperResolutionModule
 from climsr.core.utils import set_gpu_power_limit_if_needed, set_ignore_warnings
@@ -23,6 +24,7 @@ default_trainer_config = TrainerConfig()
 def run(
     instantiator: Instantiator,
     ignore_warnings: bool = True,
+    run_fit: bool = True,
     run_test_after_fit: bool = True,
     lr_find_only: bool = False,
     datamodule_cfg: Optional[SuperResolutionDataConfig] = default_sr_dm_config,
@@ -69,6 +71,9 @@ def run(
             callbacks.append(hydra.utils.instantiate(cb_conf))
 
     # Init lightning trainer
+    if trainer_cfg.resume_from_checkpoint is not None:
+        trainer_cfg.resume_from_checkpoint = to_absolute_path(trainer_cfg.resume_from_checkpoint)
+        model = type(model).load_from_checkpoint(checkpoint_path=trainer_cfg.resume_from_checkpoint)
     trainer: pl.Trainer = hydra.utils.instantiate(trainer_cfg, logger=loggers, callbacks=callbacks, _convert_="partial")
 
     if lr_find_only:
@@ -85,9 +90,10 @@ def run(
         return
 
     # Train & Test
-    trainer.fit(model, datamodule=data_module)
+    if run_fit:
+        trainer.fit(model, datamodule=data_module)
     if run_test_after_fit:
-        trainer.test(model, datamodule=data_module)
+        trainer.test(model, dataloaders=data_module.test_dataloader())
 
 
 def main(cfg: DictConfig) -> None:
@@ -98,17 +104,20 @@ def main(cfg: DictConfig) -> None:
     rank_zero_info(OmegaConf.to_yaml(cfg))
     instantiator = HydraInstantiator()
 
+    data_cfg = cfg.get("datamodule")
     task_cfg = cfg.get("task")
-    task_cfg.generator = cfg.get("generator")
     task_cfg.optimizers = cfg.get("optimizers")
     task_cfg.schedulers = cfg.get("schedulers")
+    task_cfg.generator = cfg.get("generator")
+    task_cfg.generator = infer_generator_config(task_cfg.generator, data_cfg.get("cfg"))
 
     run(
         instantiator,
         ignore_warnings=cfg.get("ignore_warnings"),
+        run_fit=cfg.get("training").get("run_fit"),
         run_test_after_fit=cfg.get("training").get("run_test_after_fit"),
         lr_find_only=cfg.get("training").get("lr_find_only"),
-        datamodule_cfg=cfg.get("datamodule"),
+        datamodule_cfg=data_cfg,
         task_cfg=task_cfg,
         trainer_cfg=cfg.get("trainer"),
         logger_cfgs=cfg.get("logger"),

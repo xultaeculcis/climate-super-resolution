@@ -49,7 +49,7 @@ class GeneratorPreTrainingLightningModule(TaskSuperResolutionModule):
 
     def validation_epoch_end(self, outputs: List[Any]) -> None:
         """Compute and log hp_metric at the epoch level."""
-        hp_metric = torch.stack([output["val/rmse"] for output in outputs]).mean()
+        hp_metric = torch.stack([output[f"{consts.stages.val}/rmse"] for output in outputs]).mean()
         self.log("hp_metric", hp_metric)
 
     def test_step(self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None) -> Dict[str, Tensor]:

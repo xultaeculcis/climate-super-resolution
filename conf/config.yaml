@@ -2,10 +2,10 @@ defaults:
   - _self_
   - task: gan_training
   - callbacks:
-      - early_stopping
-      - model_checkpoint
-      - learning_rate_monitor
-      - log_images
+    - early_stopping
+    - model_checkpoint
+    - learning_rate_monitor
+    - log_images
   - datamodule: super_resolution_data_module
   - discriminator: ???
   - logger: tensorboard
@@ -16,7 +16,7 @@ defaults:
   - training: default
   - hydra: default
 
-  - experiment: srcnn_final
+  - experiment: srcnn_pre_training_no_elevation_no_mask
 
 log: False
 ignore_warnings: True

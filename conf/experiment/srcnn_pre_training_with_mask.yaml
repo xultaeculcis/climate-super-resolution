@@ -1,0 +1,50 @@
+# @package _global_
+defaults:
+  - /optimizers@optimizers.generator_optimizer: adam
+  - /optimizers@optimizers.discriminator_optimizer: null
+  - /schedulers@schedulers.generator_scheduler: cosine_schedule_with_warmup
+  - /schedulers@schedulers.discriminator_scheduler: null
+  - override /task: generator_pre_training
+  - override /datamodule: super_resolution_data_module
+  - override /training: default
+  - override /generator: srcnn
+  - override /discriminator: null
+  - override /trainer: default
+
+training:
+  lr: 1e-4
+  batch_size: 128
+  validation_batch_size: 384
+  generator_type: "srcnn"
+  experiment_name: srcnn-${now:%Y%m%d%H%M%S}
+  run_fit: True
+  run_test_after_fit: True
+  num_workers: 8
+
+trainer:
+  gpus: 1
+  accumulate_grad_batches: 1
+  benchmark: True
+  precision: 16
+  flush_logs_every_n_steps: 30
+  log_every_n_steps: 30
+  max_epochs: 1
+
+datamodule:
+  cfg:
+    batch_size: ${training.batch_size}
+    num_workers: ${training.num_workers}
+    pin_memory: False
+    data_path: "datasets"
+    world_clim_variable: "temp"
+    resolutions:
+      - "2.5m"
+    generator_type: ${training.generator_type}
+    scale_factor: 4
+    hr_size: 128
+    seed: ${training.seed}
+    normalization_method: "minmax"
+    normalization_range: [ -1.0, 1.0 ]
+    use_elevation: False
+    use_mask: True
+    use_global_min_max: True

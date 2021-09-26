@@ -26,7 +26,7 @@ trainer:
   accumulate_grad_batches: 1
   benchmark: True
   precision: 16
-  max_epochs: 30
+  max_epochs: 1
 
 datamodule:
   cfg:
@@ -37,6 +37,7 @@ datamodule:
     world_clim_variable: "temp"
     resolutions:
       - "2.5m"
+      - "5m"
     generator_type: ${training.generator_type}
     scale_factor: 4
     hr_size: 128

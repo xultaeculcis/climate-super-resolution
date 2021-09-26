@@ -16,7 +16,7 @@ defaults:
   - training: default
   - hydra: default
 
-  - experiment: srcnn_pre_training_no_elevation_no_mask
+  - experiment: srcnn_pre_training
 
 log: False
 ignore_warnings: True

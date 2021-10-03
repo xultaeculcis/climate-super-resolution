@@ -95,13 +95,16 @@ class LitSuperResolutionModule(pl.LightningModule):
     def setup(self, stage: Optional[str] = None) -> None:
         self.configure_metrics(stage)
 
-    def configure_metrics(self, stage: str) -> Optional[Any]:
+    def configure_metrics(self, stage: Optional[str] = None) -> Optional[Any]:
         """
         Override to configure metrics for train/validation/test.
         This is called on fit start to have access to the data module,
         and initialize any data specific metrics.
         """
         pass
+
+    def on_epoch_start(self) -> None:
+        self.configure_metrics()
 
 
 class TaskSuperResolutionModule(LitSuperResolutionModule):
@@ -136,7 +139,7 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
         self.metrics = {}
 
         # loss
-        self.loss = MSELoss() if self.hparams.generator == consts.models.srcnn else L1Loss()
+        self.loss = MSELoss() if self.hparams.generator_type == consts.models.srcnn else L1Loss()
 
         # normalization
         self.stats, self.scaler = self._configure_scaler()
@@ -297,7 +300,7 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
 
         return metric_dict
 
-    def configure_metrics(self, stage: str) -> None:
+    def configure_metrics(self, stage: Optional[str] = None) -> None:
         self.acc_at_0_1 = RegressionAccuracy(eps=0.1)
         self.acc_at_0_25 = RegressionAccuracy(eps=0.25)
         self.acc_at_0_5 = RegressionAccuracy(eps=0.5)
@@ -332,6 +335,10 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
             "smape": self.smape,
             "r2": self.r2,
         }
+
+        # ensure the same device as main model
+        for k, metric in self.metrics.items():
+            self.metrics[k] = metric.to(self.device)
 
     def compute_metrics(
         self,

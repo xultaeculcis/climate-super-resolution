@@ -12,8 +12,11 @@ from torch import Tensor
 from torchvision import transforms as transforms
 
 import climsr.consts as consts
+from climsr.core.config import TransformsCfg
 from climsr.data.normalization import MinMaxScaler, StandardScaler
 from climsr.data.sr.climate_dataset_base import ClimateDatasetBase
+
+default_transforms_cfg = TransformsCfg()
 
 
 class ClimateDataset(ClimateDatasetBase):
@@ -33,6 +36,7 @@ class ClimateDataset(ClimateDatasetBase):
         use_elevation: Optional[bool] = True,
         use_mask: Optional[bool] = True,
         use_global_min_max: Optional[bool] = True,
+        transforms_cfg: Optional[TransformsCfg] = default_transforms_cfg,
     ):
         super().__init__(
             generator_type=generator_type,
@@ -51,6 +55,7 @@ class ClimateDataset(ClimateDatasetBase):
         self.use_elevation = use_elevation
         self.use_mask = use_mask
         self.use_global_min_max = use_global_min_max
+        self.transforms_cfg = transforms_cfg
 
         if self.standardize:
             self.scaler = StandardScaler(
@@ -144,19 +149,19 @@ class ClimateDataset(ClimateDatasetBase):
         """Gets single training sample with applied transformations."""
 
         # Vertical flip
-        if random.random() > 0.5:
+        if self.transforms_cfg.v_flip and random.random() > 0.5:
             img_hr = np.flipud(img_hr)
             img_elev = np.flipud(img_elev)
             mask = np.flipud(mask)
 
         # Horizontal flip
-        if random.random() > 0.5:
+        if self.transforms_cfg.h_flip and random.random() > 0.5:
             img_hr = np.fliplr(img_hr)
             img_elev = np.fliplr(img_elev)
             mask = np.fliplr(mask)
 
         # Random 90 deg rotation
-        if random.random() > 0.5:
+        if self.transforms_cfg.random_90_rotation and random.random() > 0.5:
             factor = random.randint(0, 3)
             img_hr = np.rot90(img_hr, factor)
             img_elev = np.rot90(img_elev, factor)

@@ -47,6 +47,7 @@ class SuperResolutionDataModule(DataModuleBase):
             use_elevation=self.cfg.use_elevation,
             use_mask=self.cfg.use_mask,
             use_global_min_max=self.cfg.use_global_min_max,
+            transforms_cfg=self.cfg.transforms,
         )
 
     def _setup(self) -> None:

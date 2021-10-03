@@ -3,6 +3,8 @@ defaults:
   - task: gan_training
   - callbacks:
     - early_stopping
+    - gpu_stats_monitor
+    - learning_rate_monitor
     - model_checkpoint
     - learning_rate_monitor
     - log_images

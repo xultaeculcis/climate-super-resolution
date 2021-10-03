@@ -50,6 +50,13 @@ class PreProcessingConfig:
 
 
 @dataclass
+class TransformsCfg:
+    v_flip: Optional[bool] = True
+    h_flip: Optional[bool] = True
+    random_90_rotation: Optional[bool] = True
+
+
+@dataclass
 class SuperResolutionDataConfig:
     data_path: Optional[str] = MISSING
     world_clim_variable: Optional[str] = consts.world_clim.temp
@@ -67,6 +74,7 @@ class SuperResolutionDataConfig:
     use_elevation: Optional[bool] = True
     use_mask: Optional[bool] = True
     use_global_min_max: Optional[bool] = True
+    transforms: Optional[TransformsCfg] = TransformsCfg()
 
 
 @dataclass

@@ -19,3 +19,7 @@ cfg:
   use_elevation: True
   use_mask: True
   use_global_min_max: True
+  transforms:
+    v_flip: True
+    h_flip: True
+    random_90_rotation: True

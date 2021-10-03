@@ -22,6 +22,7 @@ from tqdm import tqdm
 import climsr.consts as consts
 from climsr.core.task import TaskSuperResolutionModule
 from climsr.data import normalization
+from climsr.data.normalization import MinMaxScaler, StandardScaler
 
 MAX_ITEMS = 88
 MAX_MINI_BATCHES = 12
@@ -68,16 +69,20 @@ class LogImagesCallback(Callback):
         batch = next(iter(dl))
 
         with torch.no_grad():
-            lr, hr, nearest, cubic, elev, mask = (
+            lr, hr, original, nearest, cubic, elev, mask, mins, maxes = (
                 batch[consts.batch_items.lr].to(pl_module.device),
                 batch[consts.batch_items.hr].to(pl_module.device),
+                batch[consts.batch_items.original_data].to(pl_module.device),
                 batch[consts.batch_items.nearest].to(pl_module.device),
                 batch[consts.batch_items.cubic],
                 batch[consts.batch_items.elevation].to(pl_module.device),
                 batch[consts.batch_items.mask].to(pl_module.device),
+                batch[consts.batch_items.min],
+                batch[consts.batch_items.max],
             )
 
             sr = pl_module(lr, elev, mask)
+            error = torch.abs(sr - hr)
 
             img_dir = os.path.join(pl_module.logger.experiment[0].log_dir, "images")
 
@@ -95,7 +100,7 @@ class LogImagesCallback(Callback):
                 tensors = [hr, elev, nearest, cubic]
                 self._log_images(pl_module, img_dir, names, tensors, mask)
 
-            self._log_images(pl_module, img_dir, ["sr_images"], [sr], mask)
+            self._log_images(pl_module, img_dir, ["sr_images", consts.batch_items.error], [sr, error], mask)
             self._save_fig(
                 hr=hr,
                 sr_nearest=nearest,
@@ -103,10 +108,14 @@ class LogImagesCallback(Callback):
                 sr=sr,
                 elev=elev,
                 mask=mask,
+                error=error,
+                original=original,
                 img_dir=img_dir,
                 current_epoch=pl_module.current_epoch,
                 global_step=pl_module.global_step,
                 stats=pl_module.stats,
+                mins=mins,
+                maxes=maxes,
             )
 
     def _log_images(
@@ -192,7 +201,7 @@ class LogImagesCallback(Callback):
 
         plt.figure(figsize=(2 * nrows, 2 * ncols))
         plt.imshow(
-            img_grid, cmap=cmap_inferno if os.path.basename(out_path).startswith(consts.cruts.elev) else cmap_jet, aspect="auto"
+            img_grid, cmap=(cmap_inferno if os.path.basename(out_path).startswith(consts.cruts.elev) else cmap_jet), aspect="auto"
         )
         plt.axis("off")
 
@@ -206,10 +215,14 @@ class LogImagesCallback(Callback):
         sr: Tensor,
         elev: Tensor,
         mask: Tensor,
+        error: Tensor,
+        original: Tensor,
         img_dir: str,
         current_epoch: int,
         global_step: int,
         stats: pd.DataFrame,
+        mins: Tensor,
+        maxes: Tensor,
         items: Optional[int] = 16,
     ) -> None:
         """
@@ -222,9 +235,13 @@ class LogImagesCallback(Callback):
             sr (Tensor): The SR image tensor.
             elev (Tensor): The Elevation image tensor.
             mask (Tensor): The Land Mask image tensor.
+            error (Tensor): The prediction error image tensor.
+            original (Tensor): The original (non-normalized) image tensor.
             img_dir (str): The output dir.
             current_epoch (int): The number of current epoch.
             global_step (int): The number of the global step.
+            mins (Tensor): A tensor with minimum pix value. Needed for de-normalization if min-max scaling was used.
+            maxes (Tensor): A tensor with maximum pix value. Needed for de-normalization if min-max scaling was used.
             items (Optional[int]): Optional number of items from batch to save. 16 by default.
 
         """
@@ -236,6 +253,7 @@ class LogImagesCallback(Callback):
             consts.plotting.nearest_interpolation,
             consts.plotting.cubic_interpolation,
             consts.plotting.sr,
+            consts.plotting.error,
         ]
         if not self.use_elevation:
             cols.remove(consts.plotting.elevation)
@@ -245,9 +263,11 @@ class LogImagesCallback(Callback):
         nearest = sr_nearest.squeeze(1).cpu().numpy()
         cubic = sr_cubic.squeeze(1).cpu().numpy()
         hr = hr.squeeze(1).cpu().numpy()
+        original = original.squeeze(1).cpu().numpy()
         elev = elev.squeeze(1).cpu().numpy()
         sr = sr.squeeze(1).cpu().numpy()
         mask = mask.squeeze(1).cpu().numpy()
+        error = error.squeeze(1).cpu().numpy()
 
         batches = np.min([hr.shape[0] // items, MAX_MINI_BATCHES])
 
@@ -267,31 +287,40 @@ class LogImagesCallback(Callback):
             mini_batch_offset_end = mini_batch_offset_start + items
 
             hr_arr = hr[mini_batch_offset_start:mini_batch_offset_end]
+            original_arr = original[mini_batch_offset_start:mini_batch_offset_end]
             elev_arr = elev[mini_batch_offset_start:mini_batch_offset_end]
             nearest_arr = nearest[mini_batch_offset_start:mini_batch_offset_end]
             cubic_arr = cubic[mini_batch_offset_start:mini_batch_offset_end]
             sr_arr = sr[mini_batch_offset_start:mini_batch_offset_end]
             mask_arr = mask[mini_batch_offset_start:mini_batch_offset_end]
-
-            hr_arr[mask_arr] = 0.0
-            elev_arr[mask_arr] = 0.0
-            nearest_arr[mask_arr] = 0.0
-            cubic_arr[mask_arr] = 0.0
-            sr_arr[mask_arr] = 0.0
+            error_arr = error[mini_batch_offset_start:mini_batch_offset_end]
+            mins_arr = mins[mini_batch_offset_start:mini_batch_offset_end]
+            maxes_arr = maxes[mini_batch_offset_start:mini_batch_offset_end]
 
             arrs = [nearest_arr, cubic_arr, sr_arr]
-            maes = []
-            rmses = []
-            for arr in arrs:
-                diff = hr_arr - arr
-                rmses.append(np.sqrt(np.mean(diff ** 2, axis=(1, 2))))
-                maes.append(np.mean(np.absolute(diff), axis=(1, 2)))
+
+            if self.standardize:
+                scaler = StandardScaler(
+                    mean=stats.at[
+                        consts.datasets_and_preprocessing.world_clim_to_cruts_mapping[self.world_clim_variable], consts.stats.mean
+                    ],
+                    std=stats.at[
+                        consts.datasets_and_preprocessing.world_clim_to_cruts_mapping[self.world_clim_variable], consts.stats.std
+                    ],
+                    nan_substitution=stats.at[
+                        consts.datasets_and_preprocessing.world_clim_to_cruts_mapping[self.world_clim_variable],
+                        consts.stats.normalized_min,
+                    ],
+                )
+            else:
+                scaler = MinMaxScaler(feature_range=self.normalization_range)
 
             hr_arr[mask_arr] = np.nan
             elev_arr[mask_arr] = np.nan
             nearest_arr[mask_arr] = np.nan
             cubic_arr[mask_arr] = np.nan
             sr_arr[mask_arr] = np.nan
+            error_arr[mask_arr] = np.nan
 
             for i in range(items):
                 axes[i][0].imshow(
@@ -306,8 +335,11 @@ class LogImagesCallback(Callback):
                     axes[i][1].imshow(elev_arr[i], cmap=cmap_inferno)
                     axes[i][1].set_xlabel("-/-")
 
+                axes[i][-1].imshow(error_arr[i], cmap=cmap_jet)
+                axes[i][-1].set_xlabel("-/-")
+
                 mask_col_idx = 2 if self.use_elevation else 1
-                axes[i][mask_col_idx].imshow(~mask_arr[i], cmap=cmap_gray)
+                axes[i][mask_col_idx].imshow(~mask_arr[i], cmap=cmap_gray, vmin=0.0, vmax=1.0)
                 axes[i][mask_col_idx].set_xlabel("-/-")
 
                 offset = 3 if self.use_elevation else 2
@@ -326,8 +358,20 @@ class LogImagesCallback(Callback):
                             else self.normalization_range[1]
                         ),
                     )
-                    mae_value = maes[idx][i]
-                    rmse_value = rmses[idx][i]
+
+                    denormalized_arr = (
+                        scaler.denormalize(arr[i])
+                        if self.standardize
+                        else scaler.denormalize(arr[i], mins_arr[i].detach().cpu().item(), maxes_arr[i].detach().cpu().item())
+                    )
+
+                    original_arr[mask_arr] = 0.0
+                    denormalized_arr[mask_arr[i]] = 0.0
+
+                    diff = original_arr[i] - denormalized_arr
+                    rmse_value = np.sqrt(np.nanmean(diff ** 2))
+                    mae_value = np.nanmean(np.absolute(diff))
+
                     axes[i][offset + idx].set_xlabel(f"{mae_value:.3f}/{rmse_value:.3f}")
 
                 for j in range(ncols):

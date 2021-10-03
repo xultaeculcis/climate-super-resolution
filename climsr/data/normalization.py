@@ -36,10 +36,10 @@ class MinMaxScaler(Scaler):
 
     def _normalize(
         self,
-        arr: np.ndarray,
-        min: Optional[float] = None,
-        max: Optional[float] = None,
-        missing_indicator: Optional[float] = None,
+        arr: Union[np.ndarray, torch.Tensor],
+        min: Optional[Union[float, torch.Tensor]] = None,
+        max: Optional[Union[float, torch.Tensor]] = None,
+        missing_indicator: Optional[Union[float, torch.Tensor]] = None,
     ) -> Union[np.ndarray, torch.Tensor]:
         out_arr = arr.copy()
         if missing_indicator:
@@ -62,9 +62,9 @@ class MinMaxScaler(Scaler):
 
     def _denormalize(
         self,
-        arr: np.ndarray,
-        min: float,
-        max: float,
+        arr: Union[np.ndarray, torch.Tensor],
+        min: Union[float, torch.Tensor],
+        max: Union[float, torch.Tensor],
     ) -> Union[np.ndarray, torch.Tensor]:
         data_range = max - min
         scale = (self.b - self.a) / (data_range + self.eps)

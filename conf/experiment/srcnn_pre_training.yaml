@@ -27,6 +27,7 @@ trainer:
   benchmark: True
   precision: 16
   max_epochs: 30
+  resume_from_checkpoint: "/media/xultaeculcis/2TB/repos/climate-super-resolution/outputs/runs/srcnn/2021-09-27/21-35-53/model_weights/srcnn-20210927213559_epoch=010_step=240624_hp_metric=0.85531.ckpt"
 
 datamodule:
   cfg:

@@ -222,8 +222,9 @@ class ClimateDataset(ClimateDatasetBase):
         max = row[consts.stats.max] if not self.use_global_min_max else row[consts.stats.global_max]
 
         # original, hr
-        original_image = np.array(Image.open(row[consts.datasets_and_preprocessing.tile_file_path]))
-        img_hr = original_image.copy()
+        with Image.open(row[consts.datasets_and_preprocessing.tile_file_path]) as img:
+            original_image = np.array(img)
+            img_hr = original_image.copy()
 
         # elevation
         elev_fp = self.elevation_df[
@@ -235,8 +236,10 @@ class ClimateDataset(ClimateDatasetBase):
             )
         ][consts.datasets_and_preprocessing.tile_file_path]
         elev_fp = elev_fp.values[0]
-        img_elev = np.array(Image.open(elev_fp))
-        img_elev = img_elev.copy()
+
+        with Image.open(elev_fp) as img:
+            img_elev = np.array(img)
+            img_elev = img_elev.copy()
 
         # normalize/standardize
         if self.normalize:

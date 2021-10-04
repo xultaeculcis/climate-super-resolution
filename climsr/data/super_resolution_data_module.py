@@ -75,12 +75,15 @@ class SuperResolutionDataModule(DataModuleBase):
             )
         )
 
-    def _filter_by_resolution(self, df):
-        return df[df[consts.datasets_and_preprocessing.resolution].isin(self.cfg.resolutions)]
+    def _filter_df(self, df):
+        if not self.cfg.use_extra_data:
+            df = df[df[consts.datasets_and_preprocessing.year] <= 2020]
+        df = df[df[consts.datasets_and_preprocessing.resolution].isin(self.cfg.resolutions)]
+        return df
 
     def _load_data(self) -> Tuple[pd.DataFrame, pd.DataFrame, List[pd.DataFrame], pd.DataFrame, pd.DataFrame]:
         elevation_df = self._load_dataframe(consts.world_clim.elev, f"{consts.world_clim.elev}.feather")
-        elevation_df = self._filter_by_resolution(elevation_df)
+        elevation_df = self._filter_df(elevation_df)
 
         stats_df = pd.read_feather(
             os.path.join(
@@ -90,22 +93,16 @@ class SuperResolutionDataModule(DataModuleBase):
                 consts.datasets_and_preprocessing.min_max_stats_filename,
             )
         )
-        stats_df = self._filter_by_resolution(stats_df)
+        stats_df = self._filter_df(stats_df)
 
         if self.cfg.world_clim_variable == consts.world_clim.temp:
             train_dfs = []
             val_dfs = []
             test_dfs = []
             for var in consts.world_clim.temperature_vars:
-                train_dfs.append(
-                    self._filter_by_resolution(self._load_dataframe(var, consts.datasets_and_preprocessing.train_feather))
-                )
-                val_dfs.append(
-                    self._filter_by_resolution(self._load_dataframe(var, consts.datasets_and_preprocessing.val_feather))
-                )
-                test_dfs.append(
-                    self._filter_by_resolution(self._load_dataframe(var, consts.datasets_and_preprocessing.test_feather))
-                )
+                train_dfs.append(self._filter_df(self._load_dataframe(var, consts.datasets_and_preprocessing.train_feather)))
+                val_dfs.append(self._filter_df(self._load_dataframe(var, consts.datasets_and_preprocessing.val_feather)))
+                test_dfs.append(self._filter_df(self._load_dataframe(var, consts.datasets_and_preprocessing.test_feather)))
 
             train_df = pd.concat(train_dfs)
             val_df = pd.concat(val_dfs)
@@ -192,5 +189,7 @@ class SuperResolutionDataModule(DataModuleBase):
             "use_elevation": self.cfg.use_elevation,
             "use_mask": self.cfg.use_mask,
             "use_global_min_max": self.cfg.use_global_min_max,
+            "use_extra_data": self.cfg.use_extra_data,
+            "resolutions": self.cfg.resolutions,
             "seed": self.cfg.seed,
         }

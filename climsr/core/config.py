@@ -74,6 +74,7 @@ class SuperResolutionDataConfig:
     use_elevation: Optional[bool] = True
     use_mask: Optional[bool] = True
     use_global_min_max: Optional[bool] = True
+    use_extra_data: Optional[bool] = False
     transforms: Optional[TransformsCfg] = TransformsCfg()
 
 

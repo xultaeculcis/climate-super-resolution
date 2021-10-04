@@ -12,7 +12,7 @@ defaults:
   - override /trainer: default
 
 training:
-  lr: 1e-4
+  lr: 6e-4
   batch_size: 128
   validation_batch_size: 384
   generator_type: "srcnn"
@@ -27,13 +27,12 @@ trainer:
   benchmark: True
   precision: 16
   max_epochs: 30
-  resume_from_checkpoint: "/media/xultaeculcis/2TB/repos/climate-super-resolution/outputs/runs/srcnn/2021-09-27/21-35-53/model_weights/srcnn-20210927213559_epoch=010_step=240624_hp_metric=0.85531.ckpt"
 
 datamodule:
   cfg:
     batch_size: ${training.batch_size}
     num_workers: ${training.num_workers}
-    pin_memory: False
+    pin_memory: True
     data_path: "datasets"
     world_clim_variable: "temp"
     resolutions:
@@ -47,6 +46,7 @@ datamodule:
     use_elevation: True
     use_mask: True
     use_global_min_max: True
+    use_extra_data: False
     transforms:
       v_flip: True
       h_flip: True

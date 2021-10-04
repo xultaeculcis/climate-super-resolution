@@ -87,7 +87,7 @@ class LitSuperResolutionModule(pl.LightningModule):
         if num_training_steps < 0:
             # less than 0 specifies to infer number of training steps
             num_training_steps = self.num_training_steps
-        if isinstance(num_warmup_steps, float):
+        if isinstance(num_warmup_steps, float) and num_warmup_steps < 1.0:
             # Convert float values to percentage of training steps to use as warmup
             num_warmup_steps *= num_training_steps
         return num_training_steps, num_warmup_steps

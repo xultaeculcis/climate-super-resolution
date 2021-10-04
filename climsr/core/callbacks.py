@@ -25,7 +25,7 @@ from climsr.data import normalization
 from climsr.data.normalization import MinMaxScaler, StandardScaler
 
 MAX_ITEMS = 88
-MAX_MINI_BATCHES = 12
+MAX_MINI_BATCHES = 1
 
 cmap_jet = matplotlib.cm.get_cmap("jet").copy()
 cmap_gray = matplotlib.cm.get_cmap("gray").copy()
@@ -126,7 +126,9 @@ class LogImagesCallback(Callback):
         tensors: List[Tensor],
         mask: Tensor,
     ):
-        for name, tensor in zip(names, tensors):
+        for name, tensor in tqdm(
+            zip(names, tensors), total=len(names), desc=f"Saving tensors with images for: {', '.join(names)}"
+        ):
             os.makedirs(img_dir, exist_ok=True)
             image_fp = os.path.join(
                 img_dir,

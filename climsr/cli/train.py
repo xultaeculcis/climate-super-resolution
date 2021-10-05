@@ -32,6 +32,7 @@ def run(
     trainer_cfg: Optional[TrainerConfig] = default_trainer_config,
     logger_cfgs: Optional[Any] = None,
     callback_cfgs: Optional[Any] = None,
+    profiler_cfg: Optional[Any] = None,
 ) -> None:
     if ignore_warnings:
         set_ignore_warnings()
@@ -70,11 +71,19 @@ def run(
         if "_target_" in cb_conf:
             callbacks.append(hydra.utils.instantiate(cb_conf))
 
+    # Init profiler
+    if profiler_cfg is not None:
+        profiler = hydra.utils.instantiate(profiler_cfg)
+    else:
+        profiler = None
+
     # Init lightning trainer
     if trainer_cfg.resume_from_checkpoint is not None:
         trainer_cfg.resume_from_checkpoint = to_absolute_path(trainer_cfg.resume_from_checkpoint)
         model = type(model).load_from_checkpoint(checkpoint_path=trainer_cfg.resume_from_checkpoint)
-    trainer: pl.Trainer = hydra.utils.instantiate(trainer_cfg, logger=loggers, callbacks=callbacks, _convert_="partial")
+    trainer: pl.Trainer = hydra.utils.instantiate(
+        trainer_cfg, logger=loggers, callbacks=callbacks, profiler=profiler, _convert_="partial"
+    )
 
     if lr_find_only:
         # Run learning rate finder
@@ -122,6 +131,7 @@ def main(cfg: DictConfig) -> None:
         trainer_cfg=cfg.get("trainer"),
         logger_cfgs=cfg.get("logger"),
         callback_cfgs=cfg.get("callbacks"),
+        profiler_cfg=cfg.get("profiler"),
     )
 
 

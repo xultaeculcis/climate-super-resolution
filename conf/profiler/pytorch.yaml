@@ -1,0 +1,10 @@
+_target_: pytorch_lightning.profiler.PyTorchProfiler
+dirpath: null  # Optional[Union[str, Path]] = None,
+filename: "pytorch-profile"  # Optional[str] = None,
+group_by_input_shapes: False  # bool = False,
+emit_nvtx: False  # bool = False,
+export_to_chrome: True  # bool = True,
+row_limit: 20  # int = 20,
+sort_by_key: null  # Optional[str] = None,
+record_functions: null  # Set[str] = None,
+record_module_names: True  # bool = True,

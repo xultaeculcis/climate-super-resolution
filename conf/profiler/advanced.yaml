@@ -1,0 +1,4 @@
+_target_: pytorch_lightning.profiler.AdvancedProfiler
+dirpath: null # Optional[Union[str, Path]] = None,
+filename: "advanced-profile" # Optional[str] = None,
+line_count_restriction: 1.0 # float = 1.0,

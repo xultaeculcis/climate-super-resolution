@@ -45,18 +45,7 @@ class HydraInstantiator(Instantiator):
         return self.instantiate(cfg, instantiator=self, **model_data_kwargs)
 
     def optimizer(self, model: torch.nn.Module, cfg: DictConfig) -> torch.optim.Optimizer:
-        no_decay = ["bias", "LayerNorm.weight"]
-        grouped_parameters = [
-            {
-                "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay) and p.requires_grad],
-                "weight_decay": cfg.weight_decay,
-            },
-            {
-                "params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay) and p.requires_grad],
-                "weight_decay": 0.0,
-            },
-        ]
-        return self.instantiate(cfg, grouped_parameters)
+        return self.instantiate(cfg, model.parameters())
 
     def scheduler(self, cfg: DictConfig, optimizer: torch.optim.Optimizer) -> torch.optim.lr_scheduler._LRScheduler:
         return self.instantiate(cfg, optimizer=optimizer)

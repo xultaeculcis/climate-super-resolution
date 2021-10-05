@@ -17,6 +17,7 @@ defaults:
   - trainer: default
   - training: default
   - hydra: default
+  - profiler: null
 
   - experiment: srcnn_pre_training
 

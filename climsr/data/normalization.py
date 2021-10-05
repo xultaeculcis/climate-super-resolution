@@ -63,15 +63,23 @@ class MinMaxScaler(Scaler):
     def _denormalize(
         self,
         arr: Union[np.ndarray, torch.Tensor],
-        min: Union[float, torch.Tensor],
-        max: Union[float, torch.Tensor],
+        min: Union[np.ndarray, torch.Tensor],
+        max: Union[np.ndarray, torch.Tensor],
     ) -> Union[np.ndarray, torch.Tensor]:
         data_range = max - min
         scale = (self.b - self.a) / (data_range + self.eps)
         min_ = self.a - min * scale
 
-        out_arr = arr - min_
-        out_arr /= scale
+        # use numpy if ndarray
+        if type(arr) is np.ndarray:
+            out_arr = arr.transpose() - min_
+            out_arr = out_arr / scale
+            out_arr = out_arr.transpose()
+        # else, assume pytorch tensors
+        else:
+            out_arr = arr.permute(1, 2, 3, 0) - min_
+            out_arr = out_arr / scale
+            out_arr = out_arr.permute(3, 0, 1, 2)
 
         return out_arr
 

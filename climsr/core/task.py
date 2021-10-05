@@ -282,7 +282,7 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
         denormalized_sr = (
             self.scaler.denormalize(sr)
             if self.hparams.normalization_method == normalization.zscore
-            else self.scaler.denormalize(sr, min_vals[0], max_vals[0])  # we can use 0'th elements since they are the same
+            else self.scaler.denormalize(sr, min_vals, max_vals)
         )
 
         sr[(~mask.bool())] = 0.0

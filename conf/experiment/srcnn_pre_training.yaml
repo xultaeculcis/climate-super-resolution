@@ -45,7 +45,7 @@ datamodule:
     normalization_range: [ -1.0, 1.0 ]
     use_elevation: True
     use_mask: True
-    use_global_min_max: True
+    use_global_min_max: False
     use_extra_data: False
     transforms:
       v_flip: True

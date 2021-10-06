@@ -22,10 +22,10 @@ from tqdm import tqdm
 import climsr.consts as consts
 from climsr.core.task import TaskSuperResolutionModule
 from climsr.data import normalization
-from climsr.data.normalization import MinMaxScaler, StandardScaler
+from climsr.data.normalization import MinMaxScaler, Scaler, StandardScaler
 
 MAX_ITEMS = 88
-MAX_MINI_BATCHES = 1
+MAX_MINI_BATCHES = 10
 
 cmap_jet = matplotlib.cm.get_cmap("jet").copy()
 cmap_gray = matplotlib.cm.get_cmap("gray").copy()
@@ -74,11 +74,11 @@ class LogImagesCallback(Callback):
                 batch[consts.batch_items.hr].to(pl_module.device),
                 batch[consts.batch_items.original_data].to(pl_module.device),
                 batch[consts.batch_items.nearest].to(pl_module.device),
-                batch[consts.batch_items.cubic],
+                batch[consts.batch_items.cubic].to(pl_module.device),
                 batch[consts.batch_items.elevation].to(pl_module.device),
                 batch[consts.batch_items.mask].to(pl_module.device),
-                batch[consts.batch_items.min],
-                batch[consts.batch_items.max],
+                batch[consts.batch_items.min].to(pl_module.device),
+                batch[consts.batch_items.max].to(pl_module.device),
             )
 
             sr = pl_module(lr, elev, mask)
@@ -107,7 +107,7 @@ class LogImagesCallback(Callback):
                 sr_cubic=cubic,
                 sr=sr,
                 elev=elev,
-                mask=mask,
+                mask=mask.unsqueeze(1),
                 error=error,
                 original=original,
                 img_dir=img_dir,
@@ -209,6 +209,113 @@ class LogImagesCallback(Callback):
 
         plt.savefig(out_path, bbox_inches="tight")
 
+    def _compute_metrics(
+        self,
+        sr_nearest: Tensor,
+        sr_cubic: Tensor,
+        sr: Tensor,
+        mask: Tensor,
+        original: Tensor,
+        scaler: Scaler,
+        mins: Tensor,
+        maxes: Tensor,
+    ) -> Tuple[List[Tensor], List[Tensor]]:
+        """Helper function that computes metrics for each SR image"""
+        maes = []
+        rmses = []
+        mask = mask.bool()
+        original[mask] = 0.0
+        for arr in [sr_nearest, sr_cubic, sr]:
+            denormalized_arr = scaler.denormalize(arr) if self.standardize else scaler.denormalize(arr, mins, maxes)
+            denormalized_arr[mask] = 0.0
+            mae, rmse = self._metrics_per_image(denormalized_arr, original)
+            maes.append(mae)
+            rmses.append(rmse)
+
+        return maes, rmses
+
+    def _prepare_scaler(self, stats: pd.DataFrame) -> Scaler:
+        """Helper function that prepares scaler for image de-normalization, based on current settings."""
+        if self.standardize:
+            scaler = StandardScaler(
+                mean=stats.at[
+                    consts.datasets_and_preprocessing.world_clim_to_cruts_mapping[self.world_clim_variable], consts.stats.mean
+                ],
+                std=stats.at[
+                    consts.datasets_and_preprocessing.world_clim_to_cruts_mapping[self.world_clim_variable], consts.stats.std
+                ],
+                nan_substitution=stats.at[
+                    consts.datasets_and_preprocessing.world_clim_to_cruts_mapping[self.world_clim_variable],
+                    consts.stats.normalized_min,
+                ],
+            )
+        else:
+            scaler = MinMaxScaler(feature_range=self.normalization_range)
+
+        return scaler
+
+    def _plot_single_figure_row(
+        self,
+        i: int,
+        axes: plt.Axes,
+        ncols: int,
+        hr_arr: Tensor,
+        elev_arr: Tensor,
+        error_arr: Tensor,
+        mask_arr: Tensor,
+        arrs: List[Tensor],
+        maes: List[Tensor],
+        rmses: List[Tensor],
+        mini_batch_offset_start: int,
+        mini_batch_offset_end: int,
+        stats: pd.DataFrame,
+    ) -> None:
+        """Helper function that plots single row of images in the figure"""
+
+        axes[i][0].imshow(
+            hr_arr[i],
+            cmap=cmap_jet,
+            vmin=stats.at[consts.stats.normalized_min] if self.standardize else self.normalization_range[0],
+            vmax=stats[consts.stats.normalized_max] if self.standardize else self.normalization_range[1],
+        )
+        axes[i][0].set_xlabel("MAE/RMSE")
+
+        if self.use_elevation:
+            axes[i][1].imshow(elev_arr[i], cmap=cmap_inferno)
+            axes[i][1].set_xlabel("-/-")
+
+        axes[i][-1].imshow(error_arr[i], cmap=cmap_jet)
+        axes[i][-1].set_xlabel("-/-")
+
+        mask_col_idx = 2 if self.use_elevation else 1
+        axes[i][mask_col_idx].imshow(~mask_arr[i], cmap=cmap_gray, vmin=0.0, vmax=1.0)
+        axes[i][mask_col_idx].set_xlabel("-/-")
+
+        offset = 3 if self.use_elevation else 2
+        for idx, arr in enumerate(arrs):
+            axes[i][offset + idx].imshow(
+                arr[i],
+                cmap=cmap_jet,
+                vmin=(
+                    stats.at[self.world_clim_variable, consts.stats.normalized_min]
+                    if self.standardize
+                    else self.normalization_range[0]
+                ),
+                vmax=(
+                    stats.at[self.world_clim_variable, consts.stats.normalized_max]
+                    if self.standardize
+                    else self.normalization_range[1]
+                ),
+            )
+
+            mae = maes[idx][mini_batch_offset_start:mini_batch_offset_end][i]
+            rmse = rmses[idx][mini_batch_offset_start:mini_batch_offset_end][i]
+            axes[i][offset + idx].set_xlabel(f"{mae:.3f}/{rmse:.3f}")
+
+        for j in range(ncols):
+            axes[i][j].xaxis.set_ticklabels([])
+            axes[i][j].xaxis.set_ticklabels([])
+
     def _save_fig(
         self,
         hr: Tensor,
@@ -247,7 +354,6 @@ class LogImagesCallback(Callback):
             items (Optional[int]): Optional number of items from batch to save. 16 by default.
 
         """
-
         cols = [
             consts.plotting.hr,
             consts.plotting.elevation,
@@ -261,124 +367,51 @@ class LogImagesCallback(Callback):
             cols.remove(consts.plotting.elevation)
 
         ncols = len(cols)
-
-        nearest = sr_nearest.squeeze(1).cpu().numpy()
-        cubic = sr_cubic.squeeze(1).cpu().numpy()
-        hr = hr.squeeze(1).cpu().numpy()
-        original = original.squeeze(1).cpu().numpy()
-        elev = elev.squeeze(1).cpu().numpy()
-        sr = sr.squeeze(1).cpu().numpy()
-        mask = mask.squeeze(1).cpu().numpy()
-        error = error.squeeze(1).cpu().numpy()
-
         batches = np.min([hr.shape[0] // items, MAX_MINI_BATCHES])
+        scaler = self._prepare_scaler(stats)
+        maes, rmses = self._compute_metrics(
+            sr_nearest=sr_nearest, sr_cubic=sr_cubic, sr=sr, mask=mask, original=original, scaler=scaler, mins=mins, maxes=maxes
+        )
+
+        hr[mask] = np.nan
+        elev[mask] = np.nan
+        sr_nearest[mask] = np.nan
+        sr_cubic[mask] = np.nan
+        sr[mask] = np.nan
+        error[mask] = np.nan
 
         for mini_batch_idx in tqdm(range(batches), desc="Saving figures from mini-batches"):
-            fig, axes = plt.subplots(
-                nrows=items,
-                ncols=ncols,
-                figsize=(10, 2.2 * items),
-                sharey="all",
-                constrained_layout=True,
-            )
-
-            for ax, col in zip(axes[0], cols):
-                ax.set_title(col)
+            fig, axes = self._prepare_figure(cols, ncols, items)
 
             mini_batch_offset_start = mini_batch_idx * items
             mini_batch_offset_end = mini_batch_offset_start + items
 
-            hr_arr = hr[mini_batch_offset_start:mini_batch_offset_end]
-            original_arr = original[mini_batch_offset_start:mini_batch_offset_end]
-            elev_arr = elev[mini_batch_offset_start:mini_batch_offset_end]
-            nearest_arr = nearest[mini_batch_offset_start:mini_batch_offset_end]
-            cubic_arr = cubic[mini_batch_offset_start:mini_batch_offset_end]
-            sr_arr = sr[mini_batch_offset_start:mini_batch_offset_end]
-            mask_arr = mask[mini_batch_offset_start:mini_batch_offset_end]
-            error_arr = error[mini_batch_offset_start:mini_batch_offset_end]
-            mins_arr = mins[mini_batch_offset_start:mini_batch_offset_end]
-            maxes_arr = maxes[mini_batch_offset_start:mini_batch_offset_end]
+            hr_arr = hr.cpu().numpy()[mini_batch_offset_start:mini_batch_offset_end].squeeze(1)
+            elev_arr = elev.cpu().numpy()[mini_batch_offset_start:mini_batch_offset_end].squeeze(1)
+            nearest_arr = sr_nearest.cpu().numpy()[mini_batch_offset_start:mini_batch_offset_end].squeeze(1)
+            cubic_arr = sr_cubic.cpu().numpy()[mini_batch_offset_start:mini_batch_offset_end].squeeze(1)
+            sr_arr = sr.cpu().numpy()[mini_batch_offset_start:mini_batch_offset_end].squeeze(1)
+            mask_arr = mask.cpu().numpy()[mini_batch_offset_start:mini_batch_offset_end].squeeze(1)
+            error_arr = error.cpu().numpy()[mini_batch_offset_start:mini_batch_offset_end].squeeze(1)
 
             arrs = [nearest_arr, cubic_arr, sr_arr]
 
-            if self.standardize:
-                scaler = StandardScaler(
-                    mean=stats.at[
-                        consts.datasets_and_preprocessing.world_clim_to_cruts_mapping[self.world_clim_variable], consts.stats.mean
-                    ],
-                    std=stats.at[
-                        consts.datasets_and_preprocessing.world_clim_to_cruts_mapping[self.world_clim_variable], consts.stats.std
-                    ],
-                    nan_substitution=stats.at[
-                        consts.datasets_and_preprocessing.world_clim_to_cruts_mapping[self.world_clim_variable],
-                        consts.stats.normalized_min,
-                    ],
-                )
-            else:
-                scaler = MinMaxScaler(feature_range=self.normalization_range)
-
-            hr_arr[mask_arr] = np.nan
-            elev_arr[mask_arr] = np.nan
-            nearest_arr[mask_arr] = np.nan
-            cubic_arr[mask_arr] = np.nan
-            sr_arr[mask_arr] = np.nan
-            error_arr[mask_arr] = np.nan
-
             for i in range(items):
-                axes[i][0].imshow(
-                    hr_arr[i],
-                    cmap=cmap_jet,
-                    vmin=stats.at[consts.stats.normalized_min] if self.standardize else self.normalization_range[0],
-                    vmax=stats[consts.stats.normalized_max] if self.standardize else self.normalization_range[1],
+                self._plot_single_figure_row(
+                    i=i,
+                    hr_arr=hr_arr,
+                    elev_arr=elev_arr,
+                    mask_arr=mask_arr,
+                    error_arr=error_arr,
+                    mini_batch_offset_end=mini_batch_offset_end,
+                    mini_batch_offset_start=mini_batch_offset_start,
+                    rmses=rmses,
+                    ncols=ncols,
+                    axes=axes,
+                    maes=maes,
+                    arrs=arrs,
+                    stats=stats,
                 )
-                axes[i][0].set_xlabel("MAE/RMSE")
-
-                if self.use_elevation:
-                    axes[i][1].imshow(elev_arr[i], cmap=cmap_inferno)
-                    axes[i][1].set_xlabel("-/-")
-
-                axes[i][-1].imshow(error_arr[i], cmap=cmap_jet)
-                axes[i][-1].set_xlabel("-/-")
-
-                mask_col_idx = 2 if self.use_elevation else 1
-                axes[i][mask_col_idx].imshow(~mask_arr[i], cmap=cmap_gray, vmin=0.0, vmax=1.0)
-                axes[i][mask_col_idx].set_xlabel("-/-")
-
-                offset = 3 if self.use_elevation else 2
-                for idx, arr in enumerate(arrs):
-                    axes[i][offset + idx].imshow(
-                        arr[i],
-                        cmap=cmap_jet,
-                        vmin=(
-                            stats.at[self.world_clim_variable, consts.stats.normalized_min]
-                            if self.standardize
-                            else self.normalization_range[0]
-                        ),
-                        vmax=(
-                            stats.at[self.world_clim_variable, consts.stats.normalized_max]
-                            if self.standardize
-                            else self.normalization_range[1]
-                        ),
-                    )
-
-                    denormalized_arr = (
-                        scaler.denormalize(arr[i])
-                        if self.standardize
-                        else scaler.denormalize(arr[i], mins_arr[i].detach().cpu().item(), maxes_arr[i].detach().cpu().item())
-                    )
-
-                    original_arr[mask_arr] = 0.0
-                    denormalized_arr[mask_arr[i]] = 0.0
-
-                    diff = original_arr[i] - denormalized_arr
-                    rmse_value = np.sqrt(np.nanmean(diff ** 2))
-                    mae_value = np.nanmean(np.absolute(diff))
-
-                    axes[i][offset + idx].set_xlabel(f"{mae_value:.3f}/{rmse_value:.3f}")
-
-                for j in range(ncols):
-                    axes[i][j].xaxis.set_ticklabels([])
-                    axes[i][j].xaxis.set_ticklabels([])
 
             plt.xticks([])
             plt.yticks([])
@@ -435,3 +468,32 @@ class LogImagesCallback(Callback):
                 k = k + 1
 
         return grid
+
+    @staticmethod
+    def _prepare_figure(cols: List[str], ncols: int, items: int) -> Tuple[plt.Figure, plt.Axes]:
+        """Helper function that prepares the figure with axes"""
+        fig, axes = plt.subplots(
+            nrows=items,
+            ncols=ncols,
+            figsize=(10, 2.2 * items),
+            sharey="all",
+            constrained_layout=True,
+        )
+
+        for ax, col in zip(axes[0], cols):
+            ax.set_title(col)
+
+        return fig, axes
+
+    @staticmethod
+    def _metrics_per_image(preds: Tensor, targets: Tensor) -> Tuple[Tensor, Tensor]:
+        """Helper function to compute MAE and RMSE per image. Takes whole batch as input."""
+        assert preds.shape == targets.shape
+        assert len(preds.shape) == 4
+        assert preds.shape[1] == 1 and targets.shape[1] == 1
+
+        diff = preds - targets
+        mae = torch.abs(diff).mean(dim=[1, 2, 3])
+        rmse = torch.sqrt((diff ** 2).mean(dim=[1, 2, 3]))
+
+        return mae, rmse

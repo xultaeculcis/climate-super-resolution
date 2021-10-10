@@ -1,8 +1,8 @@
 # @package _global_
 defaults:
-  - /optimizers@optimizers.generator_optimizer: adam
+  - /optimizers@optimizers.generator_optimizer: adamw
   - /optimizers@optimizers.discriminator_optimizer: null
-  - /schedulers@schedulers.generator_scheduler: cosine_schedule_with_warmup
+  - /schedulers@schedulers.generator_scheduler: one_cycle_schedule
   - /schedulers@schedulers.discriminator_scheduler: null
   - override /task: generator_pre_training
   - override /datamodule: super_resolution_data_module
@@ -26,7 +26,7 @@ trainer:
   accumulate_grad_batches: 1
   benchmark: True
   precision: 16
-  max_epochs: 30
+  max_epochs: 1
 
 datamodule:
   cfg:

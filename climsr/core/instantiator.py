@@ -5,7 +5,8 @@ from typing import Optional
 import hydra
 import pytorch_lightning as pl
 import torch
-from omegaconf import DictConfig
+from omegaconf import DictConfig, open_dict
+from pytorch_lightning.utilities.exceptions import MisconfigurationException
 
 from climsr.data.super_resolution_data_module import SuperResolutionDataModule
 
@@ -48,6 +49,18 @@ class HydraInstantiator(Instantiator):
         return self.instantiate(cfg, model.parameters())
 
     def scheduler(self, cfg: DictConfig, optimizer: torch.optim.Optimizer) -> torch.optim.lr_scheduler._LRScheduler:
+        if cfg.get("_target_").startswith("torch.optim"):
+            if cfg.get("_target_").endswith("OneCycleLR"):
+                with open_dict(cfg):
+                    cfg.total_steps = cfg.get("num_training_steps")
+            cfg.pop("num_training_steps")
+            cfg.pop("num_warmup_steps")
+        elif not cfg.get("_target_").startswith("transformers"):
+            raise MisconfigurationException(
+                "Only LR schedulers from `torch.optim` and `transformers` library are supported. "
+                f"If you want to support {cfg.get('_target_')}, you must add your own instantiation logic here."
+            )
+
         return self.instantiate(cfg, optimizer=optimizer)
 
     def data_module(

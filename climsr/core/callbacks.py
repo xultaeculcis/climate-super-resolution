@@ -44,6 +44,7 @@ class LogImagesCallback(Callback):
         world_clim_variable: str,
         normalization_method: Optional[str] = normalization.minmax,
         normalization_range: Optional[Tuple[float, float]] = (0.0, 1.0),
+        save_figures: Optional[bool] = False,
     ):
         super(LogImagesCallback, self).__init__()
         self.generator = generator
@@ -52,6 +53,7 @@ class LogImagesCallback(Callback):
         self.standardize = normalization_method == normalization.zscore
         self.world_clim_variable = world_clim_variable
         self.normalization_range = normalization_range
+        self.save_figures = save_figures
 
     def on_validation_end(self, trainer: Trainer, pl_module: TaskSuperResolutionModule) -> None:
         """Log a single batch of images from the validation set to monitor image quality progress."""
@@ -101,22 +103,24 @@ class LogImagesCallback(Callback):
                 self._log_images(pl_module, img_dir, names, tensors, mask)
 
             self._log_images(pl_module, img_dir, ["sr_images", consts.batch_items.error], [sr, error], mask)
-            self._save_fig(
-                hr=hr,
-                sr_nearest=nearest,
-                sr_cubic=cubic,
-                sr=sr,
-                elev=elev,
-                mask=mask.unsqueeze(1),
-                error=error,
-                original=original,
-                img_dir=img_dir,
-                current_epoch=pl_module.current_epoch,
-                global_step=pl_module.global_step,
-                stats=pl_module.stats,
-                mins=mins,
-                maxes=maxes,
-            )
+
+            if self.save_figures:
+                self._save_fig(
+                    hr=hr,
+                    sr_nearest=nearest,
+                    sr_cubic=cubic,
+                    sr=sr,
+                    elev=elev,
+                    mask=mask.unsqueeze(1),
+                    error=error,
+                    original=original,
+                    img_dir=img_dir,
+                    current_epoch=pl_module.current_epoch,
+                    global_step=pl_module.global_step,
+                    stats=pl_module.stats,
+                    mins=mins,
+                    maxes=maxes,
+                )
 
     def _log_images(
         self,

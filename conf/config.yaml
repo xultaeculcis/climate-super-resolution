@@ -16,10 +16,14 @@ defaults:
   - schedulers: default
   - trainer: default
   - training: default
-  - hydra: default
   - profiler: null
 
   - experiment: srcnn_pre_training
 
+  - hydra: default
+  - override hydra/hydra_logging: colorlog
+  - override hydra/job_logging: colorlog
+
 log: False
 ignore_warnings: True
+print_config: True

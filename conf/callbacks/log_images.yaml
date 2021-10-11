@@ -6,3 +6,4 @@ log_images:
   world_clim_variable: ${datamodule.cfg.world_clim_variable}
   normalization_method: ${datamodule.cfg.normalization_method}
   normalization_range: ${datamodule.cfg.normalization_range}
+  save_figures: False

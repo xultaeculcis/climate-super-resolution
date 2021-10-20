@@ -4,8 +4,10 @@ import logging
 import os
 import warnings
 from functools import partial, wraps
-from typing import Sequence
+from typing import Sequence, List
 
+import pytorch_lightning as pl
+import pytorch_lightning.loggers
 import rich.syntax
 import rich.tree
 from omegaconf import DictConfig, OmegaConf
@@ -109,3 +111,20 @@ def log_step(
         return result
 
     return wrapper
+
+
+def finish(
+    model: pl.LightningModule,
+    datamodule: pl.LightningDataModule,
+    trainer: pl.Trainer,
+    callbacks: List[pl.Callback],
+    logger: List[pl.loggers.LightningLoggerBase],
+) -> None:
+    """Makes sure everything closed properly."""
+
+    # without this sweeps with wandb logger might crash!
+    for lg in logger:
+        if isinstance(lg, pl.loggers.wandb.WandbLogger):
+            import wandb
+
+            wandb.finish()

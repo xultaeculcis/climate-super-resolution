@@ -16,7 +16,7 @@ training:
   batch_size: 128
   validation_batch_size: 384
   generator_type: "srcnn"
-  experiment_name: srcnn-${now:%Y%m%d%H%M%S}
+  experiment_name: srcnn-lr-only
   run_fit: True
   run_test_after_fit: True
   num_workers: 8
@@ -26,7 +26,7 @@ trainer:
   accumulate_grad_batches: 1
   benchmark: True
   precision: 16
-  max_epochs: 1
+  max_epochs: 3
 
 datamodule:
   cfg:
@@ -46,3 +46,8 @@ datamodule:
     use_elevation: False
     use_mask: False
     use_global_min_max: True
+    use_extra_data: False
+    transforms:
+      v_flip: True
+      h_flip: True
+      random_90_rotation: True

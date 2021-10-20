@@ -16,7 +16,7 @@ training:
   batch_size: 128
   validation_batch_size: 384
   generator_type: "srcnn"
-  experiment_name: srcnn-debug
+  experiment_name: srcnn-2.5m-5m
   run_fit: True
   run_test_after_fit: True
   num_workers: 8
@@ -26,12 +26,7 @@ trainer:
   accumulate_grad_batches: 1
   benchmark: True
   precision: 16
-  flush_logs_every_n_steps: 30
-  log_every_n_steps: 30
-  max_epochs: 1
-  limit_train_batches: 100
-  limit_val_batches: 10
-  limit_test_batches: 10
+  max_epochs: 3
 
 datamodule:
   cfg:
@@ -42,6 +37,8 @@ datamodule:
     world_clim_variable: "temp"
     resolutions:
       - "2.5m"
+      - "5m"
+      - "10m"
     generator_type: ${training.generator_type}
     scale_factor: 4
     hr_size: 128

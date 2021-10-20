@@ -18,9 +18,11 @@ defaults:
   - training: default
   - profiler: null
 
-  - experiment: srcnn_pre_training
+  - experiment: null
 
   - hydra: default
+  - hparams_search: null
+
   - override hydra/hydra_logging: colorlog
   - override hydra/job_logging: colorlog
 

@@ -1,8 +1,8 @@
 # @package _global_
 defaults:
-  - /optimizers@optimizers.generator_optimizer: adam
+  - /optimizers@optimizers.generator_optimizer: adamw
   - /optimizers@optimizers.discriminator_optimizer: null
-  - /schedulers@schedulers.generator_scheduler: cosine_schedule_with_warmup
+  - /schedulers@schedulers.generator_scheduler: one_cycle_schedule
   - /schedulers@schedulers.discriminator_scheduler: null
   - override /task: generator_pre_training
   - override /datamodule: super_resolution_data_module
@@ -12,11 +12,11 @@ defaults:
   - override /trainer: default
 
 training:
-  lr: 1e-4
+  lr: 6e-4
   batch_size: 128
   validation_batch_size: 384
   generator_type: "srcnn"
-  experiment_name: srcnn-debug
+  experiment_name: srcnn-no-augmentations
   run_fit: True
   run_test_after_fit: True
   num_workers: 8
@@ -26,18 +26,13 @@ trainer:
   accumulate_grad_batches: 1
   benchmark: True
   precision: 16
-  flush_logs_every_n_steps: 30
-  log_every_n_steps: 30
-  max_epochs: 1
-  limit_train_batches: 100
-  limit_val_batches: 10
-  limit_test_batches: 10
+  max_epochs: 3
 
 datamodule:
   cfg:
     batch_size: ${training.batch_size}
     num_workers: ${training.num_workers}
-    pin_memory: False
+    pin_memory: True
     data_path: "datasets"
     world_clim_variable: "temp"
     resolutions:
@@ -50,7 +45,7 @@ datamodule:
     normalization_range: [ -1.0, 1.0 ]
     use_elevation: True
     use_mask: True
-    use_global_min_max: True
+    use_global_min_max: False
     use_extra_data: False
     transforms:
       v_flip: True

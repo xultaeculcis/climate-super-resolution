@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Union
 
 import hydra
 import pytorch_lightning as pl
@@ -8,11 +8,12 @@ from hydra.utils import to_absolute_path
 from omegaconf import DictConfig
 from pytorch_lightning import Callback, seed_everything
 from pytorch_lightning.loggers import LightningLoggerBase
+from torch import Tensor
 
+from climsr.core import utils
 from climsr.core.config import SuperResolutionDataConfig, TaskConfig, TrainerConfig, infer_generator_config
 from climsr.core.instantiator import HydraInstantiator, Instantiator
 from climsr.core.task import TaskSuperResolutionModule
-from climsr.core.utils import print_config, set_gpu_power_limit_if_needed, set_ignore_warnings
 from climsr.data.super_resolution_data_module import SuperResolutionDataModule
 
 default_sr_dm_config = SuperResolutionDataConfig()
@@ -32,12 +33,13 @@ def run(
     logger_cfgs: Optional[Any] = None,
     callback_cfgs: Optional[Any] = None,
     profiler_cfg: Optional[Any] = None,
+    optimized_metric: Optional[str] = None,
 ) -> None:
     if ignore_warnings:
-        set_ignore_warnings()
+        utils.set_ignore_warnings()
 
     # Limit RTX 3090 power draw if possible to stabilize PSU usage
-    set_gpu_power_limit_if_needed()
+    utils.set_gpu_power_limit_if_needed()
 
     # Init data module
     data_module: SuperResolutionDataModule = instantiator.data_module(datamodule_cfg)
@@ -103,11 +105,25 @@ def run(
     if run_test_after_fit:
         trainer.test(model, dataloaders=data_module.test_dataloader())
 
+    # Make sure everything closed properly
+    logging.info("Finalizing!")
+    utils.finish(
+        model=model,
+        datamodule=data_module,
+        trainer=trainer,
+        callbacks=callbacks,
+        logger=loggers,
+    )
 
-def main(cfg: DictConfig) -> None:
+    # Return metric score for hyperparameter optimization
+    if optimized_metric:
+        return trainer.callback_metrics[optimized_metric]
+
+
+def main(cfg: DictConfig) -> Optional[Union[float, Tensor]]:
     # Pretty print config using Rich library
     if cfg.get("print_config"):
-        print_config(cfg, resolve=True)
+        utils.print_config(cfg, resolve=True)
 
     # Reproducibility
     if "seed" in cfg.training:
@@ -122,7 +138,7 @@ def main(cfg: DictConfig) -> None:
     task_cfg.generator = cfg.get("generator")
     task_cfg.generator = infer_generator_config(task_cfg.generator, data_cfg.get("cfg"))
 
-    run(
+    return run(
         instantiator,
         ignore_warnings=cfg.get("ignore_warnings"),
         run_fit=cfg.get("training").get("run_fit"),
@@ -134,6 +150,7 @@ def main(cfg: DictConfig) -> None:
         logger_cfgs=cfg.get("logger"),
         callback_cfgs=cfg.get("callbacks"),
         profiler_cfg=cfg.get("profiler"),
+        optimized_metric=cfg.get("optimized_metric"),
     )
 
 

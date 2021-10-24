@@ -70,10 +70,10 @@ class ClimateDataset(ClimateDatasetBase):
                 ],
             )
             self.elevation_scaler = StandardScaler(
-                mean=standardize_stats.at[consts.cruts.elev, consts.stats.mean],
-                std=standardize_stats.at[consts.cruts.elev, consts.stats.std],
+                mean=self.standardize_stats.at[consts.world_clim.elev, consts.stats.mean],
+                std=self.standardize_stats.at[consts.world_clim.elev, consts.stats.std],
                 missing_indicator=consts.world_clim.elevation_missing_indicator,
-                nan_substitution=self.standardize_stats.at[consts.cruts.elev, consts.stats.nan_sub],
+                nan_substitution=self.standardize_stats.at[consts.world_clim.elev, consts.stats.normalized_min],
             )
         else:
             self.scaler = MinMaxScaler(feature_range=self.normalize_range)

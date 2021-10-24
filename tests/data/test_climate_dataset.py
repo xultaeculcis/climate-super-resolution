@@ -58,6 +58,7 @@ def test_should_return_proper_data(
     # arrange
     tile_df = pd.read_feather(os.path.join(data_dir, "tmax/train.feather"))
     stats_df = pd.read_feather(os.path.join(data_dir, "statistics_min_max.feather"))
+    zscore_stats_df = pd.read_feather(os.path.join(data_dir, "statistics_zscore.feather"))
     df = pd.merge(
         tile_df,
         stats_df,
@@ -77,6 +78,7 @@ def test_should_return_proper_data(
         variable=consts.world_clim.tmin,
         use_elevation=use_elevation,
         use_mask=use_mask,
+        standardize_stats=zscore_stats_df,
     )
 
     # act

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import gc
 import logging
 from typing import Any, List, Optional, Union
 
@@ -11,7 +12,13 @@ from pytorch_lightning.loggers import LightningLoggerBase
 from torch import Tensor
 
 from climsr.core import utils
-from climsr.core.config import SuperResolutionDataConfig, TaskConfig, TrainerConfig, infer_generator_config
+from climsr.core.config import (
+    SuperResolutionDataConfig,
+    SuperResolutionDataModuleConfig,
+    TaskConfig,
+    TrainerConfig,
+    infer_generator_config,
+)
 from climsr.core.instantiator import HydraInstantiator, Instantiator
 from climsr.core.task import TaskSuperResolutionModule
 from climsr.data.super_resolution_data_module import SuperResolutionDataModule
@@ -27,14 +34,14 @@ def run(
     run_fit: bool = True,
     run_test_after_fit: bool = True,
     lr_find_only: bool = False,
-    datamodule_cfg: Optional[SuperResolutionDataConfig] = default_sr_dm_config,
+    datamodule_cfg: Optional[SuperResolutionDataModuleConfig] = default_sr_dm_config,
     task_cfg: Optional[TaskConfig] = default_task_config,
     trainer_cfg: Optional[TrainerConfig] = default_trainer_config,
     logger_cfgs: Optional[Any] = None,
     callback_cfgs: Optional[Any] = None,
     profiler_cfg: Optional[Any] = None,
     optimized_metric: Optional[str] = None,
-) -> None:
+) -> Optional[Union[Tensor, float]]:
     if ignore_warnings:
         utils.set_ignore_warnings()
 
@@ -114,6 +121,9 @@ def run(
         callbacks=callbacks,
         logger=loggers,
     )
+
+    del model, data_module, loggers, callbacks, instantiator
+    gc.collect()
 
     # Return metric score for hyperparameter optimization
     if optimized_metric:

@@ -79,6 +79,11 @@ class SuperResolutionDataConfig:
 
 
 @dataclass
+class SuperResolutionDataModuleConfig:
+    cfg: SuperResolutionDataConfig
+
+
+@dataclass
 class OptimizerConfig:
     lr: float = 1e-3
     weight_decay: float = 1e-4

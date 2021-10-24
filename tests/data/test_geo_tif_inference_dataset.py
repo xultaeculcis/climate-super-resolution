@@ -43,7 +43,9 @@ variable = var
 scaling_factor = 4
 normalize = True
 standardize = False
-standardize_stats = None
+standardize_stats = pd.read_feather(
+    os.path.join(data_dir, consts.datasets_and_preprocessing.preprocessing_output_path, "feather/statistics_zscore.feather")
+)
 normalize_range = (-1.0, 1.0)
 use_elevation = True
 use_global_min_max = True

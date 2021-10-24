@@ -24,7 +24,7 @@ hydra:
     direction: minimize
 
     # number of experiments that will be executed
-    n_trials: 100
+    n_trials: 512
 
     # choose Optuna hyperparameter sampler
     # learn more here: https://optuna.readthedocs.io/en/stable/reference/samplers.html
@@ -47,7 +47,7 @@ hydra:
         choices: [128, 192]
       training.lr:
         type: categorical
-        choices: [ 1e-5, 6e-4, 3e-4, 1e-4, 6e-3 ]
+        choices: [ 1e-4, 3e-4, 1e-3 ]
       datamodule.cfg.resolutions:
         type: categorical
         choices: [ ["2.5m"], ["2.5m", "5m"], ["2.5m", "5m", "10m"] ]
@@ -64,9 +64,6 @@ hydra:
         type: categorical
         choices: [ False, True ]
       datamodule.cfg.use_global_min_max:
-        type: categorical
-        choices: [ False, True ]
-      datamodule.cfg.use_extra_data:
         type: categorical
         choices: [ False, True ]
       datamodule.cfg.transforms.v_flip:

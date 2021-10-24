@@ -5,6 +5,8 @@ import pandas as pd
 from torch.utils.data import Dataset
 from torch.utils.data.dataset import T_co
 
+from climsr import consts
+
 
 class ClimateDatasetBase(Dataset):
     def __init__(
@@ -26,7 +28,7 @@ class ClimateDatasetBase(Dataset):
         self.normalize = normalize
         self.normalize_range = normalize_range
         self.standardize = standardize
-        self.standardize_stats = standardize_stats
+        self.standardize_stats = standardize_stats.set_index(consts.datasets_and_preprocessing.variable)
 
     def __getitem__(self, index) -> T_co:
         raise NotImplementedError

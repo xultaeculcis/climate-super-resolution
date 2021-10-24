@@ -191,5 +191,6 @@ class SuperResolutionDataModule(DataModuleBase):
             "use_global_min_max": self.cfg.use_global_min_max,
             "use_extra_data": self.cfg.use_extra_data,
             "resolutions": self.cfg.resolutions,
+            "transforms": self.cfg.transforms,
             "seed": self.cfg.seed,
         }

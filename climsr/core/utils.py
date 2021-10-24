@@ -4,7 +4,7 @@ import logging
 import os
 import warnings
 from functools import partial, wraps
-from typing import Sequence, List
+from typing import List, Sequence
 
 import pytorch_lightning as pl
 import pytorch_lightning.loggers

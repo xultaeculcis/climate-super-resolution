@@ -131,7 +131,6 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
             "generator",
             "optimizers",
             "schedulers",
-            "generator",
             *kwargs.keys(),
         )
 

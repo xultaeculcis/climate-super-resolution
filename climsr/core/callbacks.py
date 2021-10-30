@@ -25,6 +25,7 @@ from climsr.data import normalization
 from climsr.data.normalization import MinMaxScaler, Scaler, StandardScaler
 
 MAX_ITEMS = 88
+EUROPE_EXTENT_MAX_ITEMS = 4
 MAX_MINI_BATCHES = 10
 
 cmap_jet = matplotlib.cm.get_cmap("jet").copy()
@@ -43,8 +44,9 @@ class LogImagesCallback(Callback):
         use_elevation: bool,
         world_clim_variable: str,
         normalization_method: Optional[str] = normalization.minmax,
-        normalization_range: Optional[Tuple[float, float]] = (0.0, 1.0),
+        normalization_range: Optional[Tuple[float, float]] = (-1.0, 1.0),
         save_figures: Optional[bool] = False,
+        europe_extent: Optional[bool] = False,
     ):
         super(LogImagesCallback, self).__init__()
         self.generator = generator
@@ -54,6 +56,7 @@ class LogImagesCallback(Callback):
         self.world_clim_variable = world_clim_variable
         self.normalization_range = normalization_range
         self.save_figures = save_figures
+        self.europe_extent = europe_extent
 
     def on_validation_end(self, trainer: Trainer, pl_module: TaskSuperResolutionModule) -> None:
         """Log a single batch of images from the validation set to monitor image quality progress."""
@@ -186,8 +189,8 @@ class LogImagesCallback(Callback):
             )
 
         # ensure we only plot max of 88 images
-        nitems = np.minimum(MAX_ITEMS, images_tensor.shape[0])
-        nrows = 8
+        nitems = np.minimum(EUROPE_EXTENT_MAX_ITEMS if self.europe_extent else MAX_ITEMS, images_tensor.shape[0])
+        nrows = 2 if self.europe_extent else 8
         ncols = nitems // nrows
 
         img_grid = (
@@ -205,9 +208,13 @@ class LogImagesCallback(Callback):
             mask_grid = self._batch_tensor_to_grid(mask_tensor[:nitems], nrow=nrows).squeeze(0).to("cpu").numpy()
             img_grid[mask_grid] = np.nan
 
-        plt.figure(figsize=(2 * nrows, 2 * ncols))
+        plt.figure(figsize=(10 * nrows if self.europe_extent else 2 * nrows, 10 * nrows if self.europe_extent else 2 * ncols))
         plt.imshow(
-            img_grid, cmap=(cmap_inferno if os.path.basename(out_path).startswith(consts.cruts.elev) else cmap_jet), aspect="auto"
+            img_grid,
+            cmap=(cmap_inferno if os.path.basename(out_path).startswith(consts.cruts.elev) else cmap_jet),
+            aspect="auto",
+            vmin=None if self.standardize else self.normalization_range[0],
+            vmax=None if self.standardize else self.normalization_range[1],
         )
         plt.axis("off")
 

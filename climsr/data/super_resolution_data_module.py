@@ -22,7 +22,6 @@ class SuperResolutionDataModule(DataModuleBase):
     def __init__(self, cfg: Optional[SuperResolutionDataConfig] = default_cfg):
         super(SuperResolutionDataModule, self).__init__()
 
-        assert cfg.hr_size % cfg.scale_factor == 0
         assert consts.world_clim.resolution_2_5m in cfg.resolutions, "2.5m resolution is required!"
 
         self.cfg = cfg
@@ -35,7 +34,6 @@ class SuperResolutionDataModule(DataModuleBase):
         return ClimateDataset(
             df=df,
             elevation_df=elevation_df,
-            hr_size=self.cfg.hr_size,
             stage=stage,
             generator_type=self.cfg.generator_type,
             variable=self.cfg.world_clim_variable,
@@ -47,6 +45,7 @@ class SuperResolutionDataModule(DataModuleBase):
             use_elevation=self.cfg.use_elevation,
             use_mask=self.cfg.use_mask,
             use_global_min_max=self.cfg.use_global_min_max,
+            europe_extent=self.cfg.europe_extent,
             transforms_cfg=self.cfg.transforms,
         )
 
@@ -65,13 +64,20 @@ class SuperResolutionDataModule(DataModuleBase):
                 self.ds[stage] = self._build_dataset(stage, frames, elevation_df, standardize_stats)
 
     def _load_dataframe(self, var: str, filename: str) -> pd.DataFrame:
+        def as_extent_filename_if_needed(fname: str) -> str:
+            if self.cfg.europe_extent:
+                fname, ext = os.path.splitext(fname)
+                fname = fname + "_europe_extent"
+                return f"{fname}{ext}"
+            return fname
+
         return pd.read_feather(
             os.path.join(
                 to_absolute_path(self.cfg.data_path),
                 consts.datasets_and_preprocessing.preprocessing_output_path,
                 consts.datasets_and_preprocessing.feather_path,
                 var,
-                filename,
+                as_extent_filename_if_needed(filename),
             )
         )
 
@@ -119,30 +125,29 @@ class SuperResolutionDataModule(DataModuleBase):
                 )
             ]
 
+        merge_columns = [
+            consts.datasets_and_preprocessing.filename,
+            consts.datasets_and_preprocessing.variable,
+            consts.datasets_and_preprocessing.year,
+            consts.datasets_and_preprocessing.month,
+            consts.datasets_and_preprocessing.resolution,
+        ]
+
+        if self.cfg.europe_extent:
+            stats_df = stats_df.drop(columns=consts.datasets_and_preprocessing.file_path, axis=1)
+
         train_df = pd.merge(
             train_df,
             stats_df,
             how="inner",
-            on=[
-                consts.datasets_and_preprocessing.filename,
-                consts.datasets_and_preprocessing.variable,
-                consts.datasets_and_preprocessing.year,
-                consts.datasets_and_preprocessing.month,
-                consts.datasets_and_preprocessing.resolution,
-            ],
+            on=merge_columns,
         )
 
         val_df = pd.merge(
             val_df,
             stats_df,
             how="inner",
-            on=[
-                consts.datasets_and_preprocessing.filename,
-                consts.datasets_and_preprocessing.variable,
-                consts.datasets_and_preprocessing.year,
-                consts.datasets_and_preprocessing.month,
-                consts.datasets_and_preprocessing.resolution,
-            ],
+            on=merge_columns,
         )
 
         output_test_dfs = []
@@ -151,13 +156,7 @@ class SuperResolutionDataModule(DataModuleBase):
                 test_df,
                 stats_df,
                 how="inner",
-                on=[
-                    consts.datasets_and_preprocessing.filename,
-                    consts.datasets_and_preprocessing.variable,
-                    consts.datasets_and_preprocessing.year,
-                    consts.datasets_and_preprocessing.month,
-                    consts.datasets_and_preprocessing.resolution,
-                ],
+                on=merge_columns,
             )
             output_test_dfs.append(test_df)
 

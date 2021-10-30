@@ -7,3 +7,4 @@ log_images:
   normalization_method: ${datamodule.cfg.normalization_method}
   normalization_range: ${datamodule.cfg.normalization_range}
   save_figures: False
+  europe_extent: ${datamodule.cfg.europe_extent}

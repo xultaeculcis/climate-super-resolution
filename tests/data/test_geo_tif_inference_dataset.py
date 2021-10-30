@@ -9,10 +9,10 @@ from pytest_cases import parametrize_with_cases
 import climsr.consts as consts
 from climsr.data.sr.geo_tiff_inference_dataset import GeoTiffInferenceDataset
 
-europe_extent_expected_shape_hr_1d = (1, 412, 452)
-europe_extent_expected_shape_hr_3d = (3, 412, 452)
-europe_extent_expected_shape_lr_1d = (1, 103, 113)
-europe_extent_expected_shape_lr_3d = (3, 103, 113)
+europe_extent_expected_shape_hr_1d = (1, 452, 452)
+europe_extent_expected_shape_hr_3d = (3, 452, 452)
+europe_extent_expected_shape_lr_1d = (1, 113, 113)
+europe_extent_expected_shape_lr_3d = (3, 113, 113)
 var = "tmp"
 
 root_dir = str(Path(__file__).parent.parent.parent)

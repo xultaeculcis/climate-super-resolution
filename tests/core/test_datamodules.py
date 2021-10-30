@@ -20,10 +20,10 @@ def common_asserts(dl, stage=consts.stages.test):
         expected_lr_shape = (
             cfg.batch_size,
             3,
-            cfg.hr_size // cfg.scale_factor,
-            cfg.hr_size // cfg.scale_factor,
+            128 // cfg.scale_factor,
+            128 // cfg.scale_factor,
         )
-        expected_hr_shape = (cfg.batch_size, 1, cfg.hr_size, cfg.hr_size)
+        expected_hr_shape = (cfg.batch_size, 1, 128, 128)
 
         assert lr.shape == expected_lr_shape, (
             f"Expected the LR batch to be in shape {expected_lr_shape}, " f"but found: {lr.shape}"

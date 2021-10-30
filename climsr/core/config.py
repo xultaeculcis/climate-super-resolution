@@ -59,6 +59,7 @@ class TransformsCfg:
 @dataclass
 class SuperResolutionDataConfig:
     data_path: Optional[str] = MISSING
+    europe_extent: Optional[bool] = False
     world_clim_variable: Optional[str] = consts.world_clim.temp
     generator_type: Optional[str] = consts.models.rcan
     resolutions: Optional[List[str]] = field(default_factory=_default_resolution_list)
@@ -66,7 +67,6 @@ class SuperResolutionDataConfig:
     validation_batch_size: Optional[int] = 192
     num_workers: Optional[int] = 8
     scale_factor: Optional[int] = 4
-    hr_size: Optional[int] = 128
     seed: Optional[int] = 42
     normalization_method: Optional[str] = normalization.minmax
     normalization_range: Optional[Tuple[float, float]] = (-1.0, 1.0)

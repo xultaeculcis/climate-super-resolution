@@ -991,6 +991,9 @@ def run_extent_extraction(cfg: PreProcessingConfig) -> None:
         elif test_years_lower_bound <= year_from_filename <= test_years_upper_bound:
             stage_to_assign = consts.stages.test
 
+        elif var == consts.world_clim.elev:
+            stage_to_assign = var
+
         return (
             file_path,
             filename,
@@ -1002,7 +1005,7 @@ def run_extent_extraction(cfg: PreProcessingConfig) -> None:
         )
 
     def _train_val_test_split_extent_files() -> None:
-        for var in consts.world_clim.temperature_vars:
+        for var in consts.world_clim.temperature_vars + [consts.world_clim.elev]:
             extent_raster_paths = glob(
                 os.path.join(
                     to_absolute_path(cfg.output_path),
@@ -1042,10 +1045,10 @@ def run_extent_extraction(cfg: PreProcessingConfig) -> None:
 
             os.makedirs(path_to_save, exist_ok=True)
 
-            for stage in consts.stages.stages:
-                df[df["stage"] == stage].reset_index(drop=True).to_feather(
-                    os.path.join(path_to_save, f"{stage}_europe_extent.feather")
-                )
+            for stage in df["stage"].unique():
+                subset_df = df[df["stage"] == stage]
+                if not subset_df.empty:
+                    subset_df.reset_index(drop=True).to_feather(os.path.join(path_to_save, f"{stage}_europe_extent.feather"))
 
     if cfg.run_extent_extraction:
         # handle extent dirs

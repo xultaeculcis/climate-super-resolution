@@ -41,6 +41,7 @@ def run(
     callback_cfgs: Optional[Any] = None,
     profiler_cfg: Optional[Any] = None,
     optimized_metric: Optional[str] = None,
+    model_weights: Optional[str] = None,
 ) -> Optional[Union[Tensor, float]]:
     if ignore_warnings:
         utils.set_ignore_warnings()
@@ -106,6 +107,11 @@ def run(
         logging.info(f"LR Finder suggestion: {new_lr}")
         return
 
+    # Load pre-trained model if necessary
+    if model_weights:
+        logging.info(f"Loading pre-trained model from '{model_weights}'")
+        model = type(model).load_from_checkpoint(to_absolute_path(model_weights))
+
     # Train & Test
     if run_fit:
         trainer.fit(model, datamodule=data_module)
@@ -161,6 +167,7 @@ def main(cfg: DictConfig) -> Optional[Union[float, Tensor]]:
         callback_cfgs=cfg.get("callbacks"),
         profiler_cfg=cfg.get("profiler"),
         optimized_metric=cfg.get("optimized_metric"),
+        model_weights=cfg.get("training").get("model_weights"),
     )
 
 

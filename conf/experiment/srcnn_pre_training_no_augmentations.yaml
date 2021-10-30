@@ -39,7 +39,6 @@ datamodule:
       - "2.5m"
     generator_type: ${training.generator_type}
     scale_factor: 4
-    hr_size: 128
     seed: ${training.seed}
     normalization_method: "minmax"
     normalization_range: [ -1.0, 1.0 ]

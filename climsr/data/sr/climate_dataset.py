@@ -26,7 +26,6 @@ class ClimateDataset(ClimateDatasetBase):
         elevation_df: pd.DataFrame,
         generator_type: str,
         variable: str,
-        hr_size: Optional[int] = 128,
         stage: Optional[str] = consts.stages.train,
         scaling_factor: Optional[int] = 4,
         normalize: Optional[bool] = True,
@@ -36,6 +35,7 @@ class ClimateDataset(ClimateDatasetBase):
         use_elevation: Optional[bool] = True,
         use_mask: Optional[bool] = True,
         use_global_min_max: Optional[bool] = True,
+        europe_extent: Optional[bool] = False,
         transforms_cfg: Optional[TransformsCfg] = default_transforms_cfg,
     ):
         super().__init__(
@@ -50,11 +50,12 @@ class ClimateDataset(ClimateDatasetBase):
 
         self.df = df
         self.elevation_df = elevation_df
-        self.hr_size = hr_size
+        self.hr_size = 452 if europe_extent else 128
         self.stage = stage
         self.use_elevation = use_elevation
         self.use_mask = use_mask
         self.use_global_min_max = use_global_min_max
+        self.europe_extent = europe_extent
         self.transforms_cfg = transforms_cfg
 
         if self.standardize:
@@ -81,8 +82,8 @@ class ClimateDataset(ClimateDatasetBase):
 
         self.to_tensor = transforms.ToTensor()
         self.resize = A.Resize(
-            width=self.hr_size // self.scaling_factor,
             height=self.hr_size // self.scaling_factor,
+            width=self.hr_size // self.scaling_factor,
             interpolation=cv2.INTER_NEAREST,
             always_apply=True,
             p=1.0,
@@ -221,20 +222,31 @@ class ClimateDataset(ClimateDatasetBase):
         min = row[consts.stats.min] if not self.use_global_min_max else row[consts.stats.global_min]
         max = row[consts.stats.max] if not self.use_global_min_max else row[consts.stats.global_max]
 
+        fp_column = (
+            consts.datasets_and_preprocessing.file_path
+            if self.europe_extent
+            else consts.datasets_and_preprocessing.tile_file_path
+        )
+
         # original, hr
-        with Image.open(row[consts.datasets_and_preprocessing.tile_file_path]) as img:
+        with Image.open(row[fp_column]) as img:
             original_image = np.array(img)
             img_hr = original_image.copy()
 
         # elevation
-        elev_fp = self.elevation_df[
-            (self.elevation_df[consts.datasets_and_preprocessing.x] == row[consts.datasets_and_preprocessing.x])
-            & (self.elevation_df[consts.datasets_and_preprocessing.y] == row[consts.datasets_and_preprocessing.y])
-            & (
-                self.elevation_df[consts.datasets_and_preprocessing.resolution]
-                == row[consts.datasets_and_preprocessing.resolution]
+        lookup_expression = (
+            (self.elevation_df[consts.datasets_and_preprocessing.resolution] == row[consts.datasets_and_preprocessing.resolution])
+            if self.europe_extent
+            else (
+                (self.elevation_df[consts.datasets_and_preprocessing.x] == row[consts.datasets_and_preprocessing.x])
+                & (self.elevation_df[consts.datasets_and_preprocessing.y] == row[consts.datasets_and_preprocessing.y])
+                & (
+                    self.elevation_df[consts.datasets_and_preprocessing.resolution]
+                    == row[consts.datasets_and_preprocessing.resolution]
+                )
             )
-        ][consts.datasets_and_preprocessing.tile_file_path]
+        )
+        elev_fp = self.elevation_df[lookup_expression][fp_column]
         elev_fp = elev_fp.values[0]
 
         with Image.open(elev_fp) as img:

@@ -1,43 +1,18 @@
 # Paths to CRU-TS NetCDF files
-ds_path_tmn: "/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.tmn.dat.nc"
-ds_path_tmp: "/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.tmp.dat.nc"
-ds_path_tmx: "/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.tmx.dat.nc"
-ds_path_pre: "/media/xultaeculcis/2TB/datasets/cruts/original/cru_ts4.04.1901.2019.pre.dat.nc"
+ds_path: "datasets/download/cruts/extracted/cru_ts4.05.1901.2020.tmp.dat.nc"
 
 # Paths to tiff data dirs
-data_dir: "/media/xultaeculcis/2TB/datasets/cruts/pre-processed/full-res"
-original_full_res_cruts_data_path: "/media/xultaeculcis/2TB/datasets/cruts/pre-processed/full-res"
-inference_out_path: "/media/xultaeculcis/2TB/datasets/cruts/inference"
+data_dir: "datasets/pre-processed/cruts/full-res"
+original_full_res_cruts_data_path: "datasets/pre-processed/cruts/full-res"
+inference_out_path: "datasets/inference/europe-extent/cruts/tiff"
 
 # Europe extent dirs
-tiff_dir: "/media/xultaeculcis/2TB/datasets/cruts/pre-processed/europe-extent"
-extent_out_path_lr: "/media/xultaeculcis/2TB/datasets/cruts/pre-processed/europe-extent"
-extent_out_path_sr: "/media/xultaeculcis/2TB/datasets/cruts/inference-europe-extent"
-extent_out_path_sr_nc: "/media/xultaeculcis/2TB/datasets/cruts/inference-europe-extent-nc"
+tiff_dir: "datasets/pre-processed/cruts/europe-extent"
+extent_out_path_sr: "datasets/inference/europe-extent/cruts/tiff"
+extent_out_path_sr_nc: "datasets/inference/europe-extent/cruts/nc"
 
 # Pretrained models
-# pretrained_model_tmn: "./model_weights/with_elevation/gen-pre-training-srcnn-tmin-4x-epoch=29-step=82709-hp_metric=0.00165.ckpt"
-# pretrained_model_tmn: "./model_weights/no_elevation/gen-pre-training-srcnn-tmin-4x-epoch=29-step=82709-hp_metric=0.00571.ckpt"
-# pretrained_model_tmn: "./model_weights/use_elevation=True-batch_size=256/normalize-v2/gen-pre-training-srcnn-tmin-4x-epoch=29-step=20699-hp_metric=0.00064.ckpt"
-pretrained_model_tmn: "./model_weights/use_elevation=True-batch_size=48/gen-pre-training-rcan-tmin-4x-epoch=29-step=110279-hp_metric=0.00397.ckpt"
-
-# pretrained_model_tmp: "./model_weights/with_elevation/gen-pre-training-srcnn-temp-4x-epoch=29-step=165419-hp_metric=0.00083.ckpt",  # noqa E501
-# pretrained_model_tmp: "./model_weights/no_elevation/gen-pre-training-srcnn-temp-4x-epoch=24-step=137849-hp_metric=0.00516.ckpt",  # noqa E501
-# pretrained_model_tmp: "./model_weights/use_elevation=True-batch_size=256/normalize-v2/gen-pre-training-srcnn-temp-4x-epoch=29-step=41369-hp_metric=0.00056.ckpt",  # noqa E501
-# pretrained_model_tmp: "./model_weights/use_elevation=True-batch_size=48/gen-pre-training-rcan-temp-4x-epoch=29-step=220559-hp_metric=0.00317.ckpt",  # noqa E501
-# pretrained_model_tmp: "./model_weights/use_elevation=True-batch_size=48/gen-pre-training-rcan-tmax-4x-epoch=29-step=110279-hp_metric=0.00417.ckpt",  # noqa E501
-# pretrained_model_tmp: "./model_weights/use_elevation=True-batch_size=64/gen-pre-training-esrgan-temp-4x-epoch=29-step=165419-hp_metric=0.00608.ckpt",  # noqa E501
-# pretrained_model_tmp: "./model_weights/use_elevation=True-batch_size=64/gan-training-esrgan-temp-4x-epoch=18-step=104765-hp_metric=0.50164.ckpt",  # noqa E501
-pretrained_model_tmp: "./model_weights/use_elevation=True-batch_size=48/gen-pre-training-100epoch--rcan-temp-4x-epoch=99-step=155599-hp_metric=0.00261.ckpt"  # noqa E501
-
-# pretrained_model_tmx: "./model_weights/with_elevation/gen-pre-training-srcnn-tmax-4x-epoch=29-step=82709-hp_metric=0.00142.ckpt",  # noqa E501
-# pretrained_model_tmx: "./model_weights/no_elevation/gen-pre-training-srcnn-tmax-4x-epoch=18-step=52382-hp_metric=0.00468.ckpt",  # noqa E501
-# pretrained_model_tmx: "./model_weights/use_elevation=True-batch_size=256/normalize-v2/gen-pre-training-srcnn-tmax-4x-epoch=29-step=20699-hp_metric=0.00059.ckpt",  # noqa E501
-pretrained_model_tmx: "./model_weights/use_elevation=True-batch_size=48/gen-pre-training-rcan-tmax-4x-epoch=29-step=110279-hp_metric=0.00417.ckpt"  # noqa E501
-
-# pretrained_model_pre: "./model_weights/with_elevation/gen-pre-training-srcnn-prec-4x-epoch=29-step=82709-hp_metric=0.00007.ckpt",  # noqa E501
-# pretrained_model_pre: "./model_weights/no_elevation/gen-pre-training-srcnn-prec-4x-epoch=21-step=60653-hp_metric=0.00017.ckpt",  # noqa E501
-pretrained_model_pre: "./model_weights/use_elevation=True-batch_size=256/normalize/gen-pre-training-srcnn-prec-4x-epoch=29-step=20699-hp_metric=0.00005.ckpt"  # noqa E501
+pretrained_model: ???
 
 # Misc
 use_netcdf_datasets: False
@@ -45,8 +20,8 @@ temp_only: True # Use model trained on combined temp data? Or models trained on 
 generator_name: ???
 
 # Dataset stuff
-elevation_file: "/media/xultaeculcis/2TB/datasets/cruts/pre-processed/europe-extent/elevation/wc2.1_2.5m_elev.tif"
-land_mask_file: "/media/xultaeculcis/2TB/datasets/cruts/pre-processed/europe-extent/mask/wc2.1_2.5m_prec_1961-01.tif"
+elevation_file: "datasets/pre-processed/world-clim/europe-extent/elev/wc2.1_2.5m_elev.tif"
+land_mask_file: "datasets/pre-processed/world-clim/europe-extent/tmax/wc2.1_2.5m_tmax_1961-01.tif"
 use_elevation: True
 use_mask: True
 use_global_min_max: True
@@ -54,7 +29,8 @@ cruts_variable: "tmp" # Select null if you want to run in a loop for all variabl
 scaling_factor: 4
 normalize: True
 normalization_range: [-1.0, 1.0]
-min_max_lookup: "./datasets/statistics_min_max.feather"
+min_max_lookup: "datasets/pre-processed/feather/statistics_min_max.feather"
+zscore_lookup: "datasets/pre-processed/feather/statistics_zscore.feather"
 
 # Run steps
 run_inference: True

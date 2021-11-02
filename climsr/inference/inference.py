@@ -10,9 +10,9 @@ import pytorch_lightning as pl
 import rasterio as rio
 import torch
 import xarray as xr
+from hydra.utils import to_absolute_path
 from matplotlib import pyplot as plt
-from omegaconf import DictConfig
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import climsr.consts as consts
@@ -25,8 +25,7 @@ from climsr.data.sr.geo_tiff_inference_dataset import GeoTiffInferenceDataset
 
 def inference_on_full_images(
     model: pl.LightningModule,
-    ds: Dataset,
-    land_mask_file: str,
+    ds: Union[GeoTiffInferenceDataset, CRUTSInferenceDataset],
     out_dir: str,
     normalization_range: Optional[Tuple[float, float]] = (-1.0, 1.0),
 ) -> None:
@@ -35,8 +34,7 @@ def inference_on_full_images(
 
     Args:
         model (pl.LightningModule): The model.
-        ds (Dataset): The dataset.
-        land_mask_file (str): The HR land mask file.
+        ds (Union[GeoTiffInferenceDataset, CRUTSInferenceDataset]): The dataset.
         out_dir (str): The output SR Geo-Tiff dir.
         normalization_range (Optional[Tuple[float, float]]): Optional normalization range. `(-1, 1)` by default.
 
@@ -46,7 +44,7 @@ def inference_on_full_images(
     model = model.cuda()
 
     # load mask
-    with rio.open(land_mask_file) as mask_src:
+    with rio.open(ds.land_mask_file) as mask_src:
         profile = mask_src.profile
         plt.imshow(mask_src.read().squeeze(0), cmap="jet")
         plt.show()
@@ -74,23 +72,23 @@ def inference_on_full_images(
             arr = scaler.denormalize(arr, min[idx], max[idx]).clip(min[idx], max[idx])
             arr[~mask_np] = np.nan
 
-            with rio.open(os.path.join(out_dir, filename[idx]), "w", **profile) as dataset:
-                dataset.write(arr, 1)
+            with rio.open(os.path.join(out_dir, filename[idx]), "w", **profile) as raster:
+                raster.write(arr, 1)
 
-        if i == 0:
-            plt.imshow(lr.cpu().squeeze(0).permute(1, 2, 0).numpy())
-            plt.show()
-            plt.imshow(mask_np, cmap="jet")
-            plt.show()
-            plt.imshow(mask.cpu().squeeze(0).squeeze(0).numpy(), cmap="jet")
-            plt.show()
-            plt.imshow(elev.cpu().squeeze(0).squeeze(0).numpy(), cmap="jet")
-            plt.show()
-            plt.imshow(arr, cmap="jet")
-            plt.show()
+            if i == 0 and idx == 0:
+                plt.imshow(lr.cpu().squeeze(0).permute(1, 2, 0).numpy())
+                plt.show()
+                plt.imshow(mask_np, cmap="jet")
+                plt.show()
+                plt.imshow(mask.cpu().squeeze(0).squeeze(0).numpy(), cmap="jet")
+                plt.show()
+                plt.imshow(elev.cpu().squeeze(0).squeeze(0).numpy(), cmap="jet")
+                plt.show()
+                plt.imshow(arr, cmap="jet")
+                plt.show()
 
 
-def run_inference(cfg: Union[InferenceConfig, DictConfig], cruts_variables: List[str]) -> None:
+def run_inference(cfg: InferenceConfig, cruts_variables: List[str]) -> None:
     """
     Runs the inference on specified variables.
 
@@ -101,23 +99,16 @@ def run_inference(cfg: Union[InferenceConfig, DictConfig], cruts_variables: List
     """
 
     for var in cruts_variables:
-        out_path = os.path.join(cfg.inference_out_path, var)
+        out_path = to_absolute_path(os.path.join(cfg.inference_out_path, var))
         os.makedirs(out_path, exist_ok=True)
 
-        if var in [consts.cruts.tmn, consts.cruts.tmx] and cfg.temp_only:
-            logging.info(f"TEMP_ONLY detected - 'temp' model will be used instead of '{var}' model.")
-            model_file = cfg[f"pretrained_model_{consts.cruts.tmp}"]
-        else:
-            model_file = cfg[f"pretrained_model_{var}"]
-
-        cfg.pretrained_model = model_file
-        net = TaskSuperResolutionModule.load_from_checkpoint(model_file)
+        net = TaskSuperResolutionModule.load_from_checkpoint(to_absolute_path(cfg.pretrained_model))
         net.eval()
 
         logging.info(f"Running inference for variable: {var}")
-        logging.info(f"Running inference with model: {model_file}")
+        logging.info(f"Running inference with model: {cfg.pretrained_model}")
 
-        min_max_lookup = pd.read_feather(cfg.min_max_lookup)
+        min_max_lookup = pd.read_feather(to_absolute_path(cfg.min_max_lookup))
         min_max_lookup = min_max_lookup[
             (min_max_lookup[consts.datasets_and_preprocessing.dataset] == "cru-ts")
             & (min_max_lookup[consts.datasets_and_preprocessing.variable] == var)
@@ -126,10 +117,10 @@ def run_inference(cfg: Union[InferenceConfig, DictConfig], cruts_variables: List
         # prepare dataset
         dataset = (
             CRUTSInferenceDataset(
-                ds_path=cfg.ds_path,
-                elevation_file=cfg.elevation_file,
-                land_mask_file=cfg.land_mask_file,
-                generator_type=cfg.generator_type,
+                ds_path=to_absolute_path(cfg.ds_path),
+                elevation_file=to_absolute_path(cfg.elevation_file),
+                land_mask_file=to_absolute_path(cfg.land_mask_file),
+                generator_type=to_absolute_path(cfg.generator_type),
                 scaling_factor=4,
                 normalize=cfg.normalize,
                 standardize=not cfg.normalize,
@@ -137,17 +128,17 @@ def run_inference(cfg: Union[InferenceConfig, DictConfig], cruts_variables: List
             )
             if cfg.use_netcdf_datasets
             else GeoTiffInferenceDataset(
-                tiff_dir=os.path.join(cfg.extent_out_path_lr, var),
+                tiff_dir=to_absolute_path(os.path.join(cfg.tiff_dir, var)),
                 tiff_df=min_max_lookup,
                 variable=var,
-                elevation_file=cfg.elevation_file,
-                land_mask_file=cfg.land_mask_file,
+                elevation_file=to_absolute_path(cfg.elevation_file),
+                land_mask_file=to_absolute_path(cfg.land_mask_file),
                 generator_type=cfg.generator_type,
                 scaling_factor=4,
                 normalize=cfg.normalize,
                 standardize=not cfg.normalize,
                 normalize_range=cfg.normalization_range,
-                standardize_stats=None,
+                standardize_stats=pd.read_feather(to_absolute_path(cfg.zscore_lookup)),
                 use_elevation=cfg.use_elevation,
                 use_mask=cfg.use_mask,
                 use_global_min_max=cfg.use_global_min_max,
@@ -158,7 +149,6 @@ def run_inference(cfg: Union[InferenceConfig, DictConfig], cruts_variables: List
             inference_on_full_images(
                 model=net,
                 ds=dataset,
-                land_mask_file=cfg.land_mask_file,
                 out_dir=out_path,
                 normalization_range=cfg.normalization_range,
             )

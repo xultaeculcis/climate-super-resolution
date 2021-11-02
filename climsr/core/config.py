@@ -175,11 +175,8 @@ class TaskConfig:
 
 @dataclass
 class InferenceConfig:
-    # Paths to CRU-TS NetCDF files
-    ds_path_tmn: Optional[str] = MISSING
-    ds_path_tmp: Optional[str] = MISSING
-    ds_path_tmx: Optional[str] = MISSING
-    ds_path_pre: Optional[str] = MISSING
+    # Paths to CRU-TS NetCDF file
+    ds_path: Optional[str] = MISSING
 
     # Paths to tiff data dirs
     data_dir: Optional[str] = MISSING
@@ -188,15 +185,11 @@ class InferenceConfig:
 
     # Europe extent dirs
     tiff_dir: Optional[str] = MISSING
-    extent_out_path_lr: Optional[str] = MISSING
     extent_out_path_sr: Optional[str] = MISSING
     extent_out_path_sr_nc: Optional[str] = MISSING
 
     # Pretrained models
-    pretrained_model_tmn: Optional[str] = MISSING
-    pretrained_model_tmp: Optional[str] = MISSING
-    pretrained_model_tmx: Optional[str] = MISSING
-    pretrained_model_pre: Optional[str] = MISSING
+    pretrained_model: Optional[str] = MISSING
 
     # Misc
     use_netcdf_datasets: Optional[bool] = False  # This defines the dataset type
@@ -214,6 +207,7 @@ class InferenceConfig:
     normalize: Optional[bool] = True
     normalization_range: Optional[Tuple[int, int]] = (-1.0, 1.0)
     min_max_lookup: Optional[str] = MISSING
+    zscore_lookup: Optional[str] = MISSING
 
     # Run steps
     run_inference: Optional[bool] = True

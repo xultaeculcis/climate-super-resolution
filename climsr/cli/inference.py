@@ -6,6 +6,7 @@ from omegaconf import DictConfig, OmegaConf
 
 import climsr.consts as consts
 import climsr.inference.inference as inference
+from climsr.core import utils
 from climsr.core.config import InferenceConfig
 
 logging.basicConfig(level=logging.INFO)
@@ -13,6 +14,8 @@ logging.basicConfig(level=logging.INFO)
 
 def run(cfg: InferenceConfig) -> None:
     variables = [cfg.cruts_variable] if cfg.cruts_variable else consts.cruts.variables_cts
+
+    utils.set_gpu_power_limit_if_needed()
 
     # Run inference
     if cfg.run_inference:

@@ -20,9 +20,11 @@ resized_dir = "resized"
 tiles_dir = "tiles"
 CRS = "EPSG:4326"
 
+ocean_mask_value = 9.96921e36
 elevation_missing_indicator = -32768.0
 scenario_missing_indicator = np.float32(-3.4e38)
 missing_indicators = [
+    ocean_mask_value,
     elevation_missing_indicator,
     scenario_missing_indicator,
 ]

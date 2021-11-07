@@ -2,6 +2,7 @@
 import logging
 
 import hydra
+from hydra.utils import to_absolute_path
 from omegaconf import DictConfig, OmegaConf
 
 import climsr.consts as consts
@@ -26,8 +27,8 @@ def run(cfg: InferenceConfig) -> None:
     if cfg.to_netcdf:
         logging.info("Building NET CDF datasets from extent tiff files.")
         inference.transform_tiff_files_to_net_cdf(
-            cfg.extent_out_path_sr,
-            cfg.extent_out_path_sr_nc,
+            to_absolute_path(cfg.extent_out_path_sr),
+            to_absolute_path(cfg.extent_out_path_sr_nc),
             variables,
             prefix=cfg.generator_type,
         )

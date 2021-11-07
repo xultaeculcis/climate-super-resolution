@@ -70,11 +70,11 @@ class GeoTiffInferenceDataset(ClimateDatasetBase):
         self.v_flip = transforms.RandomVerticalFlip(p=1.0)
         self.to_tensor = transforms.ToTensor()
 
-        self.land_mask_np = ~np.isnan(np.array(Image.open(land_mask_file), dtype=np.float32))
+        self.land_mask_np = np.isnan(np.array(Image.open(land_mask_file), dtype=np.float32))
         self.land_mask_tensor = self.to_tensor(self.land_mask_np)
 
         elevation_arr = np.array(Image.open(elevation_file), dtype=np.float32)
-        elevation_arr = np.where(self.land_mask_np, elevation_arr, np.nan)  # mask Antarctica
+        elevation_arr = np.where(self.land_mask_np, np.nan, elevation_arr)  # mask Antarctica
         elevation_arr = self.elevation_scaler.normalize(
             elevation_arr,
             missing_indicator=consts.world_clim.elevation_missing_indicator,

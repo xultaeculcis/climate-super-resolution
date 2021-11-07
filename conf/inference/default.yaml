@@ -13,18 +13,18 @@ extent_out_path_sr_nc: "datasets/inference/europe-extent/cruts/nc"
 
 # Pretrained models
 pretrained_model: ???
+generator_type: ???
 
 # Misc
 use_netcdf_datasets: False
 temp_only: True # Use model trained on combined temp data? Or models trained on individual files.
-generator_name: ???
 
 # Dataset stuff
 elevation_file: "datasets/pre-processed/world-clim/europe-extent/elev/wc2.1_2.5m_elev.tif"
 land_mask_file: "datasets/pre-processed/world-clim/europe-extent/tmax/wc2.1_2.5m_tmax_1961-01.tif"
 use_elevation: True
 use_mask: True
-use_global_min_max: True
+use_global_min_max: False
 cruts_variable: "tmp" # Select null if you want to run in a loop for all variables
 scaling_factor: 4
 normalize: True
@@ -34,5 +34,4 @@ zscore_lookup: "datasets/pre-processed/feather/statistics_zscore.feather"
 
 # Run steps
 run_inference: True
-extract_polygon_extent: True
 to_netcdf: True

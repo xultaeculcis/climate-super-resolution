@@ -11,7 +11,6 @@ import rasterio as rio
 import torch
 import xarray as xr
 from hydra.utils import to_absolute_path
-from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -21,6 +20,7 @@ from climsr.core.task import TaskSuperResolutionModule
 from climsr.data.normalization import MinMaxScaler
 from climsr.data.sr.cruts_inference_dataset import CRUTSInferenceDataset
 from climsr.data.sr.geo_tiff_inference_dataset import GeoTiffInferenceDataset
+from climsr.data.utils import im_show_with_colorbar
 
 
 def inference_on_full_images(
@@ -46,8 +46,7 @@ def inference_on_full_images(
     # load mask
     with rio.open(ds.land_mask_file) as mask_src:
         profile = mask_src.profile
-        plt.imshow(mask_src.read().squeeze(0), cmap="jet")
-        plt.show()
+        im_show_with_colorbar(mask_src.read(1), title="MASK File (HR Sample)")
 
     # prepare dataloader
     dl = DataLoader(dataset=ds, batch_size=1, pin_memory=True, num_workers=1)
@@ -55,13 +54,13 @@ def inference_on_full_images(
     scaler = MinMaxScaler(feature_range=normalization_range)
 
     # run inference
-    for i, batch in tqdm(enumerate(dl), total=len(dl)):
+    for i, batch in tqdm(enumerate(dl), total=len(dl), desc="Running inference with Super-Resolution Neural Network:"):
         lr = batch[consts.batch_items.lr].cuda()
         elev = batch[consts.batch_items.elevation].cuda()
         mask = batch[consts.batch_items.mask].cuda()
         mask_np = batch[consts.batch_items.mask_np].squeeze(0).squeeze(0).numpy()
-        min = batch[consts.stats.min].numpy()
-        max = batch[consts.batch_items.max].numpy()
+        mins = batch[consts.stats.min].numpy()
+        maxes = batch[consts.batch_items.max].numpy()
         filename = batch[consts.batch_items.filename]
 
         outputs = model(lr, elev, mask)
@@ -69,23 +68,20 @@ def inference_on_full_images(
 
         for idx, output in enumerate(outputs):
             arr = output.squeeze(0)
-            arr = scaler.denormalize(arr, min[idx], max[idx]).clip(min[idx], max[idx])
-            arr[~mask_np] = np.nan
+            arr = scaler.denormalize(arr, mins[idx], maxes[idx])
+            arr[mask_np] = np.nan
+
+            lr = scaler.denormalize(lr, mins[idx], maxes[idx])
+            elev[mask] = np.nan
 
             with rio.open(os.path.join(out_dir, filename[idx]), "w", **profile) as raster:
                 raster.write(arr, 1)
 
             if i == 0 and idx == 0:
-                plt.imshow(lr.cpu().squeeze(0).permute(1, 2, 0).numpy())
-                plt.show()
-                plt.imshow(mask_np, cmap="jet")
-                plt.show()
-                plt.imshow(mask.cpu().squeeze(0).squeeze(0).numpy(), cmap="jet")
-                plt.show()
-                plt.imshow(elev.cpu().squeeze(0).squeeze(0).numpy(), cmap="jet")
-                plt.show()
-                plt.imshow(arr, cmap="jet")
-                plt.show()
+                im_show_with_colorbar(lr.cpu().squeeze(0)[0].numpy(), title="LR")
+                im_show_with_colorbar(mask_np, title="MASK")
+                im_show_with_colorbar(elev.cpu().squeeze(0).squeeze(0).numpy(), title="Elev", cmap="inferno")
+                im_show_with_colorbar(arr, title="SR")
 
 
 def run_inference(cfg: InferenceConfig, cruts_variables: List[str]) -> None:

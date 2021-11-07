@@ -1,8 +1,31 @@
 # -*- coding: utf-8 -*-
+from typing import Optional, Union
+
+import numpy as np
+import torch
 import torchvision
 from matplotlib import pyplot as plt
 
 import climsr.consts as consts
+
+
+def im_show_with_colorbar(x: Union[np.ndarray, torch.Tensor], title: Optional[str] = None, cmap: Optional[str] = "jet") -> None:
+    # img_grid has 3 channels - they have the same values
+    # as they were created using 1 channel data
+    # we can select only one of those channels
+    if x.shape[0] == 3:
+        npimg = x.numpy()[0, :, :]
+    else:
+        npimg = x
+
+    im_ratio = npimg.shape[0] / npimg.shape[1]
+
+    # show images
+    c = plt.imshow(npimg, cmap=cmap)
+    plt.colorbar(c, fraction=0.047 * im_ratio)
+    if title:
+        plt.title(title, fontweight="bold")
+    plt.show()
 
 
 def matplotlib_imshow(batch, title=None, nrow=8, normalize=False, padding=2, truncate=88):

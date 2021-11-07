@@ -76,12 +76,12 @@ def _cruts_as_tiff(variable: str, data_dir: str, out_dir: str, df_output_path: s
     fp = consts.cruts.file_pattern.format(variable)
     file_path = os.path.join(data_dir, fp)
     out_path = os.path.join(out_dir, consts.cruts.full_res_dir, variable)
-    ds = xarray.open_dataset(file_path)
+    ds = xarray.open_dataset(file_path).fillna(np.nan)
     file_paths = []
     df_output_path = os.path.join(df_output_path, consts.datasets_and_preprocessing.feather_path)
     os.makedirs(df_output_path, exist_ok=True)
 
-    for i in range(ds.dims["time"]):
+    for i in tqdm(range(ds.dims["time"]), desc=f"'{variable}' CRU-TS to Geo-Tiff"):
         # get frame at time index i
         arr = ds[variable].isel(time=i)
 
@@ -377,6 +377,8 @@ def _compute_stats_for_min_max_normalization(cfg: PreProcessingConfig) -> None:
     def compute_stats(fp):
         with rio.open(fp) as ds:
             arr = ds.read(1)
+            for missing_indicator in consts.world_clim.missing_indicators:
+                arr[arr == missing_indicator] = consts.world_clim.target_missing_indicator
             min = np.nanmin(arr)
             max = np.nanmax(arr)
             return min, max
@@ -684,15 +686,21 @@ def run_cruts_to_tiff(cfg: PreProcessingConfig) -> None:
     if cfg.run_cruts_to_tiff:
         logging.info("Running CRU-TS pre-processing - Geo Tiff generation")
 
-        dask.bag.from_sequence(consts.cruts.temperature_vars).map(
-            _cruts_as_tiff,
-            to_absolute_path(cfg.data_dir_cruts),
-            os.path.join(to_absolute_path(cfg.output_path), consts.datasets_and_preprocessing.cruts_preprocessing_out_path),
-            os.path.join(
-                to_absolute_path(cfg.output_path),
-                consts.datasets_and_preprocessing.preprocessing_output_path,
-            ),
-        ).compute()
+        for var in consts.cruts.temperature_vars:
+            _cruts_as_tiff(
+                variable=var,
+                data_dir=to_absolute_path(cfg.data_dir_cruts),
+                out_dir=os.path.join(
+                    to_absolute_path(cfg.output_path),
+                    consts.datasets_and_preprocessing.preprocessing_output_path,
+                    consts.datasets_and_preprocessing.cruts_preprocessing_out_path,
+                ),
+                df_output_path=os.path.join(
+                    to_absolute_path(cfg.output_path),
+                    consts.datasets_and_preprocessing.preprocessing_output_path,
+                    consts.datasets_and_preprocessing.feather_path,
+                ),
+            )
 
 
 def run_world_clim_resize(cfg: PreProcessingConfig) -> None:

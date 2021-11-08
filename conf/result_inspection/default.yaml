@@ -1,3 +1,3 @@
-ds_temp_cru_path: "datasets/download/cruts/extracted/cru_ts4.05.1901.2019.tmp.dat.nc"
+ds_temp_cru_path: "datasets/download/cruts/extracted/cru_ts4.05.1901.2020.tmp.dat.nc"
 ds_temp_nn_path: ???
-peaks_feather: "datasets/mountain_peaks.feather"
+peaks_feather: "datasets/pre-processed/feather/mountain_peaks.feather"

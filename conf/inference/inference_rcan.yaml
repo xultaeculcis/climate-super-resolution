@@ -2,4 +2,6 @@ defaults:
   - default
 
 pretrained_model: "outputs/runs/rcan/2021-10-30/15-42-50/model_weights/rcan-fine-tuning-full_epoch=029_step=02639_hp_metric=0.09036.ckpt"
+#pretrained_model: "outputs/runs/rcan/2021-10-24/21-04-59/model_weights/rcan-no-transforms_epoch=029_step=165419_hp_metric=0.16708.ckpt"
+#pretrained_model: "outputs/runs/rcan/2021-10-19/17-16-10/model_weights/rcan-full_epoch=029_step=82709_hp_metric=0.59940.ckpt"
 generator_type: "rcan"

@@ -69,10 +69,10 @@ def inference_on_full_images(
         for idx, output in enumerate(outputs):
             arr = output.squeeze(0)
             arr = scaler.denormalize(arr, mins[idx], maxes[idx])
-            arr[mask_np] = np.nan
+            arr[~mask_np] = np.nan
 
             lr = scaler.denormalize(lr, mins[idx], maxes[idx])
-            elev[mask] = np.nan
+            elev[~mask] = np.nan
 
             with rio.open(os.path.join(out_dir, filename[idx]), "w", **profile) as raster:
                 raster.write(arr, 1)
@@ -207,7 +207,7 @@ def transform_tiff_files_to_net_cdf(
             {"time": time, "lon": lon, "lat": lat},
             {
                 "Conventions": "CF-1.4",
-                "title": f"CRU TS4.04 {consts.datasets_and_preprocessing.var_to_variable[var]}",
+                "title": f"CRU TS4.05 {consts.datasets_and_preprocessing.var_to_variable[var]}",
                 "source": "Neural-Downscaling approach.",
                 "extent": "Europe. Based on ETRS89.",
             },
@@ -217,7 +217,7 @@ def transform_tiff_files_to_net_cdf(
         ds.to_netcdf(
             os.path.join(
                 nc_out_path,
-                f"{prefix}.cru_ts4.04.nn.inference.1901.2019.{var}.dat.nc",
+                f"{prefix}.cru_ts4.05.nn.inference.1901.2020.{var}.dat.nc",
             )
         )
         logging.info(f"Done for {var}")

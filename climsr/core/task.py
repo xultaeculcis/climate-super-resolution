@@ -261,7 +261,7 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
 
     def common_val_test_step(self, batch: Any, prefix: Optional[str] = consts.stages.val) -> Dict[str, Tensor]:
         """
-        Rus common validation and test steps.
+        Runs common validation and test steps.
 
         Args:
             batch (Any): The batch of data.

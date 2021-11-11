@@ -12,10 +12,11 @@ def test_should_return_tensor_with_correct_shape_after_forward():
     model = ESRGANGenerator(2, 1).cuda()
     x = torch.rand(lr_batch).cuda()
     elev = torch.rand(hr_elev_batch_size).cuda()
+    mask = torch.rand(hr_elev_batch_size).cuda()
 
     # act
     with torch.no_grad():
-        out = model.forward(x, elev)
+        out = model.forward(x, elev, mask)
 
     # assert
     assert out.shape == expected

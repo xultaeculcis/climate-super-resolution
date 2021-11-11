@@ -18,7 +18,7 @@ defaults:
   - training: default
   - profiler: null
 
-  - experiment: null
+  - experiment: ???
 
   - hydra: default
   - hparams_search: null

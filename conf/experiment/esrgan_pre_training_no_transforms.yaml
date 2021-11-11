@@ -16,7 +16,7 @@ training:
   batch_size: 192
   validation_batch_size: 192
   generator_type: "esrgan"
-  experiment_name: "esrgan-pre-training"
+  experiment_name: "esrgan-no-transforms"
   run_fit: True
   run_test_after_fit: True
   num_workers: 8
@@ -47,6 +47,6 @@ datamodule:
     use_global_min_max: False
     use_extra_data: False
     transforms:
-      v_flip: True
-      h_flip: True
-      random_90_rotation: True
+      v_flip: False
+      h_flip: False
+      random_90_rotation: False

@@ -153,6 +153,7 @@ def main(cfg: DictConfig) -> Optional[Union[float, Tensor]]:
     task_cfg.schedulers = cfg.get("schedulers")
     task_cfg.generator = cfg.get("generator")
     task_cfg.generator = infer_generator_config(task_cfg.generator, data_cfg.get("cfg"))
+    task_cfg.discriminator = cfg.get("discriminator")
 
     return run(
         instantiator,

@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 import rasterio as rio
+import rioxarray
 import torch
 import xarray as xr
 from hydra.utils import to_absolute_path
@@ -98,7 +99,7 @@ def run_inference(cfg: InferenceConfig, cruts_variables: List[str]) -> None:
         out_path = to_absolute_path(os.path.join(cfg.inference_out_path, var))
         os.makedirs(out_path, exist_ok=True)
 
-        net = TaskSuperResolutionModule.load_from_checkpoint(to_absolute_path(cfg.pretrained_model))
+        net = TaskSuperResolutionModule.load_from_checkpoint(to_absolute_path(cfg.pretrained_model), strict=False)
         net.eval()
 
         logging.info(f"Running inference for variable: {var}")
@@ -189,7 +190,7 @@ def transform_tiff_files_to_net_cdf(
             timestamp = "-".join(splitted[-3:])
             timestamps.append(timestamp)
 
-            da = xr.open_rasterio(fp).rename(var)
+            da = rioxarray.open_rasterio(fp).rename(var)
             if lat is None:
                 lat = da.y.data
             if lon is None:

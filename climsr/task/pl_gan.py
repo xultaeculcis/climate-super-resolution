@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-import dataclasses
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
 from torch import Tensor
@@ -26,7 +25,9 @@ class GANLightningModule(TaskSuperResolutionModule):
         fake_labels = torch.zeros((size, 1), device=self.device)
         return real_labels, fake_labels
 
-    def loss_g(self, hr: Tensor, sr: Tensor, real_labels: Tensor, fake_labels: Tensor) -> Tuple[float, float, float, float]:
+    def loss_g(
+        self, hr: Tensor, sr: Tensor, real_labels: Tensor, fake_labels: Tensor
+    ) -> Tuple[Union[float, Tensor], Union[float, Tensor], Union[float, Tensor], Union[float, Tensor]]:
         score_real = self.discriminator(hr)
         score_fake = self.discriminator(sr)
         discriminator_rf = score_real - score_fake.mean()
@@ -47,7 +48,7 @@ class GANLightningModule(TaskSuperResolutionModule):
 
         return perceptual_loss, adversarial_loss, pixel_level_loss, loss_g
 
-    def loss_d(self, hr: Tensor, sr: Tensor, real_labels: Tensor, fake_labels: Tensor) -> float:
+    def loss_d(self, hr: Tensor, sr: Tensor, real_labels: Tensor, fake_labels: Tensor) -> Union[float, Tensor]:
         score_real = self.discriminator(hr)
         score_fake = self.discriminator(sr.detach())
         discriminator_rf = score_real - score_fake.mean()
@@ -60,8 +61,8 @@ class GANLightningModule(TaskSuperResolutionModule):
         return loss_d
 
     def training_step(self, batch: Any, batch_idx: int, optimizer_idx: int) -> Dict[str, Any]:
-        hr = (batch[consts.batch_items.hr],)
-        real_labels, fake_labels = self._real_fake(hr.size(0))
+        hr: Tensor = batch[consts.batch_items.hr]
+        real_labels, fake_labels = self._real_fake(hr.shape[0])
 
         hr, sr = self.common_step(batch)
 
@@ -95,7 +96,9 @@ class GANLightningModule(TaskSuperResolutionModule):
                 },
             }
 
-    def validation_step(self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None) -> Dict[str, Union[int, float]]:
+    def validation_step(
+        self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None
+    ) -> Dict[str, Union[int, float, Tensor]]:
         """
         Run validation step.
 
@@ -111,29 +114,18 @@ class GANLightningModule(TaskSuperResolutionModule):
         hr = batch[consts.batch_items.hr]
         real_labels, fake_labels = self._real_fake(hr.size(0))
 
-        metrics = self.common_val_test_step(batch)
+        metric_dict = self.common_val_test_step(batch)
 
-        perceptual_loss, adversarial_loss, pixel_level_loss, loss_g = self.loss_g(hr, metrics.sr, real_labels, fake_labels)
+        perceptual_loss, adversarial_loss, pixel_level_loss, loss_g = self.loss_g(hr, metric_dict["sr"], real_labels, fake_labels)
 
-        log_dict = dict(list((f"val/{k}", v) for k, v in dataclasses.asdict(metrics).items() if k != "sr"))
-
-        log_dict.update(
+        metric_dict.pop("sr", None)
+        metric_dict.update(
             {
                 "val/perceptual_loss": perceptual_loss,
                 "val/adversarial_loss": adversarial_loss,
                 "val/loss_G": loss_g,
             }
         )
+        self.log_dict(metric_dict, on_step=False, on_epoch=True)
 
-        self.log_dict(log_dict, on_step=False, on_epoch=True)
-
-        return log_dict
-
-    def validation_epoch_end(self, outputs: List[Any]) -> None:
-        """Compute and log validation losses at the epoch level."""
-
-        loss_g_mean = torch.stack([output["val/loss_G"] for output in outputs]).mean()
-        log_dict = {
-            "hp_metric": loss_g_mean,
-        }
-        self.log_dict(log_dict)
+        return metric_dict

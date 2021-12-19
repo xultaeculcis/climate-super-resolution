@@ -1,5 +1,5 @@
 defaults:
-  - inference: inference_rcan
+  - inference: inference_esrgan
 
   - override hydra/hydra_logging: colorlog
   - override hydra/job_logging: colorlog

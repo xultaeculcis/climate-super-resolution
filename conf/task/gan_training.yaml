@@ -2,3 +2,7 @@ defaults:
   - default
 
 _target_: climsr.task.pl_gan.GANLightningModule
+
+pixel_level_loss_factor: 0.01
+perceptual_loss_factor: 1.0
+adversarial_loss_factor: 0.005

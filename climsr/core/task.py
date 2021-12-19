@@ -32,8 +32,7 @@ default_instantiator = HydraInstantiator()
 
 class LitSuperResolutionModule(pl.LightningModule):
     """
-    Base class for SR.
-    Provides a few helper functions primarily for optimization.
+    Base class for SR. Provides a few helper functions primarily for optimization.
     """
 
     def __init__(
@@ -48,17 +47,17 @@ class LitSuperResolutionModule(pl.LightningModule):
         self.discriminator = discriminator
         # some optimizers/schedulers need parameters only known dynamically
         # allow users to override the getter to instantiate them lazily
-        self.optimizers = optimizers
-        self.schedulers = schedulers
+        self._optimizers = optimizers
+        self._schedulers = schedulers
 
     def configure_optimizers(
         self,
     ) -> Tuple[List[torch.optim.Optimizer], List[Dict[str, Union[str, torch.optim.lr_scheduler._LRScheduler]]]]:
         """Prepare optimizers and schedulers"""
         schedulers = []
-        for scheduler in self.schedulers:
+        for scheduler in self._schedulers:
             schedulers.append({"scheduler": scheduler, "interval": "step"})
-        return self.optimizers, schedulers
+        return self._optimizers, schedulers
 
     @property
     def num_training_steps(self) -> int:
@@ -79,7 +78,7 @@ class LitSuperResolutionModule(pl.LightningModule):
         effective_batch_size = self.trainer.accumulate_grad_batches * num_devices
         max_estimated_steps = (dataset_size // effective_batch_size) * self.trainer.max_epochs
 
-        if self.trainer.max_steps and self.trainer.max_steps < max_estimated_steps:
+        if self.trainer.max_steps and -1 < self.trainer.max_steps < max_estimated_steps:
             return self.trainer.max_steps
         return max_estimated_steps
 
@@ -129,6 +128,7 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
         # store parameters
         self.save_hyperparameters(
             "generator",
+            "discriminator",
             "optimizers",
             "schedulers",
             *kwargs.keys(),
@@ -199,14 +199,14 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
             f"{self.scheduler_cfgs[consts.training.generator_scheduler_key].num_warmup_steps}"
         )
 
-        self.optimizers = []
-        self.schedulers = []
+        self._optimizers = []
+        self._schedulers = []
 
         generator_optimizer = self.instantiator.optimizer(
             self.generator, self.optimizer_cfgs[consts.training.generator_optimizer_key]
         )
-        self.optimizers.append(generator_optimizer)
-        self.schedulers.append(
+        self._optimizers.append(generator_optimizer)
+        self._schedulers.append(
             self.instantiator.scheduler(self.scheduler_cfgs[consts.training.generator_scheduler_key], generator_optimizer)
         )
 
@@ -215,8 +215,8 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
                 self.discriminator,
                 self.optimizer_cfgs[consts.training.discriminator_optimizer_key],
             )
-            self.optimizers.append(discriminator_optimizer)
-            self.schedulers.append(
+            self._optimizers.append(discriminator_optimizer)
+            self._schedulers.append(
                 self.instantiator.scheduler(
                     self.scheduler_cfgs[consts.training.discriminator_scheduler_key],
                     discriminator_optimizer,
@@ -276,6 +276,7 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
         min_vals = batch[consts.batch_items.min]
 
         hr, sr = self.common_step(batch)
+        sr_copy = sr.detach().clone()
 
         # denormalize/destandardize
         denormalized_sr = (
@@ -294,8 +295,7 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
         metric_dict = self.compute_metrics(sr, hr, denormalized_sr, original, mode=prefix)
         metric_dict[f"{prefix}/normalized_loss"] = normal_loss
         metric_dict[f"{prefix}/loss"] = loss
-
-        self.log_dict(metric_dict, prog_bar=False, on_step=False, on_epoch=True)
+        metric_dict["sr"] = sr_copy
 
         return metric_dict
 
@@ -384,3 +384,8 @@ class TaskSuperResolutionModule(LitSuperResolutionModule):
         for logger in self.logger:
             if type(logger) == TensorBoardLogger:
                 self.logger[0].log_hyperparams(self.hparams, {"hp_metric": self.hparams.initial_hp_metric_val})
+
+    def validation_epoch_end(self, outputs: List[Any]) -> None:
+        """Compute and log hp_metric at the epoch level."""
+        hp_metric = torch.stack([output[f"{consts.stages.val}/rmse"] for output in outputs]).mean()
+        self.log("hp_metric", hp_metric)

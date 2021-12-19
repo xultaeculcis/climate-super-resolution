@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-import torch
 from torch import Tensor
 
 from climsr import consts
@@ -45,12 +44,10 @@ class GeneratorPreTrainingLightningModule(TaskSuperResolutionModule):
         Returns (Union[float, int, Tensor]): Validation loss.
 
         """
-        return self.common_val_test_step(batch, prefix=consts.stages.val)
-
-    def validation_epoch_end(self, outputs: List[Any]) -> None:
-        """Compute and log hp_metric at the epoch level."""
-        hp_metric = torch.stack([output[f"{consts.stages.val}/rmse"] for output in outputs]).mean()
-        self.log("hp_metric", hp_metric)
+        metric_dict = self.common_val_test_step(batch, prefix=consts.stages.val)
+        metric_dict.pop("sr", None)
+        self.log_dict(metric_dict, prog_bar=False, on_step=False, on_epoch=True)
+        return metric_dict
 
     def test_step(self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None) -> Dict[str, Tensor]:
         """

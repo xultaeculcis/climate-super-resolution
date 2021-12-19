@@ -1,0 +1,5 @@
+defaults:
+  - default
+
+pretrained_model: "outputs/runs/esrgan/2021-11-14/13-54-23/model_weights/esrgan-gan-training_epoch=029_step=124079_hp_metric=3.82710.ckpt"
+generator_type: "esrgan"

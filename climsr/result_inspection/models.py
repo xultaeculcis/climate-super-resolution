@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+import os
 from dataclasses import dataclass
 from typing import List, Optional, Union
 
@@ -22,7 +23,7 @@ class StatsResult:
     maxima: np.ndarray
 
     @classmethod
-    def empty(cls, size):
+    def empty(cls, size) -> "StatsResult":
         return cls(
             minima=np.zeros(size),
             means=np.zeros(size),
@@ -51,7 +52,17 @@ class CompareStatsResults:
     mae: float
 
     @classmethod
-    def compute(cls, var, time_range, lats, lons, alts, ds_cru, ds_nn, names=None):
+    def compute(
+        cls,
+        var: str,
+        time_range: pd.DatetimeIndex,
+        lats: Union[List, np.ndarray],
+        lons: Union[List, np.ndarray],
+        alts: Union[List, np.ndarray],
+        ds_cru: xr.Dataset,
+        ds_nn: xr.Dataset,
+        names: Optional[Union[List, np.ndarray]] = None,
+    ) -> "CompareStatsResults":
         cru_stats = StatsResult.empty(len(lats))
         nn_stats = StatsResult.empty(len(lats))
 
@@ -61,24 +72,16 @@ class CompareStatsResults:
 
         for idx, (lat, lon) in enumerate(zip(lats, lons)):
             cru_data = ds_cru[var].sel(lat=lat, lon=lon, time=time_range, method="nearest")
-
-            cru_stats.q25[idx] = cru_data.quantile(0.25)
-            cru_stats.q50[idx] = cru_data.quantile(0.5)
-            cru_stats.q75[idx] = cru_data.quantile(0.75)
-            cru_stats.minima[idx] = cru_data.min()
-            cru_stats.maxima[idx] = cru_data.max()
-            cru_stats.means[idx] = cru_data.mean()
-            cru_stats.medians[idx] = cru_data.median()
-
             nn_data = ds_nn[var].sel(lat=lat, lon=lon, time=time_range, method="nearest")
 
-            nn_stats.q25[idx] = nn_data.quantile(0.25)
-            nn_stats.q50[idx] = nn_data.quantile(0.5)
-            nn_stats.q75[idx] = nn_data.quantile(0.75)
-            nn_stats.minima[idx] = nn_data.min()
-            nn_stats.maxima[idx] = nn_data.max()
-            nn_stats.means[idx] = nn_data.mean()
-            nn_stats.medians[idx] = nn_data.median()
+            for data, stats in zip([cru_data, nn_data], [cru_stats, nn_stats]):
+                stats.q25[idx] = data.quantile(0.25)
+                stats.q50[idx] = data.quantile(0.5)
+                stats.q75[idx] = data.quantile(0.75)
+                stats.minima[idx] = data.min()
+                stats.maxima[idx] = data.max()
+                stats.means[idx] = data.mean()
+                stats.medians[idx] = data.median()
 
             mae[idx] = mean_absolute_error(cru_data, nn_data)
             mse[idx] = mean_squared_error(cru_data, nn_data)
@@ -100,7 +103,7 @@ class CompareStatsResults:
             rmse=rmse.mean(),
         )
 
-    def line_plot(self):
+    def line_plot(self, save_path: Optional[str] = None) -> None:
         plt.figure(figsize=(15, 15))
         ax = plt.subplot(1, 1, 1)
         for lat, lon in zip(self.lats, self.lons):
@@ -112,9 +115,14 @@ class CompareStatsResults:
         ax.set_title("Temperature comparison between CRU-TS and SR across time")
 
         plt.gca().legend(("CRU-TS", "SR"))
+
+        if save_path:
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+            plt.savefig(save_path)
+
         plt.show()
 
-    def box_plot(self):
+    def box_plot(self, save_path: Optional[str] = None) -> None:
         plt.figure(figsize=(20, 10))
         values = []
         locations = []
@@ -144,9 +152,14 @@ class CompareStatsResults:
         plt.figure(figsize=(np.maximum(0.25 * len(df["Location"].unique()), 20), 10))
         chart = sns.boxplot(x="Location", y="Temperature (Celsius)", data=df, hue="Data source")
         chart.set_xticklabels(chart.get_xticklabels(), rotation=45, horizontalalignment="right")
+
+        if save_path:
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+            plt.savefig(save_path)
+
         plt.show()
 
-    def print_comparison_summary(self):
+    def print_comparison_summary(self) -> None:
         logging.info(
             f"Avg min CTS: {self.stats_cru.minima.mean()}, "
             f"NN: {self.stats_nn.minima.mean()}, "
@@ -185,3 +198,68 @@ class CompareStatsResults:
         logging.info(f"Mean Absolute Error between CRU-TS and SR-NN: {self.mae}")
         logging.info(f"Mean Squared Error between CRU-TS and SR-NN: {self.mse}")
         logging.info(f"Root Mean Squared Error between CRU-TS and SR-NN: {self.rmse}")
+
+    def to_frame(self) -> pd.DataFrame:
+        records = [
+            (
+                "Avg min",
+                self.stats_cru.minima.mean(),
+                self.stats_nn.minima.mean(),
+                (self.stats_cru.minima - self.stats_nn.minima).mean(),
+            ),
+            (
+                "Avg mean",
+                self.stats_cru.means.mean(),
+                self.stats_nn.means.mean(),
+                (self.stats_cru.means - self.stats_nn.means).mean(),
+            ),
+            (
+                "Avg median",
+                self.stats_cru.medians.mean(),
+                self.stats_nn.medians.mean(),
+                (self.stats_cru.medians - self.stats_nn.medians).mean(),
+            ),
+            (
+                "Avg max",
+                self.stats_cru.maxima.mean(),
+                self.stats_nn.maxima.mean(),
+                (self.stats_cru.maxima - self.stats_nn.maxima).mean(),
+            ),
+            (
+                "Avg q25",
+                self.stats_cru.q25.mean(),
+                self.stats_nn.q25.mean(),
+                (self.stats_cru.q25 - self.stats_nn.q25).mean(),
+            ),
+            (
+                "Avg q50",
+                self.stats_cru.q50.mean(),
+                self.stats_nn.q50.mean(),
+                (self.stats_cru.q50 - self.stats_nn.q50).mean(),
+            ),
+            (
+                "Avg q75",
+                self.stats_cru.q75.mean(),
+                self.stats_nn.q75.mean(),
+                (self.stats_cru.q75 - self.stats_nn.q75).mean(),
+            ),
+            (
+                "MAE",
+                np.nan,
+                np.nan,
+                self.mae,
+            ),
+            (
+                "MSE",
+                np.nan,
+                np.nan,
+                self.mse,
+            ),
+            (
+                "RMSE",
+                np.nan,
+                np.nan,
+                self.rmse,
+            ),
+        ]
+        return pd.DataFrame.from_records(records, columns=["Metric", "CRU-TS", "SR", "Diff"])

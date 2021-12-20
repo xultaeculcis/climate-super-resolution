@@ -7,13 +7,13 @@ from climsr import consts
 from climsr.core.task import TaskSuperResolutionModule
 
 
-class GeneratorPreTrainingLightningModule(TaskSuperResolutionModule):
+class SuperResolutionLightningModule(TaskSuperResolutionModule):
     """
-    LightningModule for pre-training the Generator Network.
+    LightningModule for training the SR networks or pre-training generator networks in GAN setting.
     """
 
     def __init__(self, *args, **kwargs):
-        super(GeneratorPreTrainingLightningModule, self).__init__(*args, **kwargs)
+        super(SuperResolutionLightningModule, self).__init__(*args, **kwargs)
 
     def training_step(self, batch: Any, batch_idx: int) -> Any:
         """

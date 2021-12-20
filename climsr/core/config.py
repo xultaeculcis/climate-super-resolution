@@ -191,6 +191,9 @@ class InferenceConfig:
     # Pretrained models
     pretrained_model: Optional[str] = MISSING
 
+    # Results dir
+    results_dir: Optional[str] = MISSING
+
     # Misc
     use_netcdf_datasets: Optional[bool] = False  # This defines the dataset type
     temp_only: Optional[bool] = True  # Use model trained on combined temp data? Or models trained on individual files.
@@ -220,6 +223,7 @@ class ResultInspectionConfig:
     ds_temp_nn_path: Optional[str] = MISSING
     ds_temp_cru_path: Optional[str] = MISSING
     peaks_feather: Optional[str] = MISSING
+    results_dir: Optional[str] = MISSING
 
 
 def infer_generator_config(generator_cfg: GeneratorConfig, data_config: SuperResolutionDataConfig) -> GeneratorConfig:

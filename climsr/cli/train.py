@@ -22,7 +22,7 @@ from climsr.core.config import (
 from climsr.core.instantiator import HydraInstantiator, Instantiator
 from climsr.core.task import TaskSuperResolutionModule
 from climsr.data.super_resolution_data_module import SuperResolutionDataModule
-from climsr.task.pl_generator_pre_training import GeneratorPreTrainingLightningModule
+from climsr.task.pl_generator_pre_training import SuperResolutionLightningModule
 
 default_sr_dm_config = SuperResolutionDataConfig()
 default_task_config = TaskConfig()
@@ -112,12 +112,12 @@ def run(
     if model_weights:
         logging.info(f"Loading pre-trained model from '{model_weights}'")
 
-        if isinstance(model, GeneratorPreTrainingLightningModule):
+        if isinstance(model, SuperResolutionLightningModule):
             # handle fine-tuning of the generator model without discriminator
             model = type(model).load_from_checkpoint(to_absolute_path(model_weights))
         else:
             # handle fine-tuning in a GAN setting
-            generator = GeneratorPreTrainingLightningModule.load_from_checkpoint(to_absolute_path(model_weights)).generator
+            generator = SuperResolutionLightningModule.load_from_checkpoint(to_absolute_path(model_weights)).generator
             model.generator = generator
 
     # Train & Test

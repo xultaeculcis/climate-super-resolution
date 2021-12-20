@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 from typing import Optional, Union
 
 import numpy as np
@@ -9,7 +10,9 @@ from matplotlib import pyplot as plt
 import climsr.consts as consts
 
 
-def im_show_with_colorbar(x: Union[np.ndarray, torch.Tensor], title: Optional[str] = None, cmap: Optional[str] = "jet") -> None:
+def im_show_with_colorbar(
+    x: Union[np.ndarray, torch.Tensor], title: Optional[str] = None, cmap: Optional[str] = "jet", save_path: Optional[str] = None
+) -> None:
     # img_grid has 3 channels - they have the same values
     # as they were created using 1 channel data
     # we can select only one of those channels
@@ -25,6 +28,11 @@ def im_show_with_colorbar(x: Union[np.ndarray, torch.Tensor], title: Optional[st
     plt.colorbar(c, fraction=0.047 * im_ratio)
     if title:
         plt.title(title, fontweight="bold")
+
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path)
+
     plt.show()
 
 

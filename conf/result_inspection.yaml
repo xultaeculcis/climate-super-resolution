@@ -1,2 +1,2 @@
 defaults:
-  - result_inspection: esrgan_results
+  - result_inspection: rcan_results

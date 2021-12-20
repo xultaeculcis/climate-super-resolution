@@ -15,6 +15,9 @@ extent_out_path_sr_nc: "datasets/inference/europe-extent/cruts/nc"
 pretrained_model: ???
 generator_type: ???
 
+# Figures dir
+results_dir: ??
+
 # Misc
 use_netcdf_datasets: False
 temp_only: True # Use model trained on combined temp data? Or models trained on individual files.

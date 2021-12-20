@@ -28,6 +28,7 @@ def inference_on_full_images(
     model: pl.LightningModule,
     ds: Union[GeoTiffInferenceDataset, CRUTSInferenceDataset],
     out_dir: str,
+    figures_dir: str,
     normalization_range: Optional[Tuple[float, float]] = (-1.0, 1.0),
 ) -> None:
     """
@@ -37,9 +38,11 @@ def inference_on_full_images(
         model (pl.LightningModule): The model.
         ds (Union[GeoTiffInferenceDataset, CRUTSInferenceDataset]): The dataset.
         out_dir (str): The output SR Geo-Tiff dir.
+        figures_dir (str): The path in which to save the figures.
         normalization_range (Optional[Tuple[float, float]]): Optional normalization range. `(-1, 1)` by default.
 
     """
+    os.makedirs(figures_dir, exist_ok=True)
 
     # ensure gpu
     model = model.cuda()
@@ -47,7 +50,7 @@ def inference_on_full_images(
     # load mask
     with rio.open(ds.land_mask_file) as mask_src:
         profile = mask_src.profile
-        im_show_with_colorbar(mask_src.read(1), title="MASK File (HR Sample)")
+        im_show_with_colorbar(mask_src.read(1), title="MASK File (HR Sample)", save_path=os.path.join(figures_dir, "mask_hr.png"))
 
     # prepare dataloader
     dl = DataLoader(dataset=ds, batch_size=1, pin_memory=True, num_workers=1)
@@ -79,10 +82,27 @@ def inference_on_full_images(
                 raster.write(arr, 1)
 
             if i == 0 and idx == 0:
-                im_show_with_colorbar(lr.cpu().squeeze(0)[0].numpy(), title="LR")
-                im_show_with_colorbar(mask_np, title="MASK")
-                im_show_with_colorbar(elev.cpu().squeeze(0).squeeze(0).numpy(), title="Elev", cmap="inferno")
-                im_show_with_colorbar(arr, title="SR")
+                im_show_with_colorbar(
+                    lr.cpu().squeeze(0)[0].numpy(),
+                    title="LR",
+                    save_path=os.path.join(figures_dir, "lr.png"),
+                )
+                im_show_with_colorbar(
+                    mask_np,
+                    title="MASK",
+                    save_path=os.path.join(figures_dir, "mask.png"),
+                )
+                im_show_with_colorbar(
+                    elev.cpu().squeeze(0).squeeze(0).numpy(),
+                    title="Elev",
+                    cmap="inferno",
+                    save_path=os.path.join(figures_dir, "elev.png"),
+                )
+                im_show_with_colorbar(
+                    arr,
+                    title="SR",
+                    save_path=os.path.join(figures_dir, "sr.png"),
+                )
 
 
 def run_inference(cfg: InferenceConfig, cruts_variables: List[str]) -> None:
@@ -98,6 +118,9 @@ def run_inference(cfg: InferenceConfig, cruts_variables: List[str]) -> None:
     for var in cruts_variables:
         out_path = to_absolute_path(os.path.join(cfg.inference_out_path, var))
         os.makedirs(out_path, exist_ok=True)
+
+        results_dir = to_absolute_path(cfg.results_dir)
+        os.makedirs(results_dir, exist_ok=True)
 
         net = TaskSuperResolutionModule.load_from_checkpoint(to_absolute_path(cfg.pretrained_model), strict=False)
         net.eval()
@@ -144,10 +167,7 @@ def run_inference(cfg: InferenceConfig, cruts_variables: List[str]) -> None:
 
         with torch.no_grad():
             inference_on_full_images(
-                model=net,
-                ds=dataset,
-                out_dir=out_path,
-                normalization_range=cfg.normalization_range,
+                model=net, ds=dataset, out_dir=out_path, normalization_range=cfg.normalization_range, figures_dir=results_dir
             )
 
         logging.info(f"Inference for variable {var} finished. Removing network.")
